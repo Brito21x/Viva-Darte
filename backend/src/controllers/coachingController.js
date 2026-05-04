@@ -1,6 +1,9 @@
 const coachingModel = require('../models/coachingModel');
 const faturacaoModel = require('../models/faturacaoModel');
 
+/** Data fixa só para parsear horas (`time`) como instante; a duração depende só da diferença entre horas. */
+const DATA_REF_COMPARACAO_HORAS = '2026-01-01';
+
 /** Evita bugs de timezone com strings `YYYY-MM-DD` (interpretação UTC vs local). */
 function parseDateParts(dataValor) {
     if (!dataValor) return null;
@@ -62,8 +65,8 @@ function instanteFimCoaching(cab) {
 
 /** Duração em minutos de um intervalo hora_inicio → hora_fim (mesmo dia). */
 function duracaoSlotMinutos(horaInicio, horaFim) {
-    const t0 = new Date(`1970-01-01T${horaInicio}`).getTime();
-    const t1 = new Date(`1970-01-01T${horaFim}`).getTime();
+    const t0 = new Date(`${DATA_REF_COMPARACAO_HORAS}T${horaInicio}`).getTime();
+    const t1 = new Date(`${DATA_REF_COMPARACAO_HORAS}T${horaFim}`).getTime();
     if (!Number.isFinite(t0) || !Number.isFinite(t1) || t1 <= t0) return 0;
     return Math.round((t1 - t0) / 60000);
 }
@@ -173,12 +176,12 @@ async function getVagasDisponiveis(req, res, next) {
         const { disponibilidades, ocupacoes } = resultado;
 
         let vagasLivres = disponibilidades.map(d => {
-            const horaInicioMs = new Date(`1970-01-01T${d.hora_inicio}`).getTime();
-            const horaFimMs = new Date(`1970-01-01T${d.hora_fim}`).getTime();
+            const horaInicioMs = new Date(`${DATA_REF_COMPARACAO_HORAS}T${d.hora_inicio}`).getTime();
+            const horaFimMs = new Date(`${DATA_REF_COMPARACAO_HORAS}T${d.hora_fim}`).getTime();
 
             const ocupado = ocupacoes.some(o => {
                 if (o.id_professor !== d.id_professor) return false;
-                const oInicio = new Date(`1970-01-01T${o.hora_inicio}`).getTime();
+                const oInicio = new Date(`${DATA_REF_COMPARACAO_HORAS}T${o.hora_inicio}`).getTime();
                 const durMin = Number(o.duracao_minutos);
                 const oFim = oInicio + (Number.isFinite(durMin) && durMin > 0 ? durMin * 60000 : 60000);
                 return oInicio < horaFimMs && oFim > horaInicioMs;

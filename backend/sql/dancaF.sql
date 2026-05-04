@@ -140,7 +140,6 @@ CREATE TABLE PECA (
 CREATE TABLE FOTO_PECA (
   id_foto_peca int IDENTITY NOT NULL, 
   foto         varchar(255) NOT NULL, 
-  descricao    varchar(255) NULL, 
   PECAid_peca  int NOT NULL, 
   PRIMARY KEY (id_foto_peca));
 CREATE TABLE EMPRESTIMO (

@@ -144,9 +144,85 @@ async function redefinirPassword(req, res, next) {
     }
 }
 
+// ============================================================================
+// Registo público (EE / Professor) — alinhado com o formulário do frontend
+// POST /api/auth/register
+// Body: { nome, email, telefone, password, tipo: 'EE' | 'PROF' }
+// ============================================================================
+async function register(req, res, next) {
+    try {
+        const { nome, email, telefone, password, tipo } = req.body;
+
+        if (!nome || !email || !password) {
+            return res.status(400).json({
+                mensagem: 'Nome, email e password são obrigatórios.',
+                error: 'Nome, email e password são obrigatórios.'
+            });
+        }
+
+        if (tipo !== 'EE' && tipo !== 'PROF') {
+            return res.status(400).json({
+                mensagem: 'Tipo de conta inválido.',
+                error: 'Tipo de conta inválido.'
+            });
+        }
+
+        if (password.length < 8) {
+            return res.status(400).json({
+                mensagem: 'A password deve ter pelo menos 8 caracteres.',
+                error: 'A password deve ter pelo menos 8 caracteres.'
+            });
+        }
+
+        const regexEspecial = /[!@#$%^&*(),.?":{}|<>]/;
+        if (!regexEspecial.test(password)) {
+            return res.status(400).json({
+                mensagem: 'A password deve incluir pelo menos um carácter especial.',
+                error: 'A password deve incluir pelo menos um carácter especial.'
+            });
+        }
+
+        const nomePerfil = tipo === 'PROF' ? 'Professor' : 'EE';
+        const passwordHash = await bcrypt.hash(password, 10);
+
+        const novoUtilizador = await utilizadorModel.criarUtilizador({
+            nome,
+            email,
+            passwordHash,
+            telefone: telefone || null,
+            nomePerfil
+        });
+
+        return res.status(201).json({
+            mensagem: 'Conta criada com sucesso.',
+            utilizador: {
+                id: novoUtilizador.id_utilizador,
+                nome: novoUtilizador.nome,
+                email: novoUtilizador.email,
+                perfil: nomePerfil
+            }
+        });
+    } catch (error) {
+        if (error.message && error.message.includes('email')) {
+            return res.status(409).json({
+                mensagem: error.message,
+                error: error.message
+            });
+        }
+        if (error.message && error.message.includes('Perfil')) {
+            return res.status(400).json({
+                mensagem: error.message,
+                error: error.message
+            });
+        }
+        next(error);
+    }
+}
+
 module.exports = {
     login,
     logout,
+    register,
     solicitarRecuperacaoPassword,
     redefinirPassword
 };

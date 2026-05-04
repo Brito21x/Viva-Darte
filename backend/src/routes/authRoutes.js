@@ -4,6 +4,9 @@ const router = express.Router();
 const authController = require('../controllers/authController');
 const { autenticar } = require('../middlewares/auth');
 
+// POST /api/auth/register — registo público (EE / Professor)
+router.post('/register', authController.register);
+
 // POST /api/auth/login
 router.post('/login', authController.login);
 

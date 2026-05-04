@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import './LoginRegisto.css'; 
+import './LoginRegisto.css';
+import { authRegister } from '../../services/api'; 
 
 export default function Registo({ irParaLogin, irParaLanding }) {
   const [tipo, setTipo] = useState('EE'); 
@@ -48,28 +49,20 @@ export default function Registo({ irParaLogin, irParaLanding }) {
     const telefoneLimpo = telefone.replace(/\s/g, '');
 
     try {
-        const response = await fetch('http://localhost:3000/api/auth/register', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-              nome, 
-              email, 
-              telefone: telefoneLimpo, 
-              password, 
-              tipo 
-            })
+        await authRegister({
+            nome,
+            email,
+            telefone: telefoneLimpo,
+            password,
+            tipo
         });
-
-        const resultado = await response.json();
-
-        if (response.ok) {
-            alert("Conta criada com sucesso! ✨");
-            irParaLogin();
-        } else {
-            alert(resultado.error || "Erro ao criar conta.");
-        }
+        alert('Conta criada com sucesso! ✨');
+        irParaLogin();
     } catch (error) {
-        alert("Erro ao ligar ao servidor!");
+        const msg =
+            error?.message ||
+            'Não foi possível contactar o servidor. Confirma que o backend está a correr (ex.: porta 3000).';
+        alert(msg);
     }
 };
 

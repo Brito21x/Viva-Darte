@@ -106,14 +106,29 @@ async function removerDisponibilidadeProfessor(idDisponibilidade, idProfessor) {
  * Retorna as disponibilidades teóricas dos professores para uma modalidade/dia,
  * cruzando com as ocupações reais (coachings já agendados e aulas regulares) nessa data.
  */
-async function getDisponibilidadeEfetiva(idModalidade, diaSemana, dataEspecifica) {
+async function getDisponibilidadeEfetiva(idModalidade, diaSemana, dataEspecifica, idProfessorFiltro = null) {
     try {
         const pool = await poolPromise;
+
+        // HORARIO.dia_semana usa escala 1=Seg … 7=Dom; DISPONIBILIDADE_PROFESSOR usa 1=Seg–Qui, 2=Sáb–Dom.
+        let diaSemanaHorario = diaSemana;
+        if (dataEspecifica != null && dataEspecifica !== '') {
+            const s = String(dataEspecifica).split(/[-T]/);
+            const y = parseInt(s[0], 10);
+            const mo = parseInt(s[1], 10);
+            const da = parseInt(s[2], 10);
+            if (Number.isFinite(y) && Number.isFinite(mo) && Number.isFinite(da)) {
+                const d = new Date(y, mo - 1, da);
+                const day = d.getDay();
+                diaSemanaHorario = day === 0 ? 7 : day;
+            }
+        }
  
-        // 1. Disponibilidades teóricas dos professores
+        // 1. Disponibilidades teóricas dos professores (RF04: filtro opcional por professor)
         const resultDisponibilidade = await pool.request()
             .input('IdModalidade', sql.Int, idModalidade)
             .input('DiaSemana', sql.Int, diaSemana)
+            .input('IdProfessorFiltro', sql.Int, idProfessorFiltro)
             .query(`
                 SELECT 
                     dp.id_disponibilidade,
@@ -128,7 +143,8 @@ async function getDisponibilidadeEfetiva(idModalidade, diaSemana, dataEspecifica
                     ON u.id_utilizador = pm.UTILIZADORid_utilizador
                 WHERE pm.MODALIDADEid_modalidade = @IdModalidade
                   AND dp.dia_semana = @DiaSemana
-                  AND u.ativo = 1;
+                  AND u.ativo = 1
+                  AND (@IdProfessorFiltro IS NULL OR u.id_utilizador = @IdProfessorFiltro);
             `);
  
         // 2. Ocupações reais (coachings agendados/confirmados)
@@ -157,7 +173,7 @@ async function getDisponibilidadeEfetiva(idModalidade, diaSemana, dataEspecifica
               AND h.ativo = 1;
         `;
         const resultOcupacaoHorario = await pool.request()
-            .input('DiaSemana', sql.Int, diaSemana)
+            .input('DiaSemana', sql.Int, diaSemanaHorario)
             .query(queryOcupacaoHorario);
  
         return {
@@ -308,6 +324,7 @@ async function getPedidosPorEncarregado(idEncarregado) {
                     pc.data_aula_pretendida,
                     pc.hora_inicio_pretendida,
                     pc.estado,
+                    pc.justificacao_rejeicao,
                     pc.custo_estimado,
                     m.nome AS modalidade,
                     prof.nome AS professor
@@ -401,6 +418,33 @@ async function getPedidosAtribuidosAoProfessor(idProfessor) {
 /**
  * True se o coaching existe, o professor é o titular e não está cancelado.
  */
+/**
+ * True se o coaching está associado a um pedido do encarregado indicado (não cancelado).
+ * US12 / RF14 — EE só cancela as suas marcações.
+ */
+async function coachingPertenceAEncarregado(idCoaching, idEncarregado) {
+    try {
+        const pool = await poolPromise;
+        const result = await pool
+            .request()
+            .input('IdCoaching', sql.Int, idCoaching)
+            .input('IdEE', sql.Int, idEncarregado)
+            .query(`
+                SELECT 1 AS ok
+                FROM COACHING c
+                JOIN PEDIDO_COACHING pc ON c.PEDIDO_COACHINGid_pedido_coaching = pc.id_pedido_coaching
+                WHERE c.id_coaching = @IdCoaching
+                  AND pc.UTILIZADORid_utilizador = @IdEE
+                  AND c.estado <> 'Cancelado';
+            `);
+
+        return result.recordset.length > 0;
+    } catch (error) {
+        console.error('Erro no Modelo (coachingPertenceAEncarregado):', error);
+        throw error;
+    }
+}
+
 async function coachingPertenceAProfessorAtivo(idCoaching, idProfessor) {
     try {
         const pool = await poolPromise;
@@ -611,6 +655,41 @@ async function aprovarEAgendarCoaching(dadosAgendamento) {
 }
  
 /**
+ * Carrega um pedido de coaching por id (dados para aprovação / consulta).
+ */
+async function getPedidoCoachingPorId(idPedido) {
+    try {
+        const pool = await poolPromise;
+        const result = await pool
+            .request()
+            .input('IdPedido', sql.Int, idPedido)
+            .query(`
+                SELECT 
+                    id_pedido_coaching,
+                    formato_aula,
+                    duracao_minutos,
+                    numero_participantes,
+                    data_aula_pretendida,
+                    hora_inicio_pretendida,
+                    estado,
+                    custo_estimado,
+                    UTILIZADORid_utilizador,
+                    ANO_LETIVOid_ano_letivo,
+                    MODALIDADEid_modalidade,
+                    UTILIZADORid_utilizador2,
+                    justificacao_rejeicao
+                FROM PEDIDO_COACHING
+                WHERE id_pedido_coaching = @IdPedido;
+            `);
+
+        return result.recordset[0] || null;
+    } catch (error) {
+        console.error('Erro no Modelo (getPedidoCoachingPorId):', error);
+        throw error;
+    }
+}
+
+/**
  * Rejeita um pedido de coaching com justificação.
  */
 async function rejeitarPedidoCoaching(idPedido, justificacao) {
@@ -621,11 +700,12 @@ async function rejeitarPedidoCoaching(idPedido, justificacao) {
             .input('Justificacao', sql.VarChar(255), justificacao)
             .query(`
                 UPDATE PEDIDO_COACHING 
-                SET estado = 'Rejeitado'
+                SET estado = 'Rejeitado',
+                    justificacao_rejeicao = @Justificacao
                 WHERE id_pedido_coaching = @IdPedido 
                   AND estado = 'Pendente';
             `);
- 
+
         return result.rowsAffected[0] > 0;
     } catch (error) {
         console.error('Erro no Modelo (rejeitarPedidoCoaching):', error);
@@ -636,6 +716,28 @@ async function rejeitarPedidoCoaching(idPedido, justificacao) {
 // ============================================================================
 // 5. CANCELAMENTOS (US12 / RF14)
 // ============================================================================
+
+/**
+ * Dados mínimos do coaching para validação de cancelamento (data/hora, estado).
+ */
+async function getCoachingCabecalhoCancelamento(idCoaching) {
+    try {
+        const pool = await poolPromise;
+        const result = await pool
+            .request()
+            .input('IdCoaching', sql.Int, idCoaching)
+            .query(`
+                SELECT data_aula, hora_inicio, estado
+                FROM COACHING
+                WHERE id_coaching = @IdCoaching;
+            `);
+
+        return result.recordset[0] || null;
+    } catch (error) {
+        console.error('Erro no Modelo (getCoachingCabecalhoCancelamento):', error);
+        throw error;
+    }
+}
  
 /**
  * Cancela um coaching e atualiza o pedido associado.
@@ -764,7 +866,10 @@ module.exports = {
     cancelarPedidoPendenteEncarregado,
     getPedidosAtribuidosAoProfessor,
     coachingPertenceAProfessorAtivo,
+    coachingPertenceAEncarregado,
+    getCoachingCabecalhoCancelamento,
     getPedidosPendentes,
+    getPedidoCoachingPorId,
     aprovarEAgendarCoaching,
     rejeitarPedidoCoaching,
     cancelarCoaching,

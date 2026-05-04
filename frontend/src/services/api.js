@@ -14,7 +14,7 @@ async function apiFetch(path, { method = 'GET', body, token } = {}) {
   const data = isJson ? await res.json().catch(() => ({})) : null;
 
   if (!res.ok) {
-    const msg = data?.error || 'Erro ao comunicar com o servidor';
+    const msg = data?.error || data?.mensagem || 'Erro ao comunicar com o servidor';
     const err = new Error(msg);
     err.status = res.status;
     err.data = data;

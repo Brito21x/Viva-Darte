@@ -21,6 +21,8 @@ async function getTabelaPrecos() {
                 tp.dia_semana,
                 tp.preco,
                 tp.ativo,
+                tp.MODALIDADEid_modalidade AS id_modalidade,
+                tp.UTILIZADORid_utilizador AS id_professor_excecao,
                 m.nome AS modalidade_excecao,
                 u.nome AS professor_excecao
             FROM TABELA_PRECO tp
@@ -62,12 +64,16 @@ async function calcularCustoAutomatico(formato, duracao, diaSemana, idModalidade
                 UTILIZADORid_utilizador DESC,   -- exceção por professor primeiro
                 MODALIDADEid_modalidade DESC;    -- depois por modalidade
         `;
+        // Garantir null explícito (não undefined): em SQL, "col = NULL" é UNKNOWN; precisamos do ramo "IS NULL".
+        const idModalidadeSql = idModalidade == null ? null : idModalidade;
+        const idProfessorSql = idProfessor == null ? null : idProfessor;
+
         const result = await pool.request()
             .input('Formato', sql.VarChar(50), formato)
             .input('Duracao', sql.Int, duracao)
             .input('DiaSemana', sql.Int, diaSemana)
-            .input('IdModalidade', sql.Int, idModalidade)
-            .input('IdProfessor', sql.Int, idProfessor)
+            .input('IdModalidade', sql.Int, idModalidadeSql)
+            .input('IdProfessor', sql.Int, idProfessorSql)
             .query(query);
  
         return result.recordset[0]?.preco || null;
@@ -77,6 +83,92 @@ async function calcularCustoAutomatico(formato, duracao, diaSemana, idModalidade
     }
 }
  
+/**
+ * Cria linha na tabela de preços (US15 / RF17).
+ * idModalidade e idProfessor null = regra universal.
+ */
+async function criarRegistoPreco(dados) {
+    try {
+        const pool = await poolPromise;
+        const result = await pool
+            .request()
+            .input('Formato', sql.VarChar(50), dados.formatoAula)
+            .input('Duracao', sql.Int, dados.duracaoMinutos)
+            .input('DiaSemana', sql.Int, dados.diaSemana)
+            .input('Preco', sql.Decimal(10, 2), dados.preco)
+            .input('Ativo', sql.Bit, dados.ativo !== false ? 1 : 0)
+            .input('IdModalidade', sql.Int, dados.idModalidade ?? null)
+            .input('IdProfessor', sql.Int, dados.idProfessor ?? null)
+            .query(`
+                INSERT INTO TABELA_PRECO (
+                    formato_aula, duracao_minutos, dia_semana, preco, ativo,
+                    MODALIDADEid_modalidade, UTILIZADORid_utilizador
+                )
+                OUTPUT INSERTED.id_preco
+                VALUES (
+                    @Formato, @Duracao, @DiaSemana, @Preco, @Ativo,
+                    @IdModalidade, @IdProfessor
+                );
+            `);
+
+        return result.recordset[0].id_preco;
+    } catch (error) {
+        console.error('Erro no Modelo (criarRegistoPreco):', error);
+        throw error;
+    }
+}
+
+/**
+ * Atualiza um registo de preço (US15 / RF17).
+ */
+async function atualizarRegistoPreco(idPreco, dados) {
+    try {
+        const pool = await poolPromise;
+        const result = await pool
+            .request()
+            .input('IdPreco', sql.Int, idPreco)
+            .input('Formato', sql.VarChar(50), dados.formatoAula)
+            .input('Duracao', sql.Int, dados.duracaoMinutos)
+            .input('DiaSemana', sql.Int, dados.diaSemana)
+            .input('Preco', sql.Decimal(10, 2), dados.preco)
+            .input('Ativo', sql.Bit, dados.ativo !== false ? 1 : 0)
+            .input('IdModalidade', sql.Int, dados.idModalidade ?? null)
+            .input('IdProfessor', sql.Int, dados.idProfessor ?? null)
+            .query(`
+                UPDATE TABELA_PRECO
+                SET formato_aula = @Formato,
+                    duracao_minutos = @Duracao,
+                    dia_semana = @DiaSemana,
+                    preco = @Preco,
+                    ativo = @Ativo,
+                    MODALIDADEid_modalidade = @IdModalidade,
+                    UTILIZADORid_utilizador = @IdProfessor
+                WHERE id_preco = @IdPreco;
+            `);
+
+        return result.rowsAffected[0] > 0;
+    } catch (error) {
+        console.error('Erro no Modelo (atualizarRegistoPreco):', error);
+        throw error;
+    }
+}
+
+/** Desativa um preço (mantém histórico; US15 / RF17). */
+async function desativarRegistoPreco(idPreco) {
+    try {
+        const pool = await poolPromise;
+        const result = await pool
+            .request()
+            .input('IdPreco', sql.Int, idPreco)
+            .query(`UPDATE TABELA_PRECO SET ativo = 0 WHERE id_preco = @IdPreco;`);
+
+        return result.rowsAffected[0] > 0;
+    } catch (error) {
+        console.error('Erro no Modelo (desativarRegistoPreco):', error);
+        throw error;
+    }
+}
+
 // ============================================================================
 // 2. GERAÇÃO DE FATURAÇÃO MENSAL (US17 / RF18)
 // ============================================================================
@@ -178,17 +270,26 @@ async function gerarFaturacaoMensal(mes, ano, idUtilizador, idAnoLetivo) {
 /**
  * Consulta faturas. Se idUtilizador for fornecido, filtra por esse EE.
  * Caso contrário, retorna todas (para exportação pela Contabilidade).
+ * Opcionalmente filtra por mês e ano civil da fatura (mes/ano da tabela FATURACAO_MENSAL).
  */
-async function getFaturacao(idUtilizador = null) {
+async function getFaturacao(idUtilizador = null, mes = null, ano = null) {
     try {
         const pool = await poolPromise;
-        let whereClause = '';
+        const conditions = [];
         const request = pool.request();
  
-        if (idUtilizador) {
-            whereClause = 'WHERE f.UTILIZADORid_utilizador = @IdUtilizador';
+        if (idUtilizador != null && idUtilizador !== '') {
+            conditions.push('f.UTILIZADORid_utilizador = @IdUtilizador');
             request.input('IdUtilizador', sql.Int, idUtilizador);
         }
+
+        if (mes != null && mes !== '' && ano != null && ano !== '') {
+            conditions.push('f.mes = @FiltroMes AND f.ano = @FiltroAno');
+            request.input('FiltroMes', sql.Int, parseInt(mes, 10));
+            request.input('FiltroAno', sql.Int, parseInt(ano, 10));
+        }
+
+        const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
  
         const query = `
             SELECT 
@@ -350,6 +451,9 @@ async function getRelatorioAulasProfessor(mes, ano) {
  
 module.exports = {
     getTabelaPrecos,
+    criarRegistoPreco,
+    atualizarRegistoPreco,
+    desativarRegistoPreco,
     calcularCustoAutomatico,
     gerarFaturacaoMensal,
     getFaturacao,

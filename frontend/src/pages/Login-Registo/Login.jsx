@@ -22,12 +22,30 @@ export default function Login({ irParaRegisto, irParaLanding, irParaRecuperar })
 
       const resultado = await response.json();
 
-      if (response.ok) {
-        localStorage.setItem('viva_user', JSON.stringify(resultado.user));
-        alert(`Bem-vindo!`);
-        irParaLanding(); 
+      if (response.ok && resultado.utilizador) {
+        const u = resultado.utilizador;
+        const perfil = u.perfis?.includes('Professor')
+          ? 'Professor'
+          : u.perfis?.includes('EE')
+            ? 'EE'
+            : u.perfis?.[0] || 'EE';
+        localStorage.setItem(
+          'viva_user',
+          JSON.stringify({
+            id: u.id,
+            nome: u.nome,
+            email: u.email,
+            perfil,
+            perfis: u.perfis,
+            token: resultado.token
+          })
+        );
+        alert('Bem-vindo!');
+        irParaLanding();
+      } else if (response.ok) {
+        alert('Resposta do servidor incompleta. Tenta novamente ou contacta o suporte.');
       } else {
-        alert(resultado.error || "Dados de acesso incorretos.");
+        alert(resultado.error || resultado.mensagem || 'Dados de acesso incorretos.');
       }
     } catch (error) {
       alert("Erro ao ligar ao servidor.");

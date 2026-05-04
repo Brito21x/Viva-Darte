@@ -31,6 +31,19 @@ router.post('/pedidos', autorizar('EE'), coachingController.criarPedidoCoaching)
 // GET  /api/coaching/pedidos/pendentes — pedidos para tratar (Coordenação)
 router.get('/pedidos/pendentes', autorizar('Admin'), coachingController.getPedidosPendentes);
 
+// US05 / RF06 — os meus pedidos (EE) — antes de /pedidos/:id
+router.get('/pedidos/meus', autorizar('EE'), coachingController.listarMeusPedidosCoaching);
+
+// Cancelar pedido pendente (EE)
+router.delete('/pedidos/:id/pendente', autorizar('EE'), coachingController.cancelarMeuPedidoPendente);
+
+// GET /api/coaching/pedidos/:id — Admin ou EE dono do pedido
+router.get(
+    '/pedidos/:id',
+    autorizar('Admin', 'EE'),
+    coachingController.getPedidoCoaching
+);
+
 // POST /api/coaching/pedidos/:id/aprovar — aprovar e agendar (Coordenação)
 router.post('/pedidos/:id/aprovar', autorizar('Admin'), coachingController.aprovarPedido);
 

@@ -1,4 +1,5 @@
 const faturacaoModel = require('../models/faturacaoModel');
+const utilizadorModel = require('../models/utilizadorModel');
 
 // ============================================================================
 // US15 / RF17 — CONSULTAR TABELA DE PREÇOS (Coordenação)
@@ -8,6 +9,107 @@ async function getTabelaPrecos(req, res, next) {
     try {
         const precos = await faturacaoModel.getTabelaPrecos();
         return res.status(200).json(precos);
+    } catch (error) {
+        next(error);
+    }
+}
+
+// ============================================================================
+// US15 / RF17 — CRIAR / ATUALIZAR / DESATIVAR PREÇO (Coordenação)
+// POST /api/faturacao/precos
+// PUT /api/faturacao/precos/:idPreco
+// DELETE /api/faturacao/precos/:idPreco (desativa ativo=0)
+// ============================================================================
+async function criarPreco(req, res, next) {
+    try {
+        const {
+            formatoAula,
+            duracaoMinutos,
+            diaSemana,
+            preco,
+            idModalidade,
+            idProfessor,
+            ativo
+        } = req.body;
+
+        if (!formatoAula || duracaoMinutos == null || diaSemana == null || preco === undefined) {
+            return res.status(400).json({
+                mensagem: 'formatoAula, duracaoMinutos, diaSemana e preco são obrigatórios.'
+            });
+        }
+
+        const idPreco = await faturacaoModel.criarRegistoPreco({
+            formatoAula,
+            duracaoMinutos: parseInt(duracaoMinutos, 10),
+            diaSemana: parseInt(diaSemana, 10),
+            preco: parseFloat(preco),
+            idModalidade: idModalidade != null ? parseInt(idModalidade, 10) : null,
+            idProfessor: idProfessor != null ? parseInt(idProfessor, 10) : null,
+            ativo
+        });
+
+        return res.status(201).json({ mensagem: 'Preço criado com sucesso.', idPreco });
+    } catch (error) {
+        next(error);
+    }
+}
+
+async function atualizarPreco(req, res, next) {
+    try {
+        const idPreco = parseInt(req.params.idPreco, 10);
+        if (Number.isNaN(idPreco)) {
+            return res.status(400).json({ mensagem: 'ID de preço inválido.' });
+        }
+
+        const {
+            formatoAula,
+            duracaoMinutos,
+            diaSemana,
+            preco,
+            idModalidade,
+            idProfessor,
+            ativo
+        } = req.body;
+
+        if (!formatoAula || duracaoMinutos == null || diaSemana == null || preco === undefined) {
+            return res.status(400).json({
+                mensagem: 'formatoAula, duracaoMinutos, diaSemana e preco são obrigatórios.'
+            });
+        }
+
+        const ok = await faturacaoModel.atualizarRegistoPreco(idPreco, {
+            formatoAula,
+            duracaoMinutos: parseInt(duracaoMinutos, 10),
+            diaSemana: parseInt(diaSemana, 10),
+            preco: parseFloat(preco),
+            idModalidade: idModalidade != null ? parseInt(idModalidade, 10) : null,
+            idProfessor: idProfessor != null ? parseInt(idProfessor, 10) : null,
+            ativo
+        });
+
+        if (!ok) {
+            return res.status(404).json({ mensagem: 'Preço não encontrado.' });
+        }
+
+        return res.status(200).json({ mensagem: 'Preço atualizado com sucesso.' });
+    } catch (error) {
+        next(error);
+    }
+}
+
+async function desativarPreco(req, res, next) {
+    try {
+        const idPreco = parseInt(req.params.idPreco, 10);
+        if (Number.isNaN(idPreco)) {
+            return res.status(400).json({ mensagem: 'ID de preço inválido.' });
+        }
+
+        const ok = await faturacaoModel.desativarRegistoPreco(idPreco);
+        if (!ok) {
+            return res.status(404).json({ mensagem: 'Preço não encontrado.' });
+        }
+
+        return res.status(200).json({ mensagem: 'Preço desativado com sucesso.' });
     } catch (error) {
         next(error);
     }
@@ -100,13 +202,48 @@ async function gerarFaturacaoTodos(req, res, next) {
             return res.status(400).json({ mensagem: 'mes, ano e idAnoLetivo são obrigatórios.' });
         }
 
-        // TODO: Obter lista de todos os EEs e iterar.
-        // Esta implementação é um placeholder para integração futura com utilizadorModel.
-        // Recomenda-se chamar listarTodosUtilizadores() filtrando por perfil 'EE'
-        // e chamar gerarFaturacaoMensal() para cada um.
+        if (Number(mes) < 1 || Number(mes) > 12) {
+            return res.status(400).json({ mensagem: 'Mês deve ser entre 1 e 12.' });
+        }
 
-        return res.status(501).json({
-            mensagem: 'Endpoint em desenvolvimento. Use POST /api/faturacao/gerar para gerar individualmente.'
+        const idsEE = await utilizadorModel.listarIdsEncarregadosEducacao();
+        const resultados = [];
+        let geradas = 0;
+        let semConsumo = 0;
+        let erros = 0;
+
+        for (const idUtilizador of idsEE) {
+            try {
+                const idFaturacao = await faturacaoModel.gerarFaturacaoMensal(
+                    parseInt(mes, 10),
+                    parseInt(ano, 10),
+                    idUtilizador,
+                    parseInt(idAnoLetivo, 10)
+                );
+                if (idFaturacao === null) {
+                    semConsumo += 1;
+                    resultados.push({ idUtilizador, resultado: 'sem_consumo' });
+                } else {
+                    geradas += 1;
+                    resultados.push({ idUtilizador, resultado: 'gerada', idFaturacao });
+                }
+            } catch (e) {
+                erros += 1;
+                resultados.push({
+                    idUtilizador,
+                    resultado: 'erro',
+                    mensagem: e.message || 'Erro desconhecido'
+                });
+            }
+        }
+
+        return res.status(200).json({
+            mensagem: `Processados ${idsEE.length} encarregados: ${geradas} fatura(s) gerada(s), ${semConsumo} sem consumo, ${erros} erro(s).`,
+            total_encarregados: idsEE.length,
+            faturas_geradas: geradas,
+            sem_consumo: semConsumo,
+            erros,
+            detalhes: resultados
         });
     } catch (error) {
         next(error);
@@ -148,11 +285,7 @@ async function exportarFaturacao(req, res, next) {
 
         let faturas;
         if (mes && ano) {
-            // Filtrar por mês e ano específicos
-            faturas = await faturacaoModel.getFaturacao(null);
-            faturas = faturas.filter(
-                f => f.mes === parseInt(mes) && f.ano === parseInt(ano)
-            );
+            faturas = await faturacaoModel.getFaturacao(null, mes, ano);
         } else {
             faturas = await faturacaoModel.getFaturacao(null);
         }
@@ -242,10 +375,17 @@ async function getHistorico(req, res, next) {
 // ============================================================================
 async function getHistoricoUtilizador(req, res, next) {
     try {
-        const idUtilizador = parseInt(req.params.id);
+        const idUtilizador = parseInt(req.params.id, 10);
+        const perfis = req.utilizador.perfis || [];
 
-        if (isNaN(idUtilizador)) {
+        if (Number.isNaN(idUtilizador)) {
             return res.status(400).json({ mensagem: 'ID de utilizador inválido.' });
+        }
+
+        if (!perfis.includes('Admin') && idUtilizador !== req.utilizador.id) {
+            return res.status(403).json({
+                mensagem: 'Só pode consultar o histórico do próprio utilizador.'
+            });
         }
 
         const historico = await faturacaoModel.getHistoricoAtividades(idUtilizador);
@@ -290,6 +430,9 @@ async function getRelatorio(req, res, next) {
 
 module.exports = {
     getTabelaPrecos,
+    criarPreco,
+    atualizarPreco,
+    desativarPreco,
     calcularCusto,
     gerarFaturacao,
     gerarFaturacaoTodos,

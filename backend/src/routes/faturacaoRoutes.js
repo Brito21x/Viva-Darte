@@ -9,8 +9,13 @@ router.use(autenticar);
 // GET  /api/faturacao/precos — tabela de preços (Coordenação)
 router.get('/precos', autorizar('Admin'), faturacaoController.getTabelaPrecos);
 
-// GET  /api/faturacao/calcular?formato=&duracao=&diaSemana=&idModalidade=&idProfessor=
-router.get('/calcular', faturacaoController.calcularCusto);
+// US15 / RF17 — criar, atualizar, desativar preço (antes de rotas com :id genérico)
+router.post('/precos', autorizar('Admin'), faturacaoController.criarPreco);
+router.put('/precos/:idPreco', autorizar('Admin'), faturacaoController.atualizarPreco);
+router.delete('/precos/:idPreco', autorizar('Admin'), faturacaoController.desativarPreco);
+
+// US16 / RF18 — cálculo de custo (EE no pedido; Admin na configuração)
+router.get('/calcular', autorizar('EE', 'Admin'), faturacaoController.calcularCusto);
 
 // POST /api/faturacao/gerar — gerar fatura de um utilizador (Coordenação)
 router.post('/gerar', autorizar('Admin'), faturacaoController.gerarFaturacao);
@@ -30,11 +35,18 @@ router.get('/exportar', autorizar('Admin'), faturacaoController.exportarFaturaca
 // PUT  /api/faturacao/:id/pagar — registar pagamento (Coordenação/Contabilidade)
 router.put('/:id/pagar', autorizar('Admin'), faturacaoController.registarPagamento);
 
-// GET  /api/faturacao/historico — histórico do utilizador autenticado
-router.get('/historico', faturacaoController.getHistorico);
+// US29 / RF27 — histórico (próprio ou, com permissão, outro id)
+router.get(
+    '/historico',
+    autorizar('Admin', 'Professor', 'EE'),
+    faturacaoController.getHistorico
+);
 
-// GET  /api/faturacao/historico/:id — histórico de utilizador específico (Admin)
-router.get('/historico/:id', autorizar('Admin'), faturacaoController.getHistoricoUtilizador);
+router.get(
+    '/historico/:id',
+    autorizar('Admin', 'Professor', 'EE'),
+    faturacaoController.getHistoricoUtilizador
+);
 
 // GET  /api/faturacao/relatorio?mes=&ano= — relatório por professor (Admin)
 router.get('/relatorio', autorizar('Admin'), faturacaoController.getRelatorio);

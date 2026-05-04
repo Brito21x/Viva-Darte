@@ -169,7 +169,7 @@ async function listarTodosUtilizadores() {
 /**
  * Cria um novo utilizador e associa-o a um perfil dentro de uma transação.
  */
-async function criarUtilizador({ nome, email, passwordHash, telefone, nomePerfil, tipo }) {
+async function criarUtilizador({ nome, email, passwordHash, telefone, nomePerfil }) {
     const pool = await poolPromise;
     const transaction = pool.transaction();
     await transaction.begin();
@@ -310,11 +310,12 @@ async function alterarEstadoUtilizador(idUtilizador, estadoAtivo) {
 async function guardarTokenRecuperacao(idUtilizador, token) {
     try {
         const pool = await poolPromise;
+        const dataExpiracaoUnix = Math.floor(Date.now() / 1000) + 3600;
         const query = `
             INSERT INTO TOKEN_RECUPERACAO (token, data_expiracao, usado, data_criacao, UTILIZADORid_utilizador)
             VALUES (
                 @Token, 
-                DATEDIFF(SECOND, '1970-01-01', DATEADD(HOUR, 1, GETUTCDATE())), 
+                @DataExpiracao,
                 0, 
                 GETDATE(), 
                 @IdUtilizador
@@ -322,6 +323,7 @@ async function guardarTokenRecuperacao(idUtilizador, token) {
         `;
         await pool.request()
             .input('Token', sql.VarChar(255), token)
+            .input('DataExpiracao', sql.Int, dataExpiracaoUnix)
             .input('IdUtilizador', sql.Int, idUtilizador)
             .query(query);
  
@@ -414,7 +416,84 @@ async function getAlunosPorEncarregado(idEncarregado) {
         throw error;
     }
 }
- 
+
+/**
+ * Cria um aluno (Admin). Não associa automaticamente a um EE.
+ */
+async function criarAluno({ nome, dataNascimento }) {
+    try {
+        const pool = await poolPromise;
+        const result = await pool
+            .request()
+            .input('Nome', sql.VarChar(255), nome)
+            .input('DataNasc', sql.Date, dataNascimento || null)
+            .query(`
+                INSERT INTO ALUNO (nome, data_nascimento, ativo, data_criacao)
+                OUTPUT INSERTED.id_aluno, INSERTED.nome, INSERTED.data_nascimento, INSERTED.ativo
+                VALUES (@Nome, @DataNasc, 1, CAST(GETDATE() AS DATE));
+            `);
+
+        return result.recordset[0];
+    } catch (error) {
+        console.error('Erro no Modelo (criarAluno):', error);
+        throw error;
+    }
+}
+
+/**
+ * Associa um aluno a um encarregado de educação (Admin).
+ */
+async function associarEncarregadoAluno(idEncarregado, idAluno) {
+    try {
+        const pool = await poolPromise;
+
+        const duplicado = await pool
+            .request()
+            .input('IdEnc', sql.Int, idEncarregado)
+            .input('IdAluno', sql.Int, idAluno)
+            .query(`
+                SELECT 1 AS ok FROM ENCARREGADO_ALUNO
+                WHERE UTILIZADORid_utilizador = @IdEnc AND ALUNOid_aluno = @IdAluno;
+            `);
+
+        if (duplicado.recordset.length > 0) {
+            throw new Error('Este aluno já está associado a este encarregado.');
+        }
+
+        await pool
+            .request()
+            .input('IdEnc', sql.Int, idEncarregado)
+            .input('IdAluno', sql.Int, idAluno)
+            .query(`
+                INSERT INTO ENCARREGADO_ALUNO (UTILIZADORid_utilizador, ALUNOid_aluno)
+                VALUES (@IdEnc, @IdAluno);
+            `);
+
+        return true;
+    } catch (error) {
+        console.error('Erro no Modelo (associarEncarregadoAluno):', error);
+        throw error;
+    }
+}
+
+/** IDs de utilizadores com perfil EE ativo (faturação em lote). */
+async function listarIdsEncarregadosEducacao() {
+    try {
+        const pool = await poolPromise;
+        const r = await pool.request().query(`
+            SELECT DISTINCT u.id_utilizador
+            FROM UTILIZADOR u
+            JOIN UTILIZADOR_PERFIL up ON u.id_utilizador = up.UTILIZADORid_utilizador
+            JOIN PERFIL p ON p.id_perfil = up.PERFILid_perfil AND p.nome = 'EE'
+            WHERE u.ativo = 1;
+        `);
+        return r.recordset.map(row => row.id_utilizador);
+    } catch (error) {
+        console.error('Erro no Modelo (listarIdsEncarregadosEducacao):', error);
+        throw error;
+    }
+}
+
 module.exports = {
     getUtilizadorByEmail,
     getPerfisDoUtilizador,
@@ -428,5 +507,8 @@ module.exports = {
     guardarTokenRecuperacao,
     validarTokenRecuperacao,
     atualizarPassword,
-    getAlunosPorEncarregado
+    getAlunosPorEncarregado,
+    criarAluno,
+    associarEncarregadoAluno,
+    listarIdsEncarregadosEducacao
 };

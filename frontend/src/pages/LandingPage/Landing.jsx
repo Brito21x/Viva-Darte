@@ -8,7 +8,14 @@ export default function Landing({ irParaLogin, irParaRegisto }) {
 
   useEffect(() => {
     const userGuardado = localStorage.getItem('viva_user');
-    if (userGuardado) setUtilizador(JSON.parse(userGuardado));
+    if (userGuardado && userGuardado !== 'undefined' && userGuardado !== 'null') {
+      try {
+        const parsed = JSON.parse(userGuardado);
+        if (parsed && typeof parsed === 'object') setUtilizador(parsed);
+      } catch {
+        localStorage.removeItem('viva_user');
+      }
+    }
     document.title = "Viva D'arte | Escola de Dança";
   }, []);
 

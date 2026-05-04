@@ -186,28 +186,28 @@ async function getProfessoresPorModalidade(idModalidade) {
 async function associarProfessorModalidade(idProfessor, idModalidade) {
     try {
         const pool = await poolPromise;
-        // Verificar se já existe a associação antes de inserir
-        const existe = await pool.request()
+        const result = await pool
+            .request()
             .input('IdProfessor', sql.Int, idProfessor)
             .input('IdModalidade', sql.Int, idModalidade)
             .query(`
-                SELECT 1 FROM PROFESSOR_MODALIDADE 
-                WHERE UTILIZADORid_utilizador = @IdProfessor 
-                  AND MODALIDADEid_modalidade = @IdModalidade
+                MERGE PROFESSOR_MODALIDADE AS t
+                USING (SELECT @IdProfessor AS id_p, @IdModalidade AS id_m) AS s
+                ON t.UTILIZADORid_utilizador = s.id_p AND t.MODALIDADEid_modalidade = s.id_m
+                WHEN NOT MATCHED THEN
+                    INSERT (UTILIZADORid_utilizador, MODALIDADEid_modalidade)
+                    VALUES (s.id_p, s.id_m);
             `);
- 
-        if (existe.recordset.length > 0) {
+
+        const ra = result.rowsAffected || [];
+        const totalAfetadas = (Array.isArray(ra) ? ra : [ra]).reduce(
+            (acc, n) => acc + (Number(n) || 0),
+            0
+        );
+        if (totalAfetadas < 1) {
             throw new Error('Esta associação professor/modalidade já existe.');
         }
- 
-        await pool.request()
-            .input('IdProfessor', sql.Int, idProfessor)
-            .input('IdModalidade', sql.Int, idModalidade)
-            .query(`
-                INSERT INTO PROFESSOR_MODALIDADE (UTILIZADORid_utilizador, MODALIDADEid_modalidade)
-                VALUES (@IdProfessor, @IdModalidade);
-            `);
- 
+
         return true;
     } catch (error) {
         console.error('Erro no Modelo (associarProfessorModalidade):', error);
@@ -237,6 +237,53 @@ async function removerProfessorModalidade(idProfessor, idModalidade) {
     }
 }
  
+/**
+ * Lista horários de aulas regulares (HORARIO), opcionalmente filtrados por ano letivo.
+ */
+async function getHorariosPorAnoLetivo(idAnoLetivo = null) {
+    try {
+        const pool = await poolPromise;
+        const request = pool.request();
+
+        let filtroAno = '';
+        if (idAnoLetivo != null && !Number.isNaN(Number(idAnoLetivo))) {
+            filtroAno = 'AND h.ANO_LETIVOid_ano_letivo = @IdAnoLetivo';
+            request.input('IdAnoLetivo', sql.Int, parseInt(idAnoLetivo, 10));
+        }
+
+        const query = `
+            SELECT 
+                h.id_horario,
+                h.dia_semana,
+                h.hora_inicio,
+                h.hora_fim,
+                h.ativo,
+                h.UTILIZADORid_utilizador AS id_professor,
+                h.ALUNOid_aluno AS id_aluno,
+                h.MODALIDADEid_modalidade AS id_modalidade,
+                h.SALAid_sala AS id_sala,
+                h.ANO_LETIVOid_ano_letivo AS id_ano_letivo,
+                prof.nome AS nome_professor,
+                al.nome AS nome_aluno,
+                m.nome AS modalidade,
+                s.nome AS sala
+            FROM HORARIO h
+            JOIN UTILIZADOR prof ON h.UTILIZADORid_utilizador = prof.id_utilizador
+            JOIN ALUNO al ON h.ALUNOid_aluno = al.id_aluno
+            JOIN MODALIDADE m ON h.MODALIDADEid_modalidade = m.id_modalidade
+            JOIN SALA s ON h.SALAid_sala = s.id_sala
+            WHERE h.ativo = 1 ${filtroAno}
+            ORDER BY h.dia_semana, h.hora_inicio;
+        `;
+
+        const result = await request.query(query);
+        return result.recordset;
+    } catch (error) {
+        console.error('Erro no Modelo (getHorariosPorAnoLetivo):', error);
+        throw error;
+    }
+}
+
 module.exports = {
     getAnosLetivos,
     getModalidadesAtivas,
@@ -246,5 +293,6 @@ module.exports = {
     getModalidadesPorProfessor,
     getProfessoresPorModalidade,
     associarProfessorModalidade,
-    removerProfessorModalidade
+    removerProfessorModalidade,
+    getHorariosPorAnoLetivo
 };

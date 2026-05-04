@@ -82,7 +82,7 @@ async function getPecaDetalhes(idPeca) {
         const resultFotos = await pool.request()
             .input('IdPeca', sql.Int, idPeca)
             .query(`
-                SELECT id_foto_peca, foto, 
+                SELECT id_foto_peca, foto
                 FROM FOTO_PECA
                 WHERE PECAid_peca = @IdPeca
                 ORDER BY id_foto_peca ASC;
@@ -191,6 +191,23 @@ async function requisitarEmprestimo(dadosEmprestimo, itensEmprestimo) {
             if (disponivel.recordset.length === 0) {
                 throw new Error(`A peça com id ${item.idPeca} não está disponível para empréstimo.`);
             }
+
+            const emprestimoAtivo = await transaction.request()
+                .input('IdPeca', sql.Int, item.idPeca)
+                .query(`
+                    SELECT TOP 1 1 AS ok
+                    FROM EMPRESTIMO_ITEM ei
+                    INNER JOIN EMPRESTIMO e ON ei.[EMPRESIMO id_emprestimo] = e.id_emprestimo
+                    WHERE ei.PECAid_peca = @IdPeca
+                      AND e.estado NOT IN ('Concluído', 'Cancelado', 'Rejeitado')
+                      AND ei.estado_devolucao IS NULL;
+                `);
+
+            if (emprestimoAtivo.recordset.length > 0) {
+                throw new Error(
+                    `A peça com id ${item.idPeca} já se encontra num empréstimo ativo (devolução pendente).`
+                );
+            }
         }
  
         // Inserir cabeçalho do empréstimo
@@ -278,10 +295,38 @@ async function registarDevolucaoEmprestimo(idEmprestimo, estadoFinal, observacoe
                     .input('IdPeca', sql.Int, item.idPeca)
                     .query(`
                         UPDATE PECA 
-                        SET disponivel_para_emprestimo = 1, estado = @EstadoDevolucao
+                        SET disponivel_para_emprestimo = 1
                         WHERE id_peca = @IdPeca;
-                    `)
-                    .catch(() => {}); // estado pode não corresponder ao campo estado da PECA, ignorar silenciosamente
+                    `);
+
+                const estadosPecaValidos = new Set(['Novo', 'Bom', 'Usado', 'Danificado']);
+                if (estadosPecaValidos.has(item.estadoDevolucao)) {
+                    await transaction.request()
+                        .input('EstadoDevolucao', sql.VarChar(50), item.estadoDevolucao)
+                        .input('IdPeca', sql.Int, item.idPeca)
+                        .query(`
+                            UPDATE PECA 
+                            SET estado = @EstadoDevolucao
+                            WHERE id_peca = @IdPeca;
+                        `);
+                }
+            } else {
+                await transaction.request()
+                    .input('IdPeca', sql.Int, item.idPeca)
+                    .query(`
+                        UPDATE PECA 
+                        SET disponivel_para_emprestimo = 0
+                        WHERE id_peca = @IdPeca;
+                    `);
+
+                await transaction.request()
+                    .input('Estado', sql.VarChar(50), 'Danificado')
+                    .input('IdPeca', sql.Int, item.idPeca)
+                    .query(`
+                        UPDATE PECA 
+                        SET estado = @Estado
+                        WHERE id_peca = @IdPeca;
+                    `);
             }
         }
  
@@ -436,13 +481,14 @@ async function colocarPecaAVenda(idPeca, preco, idVendedor) {
             .input('Preco', sql.Decimal(10, 2), preco)
             .input('IdPeca', sql.Int, idPeca)
             .input('IdVendedor', sql.Int, idVendedor)
+            .input('IdCompradorInicial', sql.Int, null)
             .query(`
                 INSERT INTO VENDA_PECA (
-                    preco, data_colocacao, estado, PECAid_peca, UTILIZADORid_utilizador
+                    preco, data_colocacao, estado, PECAid_peca, UTILIZADORid_utilizador, UTILIZADORid_utilizador2
                 )
                 OUTPUT INSERTED.id_venda
                 VALUES (
-                    @Preco, GETDATE(), 'Disponível', @IdPeca, @IdVendedor
+                    @Preco, GETDATE(), 'Disponível', @IdPeca, @IdVendedor, @IdCompradorInicial
                 );
             `)
             .then(r => r.recordset[0].id_venda);

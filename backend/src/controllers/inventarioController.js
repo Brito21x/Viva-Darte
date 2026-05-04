@@ -109,6 +109,13 @@ async function atualizarEstadoPeca(req, res, next) {
             return res.status(400).json({ mensagem: 'Estado é obrigatório.' });
         }
 
+        const estadosValidos = ['Novo', 'Bom', 'Usado', 'Danificado'];
+        if (!estadosValidos.includes(estado)) {
+            return res.status(400).json({
+                mensagem: `Estado inválido. Valores aceites: ${estadosValidos.join(', ')}.`
+            });
+        }
+
         const sucesso = await inventarioModel.atualizarEstadoPeca(idPeca, {
             estado,
             disponivelEmprestimo: disponivelEmprestimo ?? false,

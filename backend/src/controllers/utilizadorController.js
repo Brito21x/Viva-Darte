@@ -71,7 +71,10 @@ async function criarUtilizador(req, res, next) {
 // ============================================================================
 async function editarUtilizador(req, res, next) {
     try {
-        const idUtilizador = parseInt(req.params.id);
+        const idUtilizador = parseInt(req.params.id, 10);
+        if (Number.isNaN(idUtilizador)) {
+            return res.status(400).json({ mensagem: 'ID de utilizador inválido.' });
+        }
         const { nome, telefone, perfil } = req.body;
 
         if (!nome) {
@@ -113,7 +116,10 @@ async function editarUtilizador(req, res, next) {
 // ============================================================================
 async function alterarEstadoUtilizador(req, res, next) {
     try {
-        const idUtilizador = parseInt(req.params.id);
+        const idUtilizador = parseInt(req.params.id, 10);
+        if (Number.isNaN(idUtilizador)) {
+            return res.status(400).json({ mensagem: 'ID de utilizador inválido.' });
+        }
         const { ativo } = req.body;
 
         if (typeof ativo !== 'boolean') {
@@ -160,11 +166,60 @@ async function getAlunosPorEncarregado(req, res, next) {
 // ============================================================================
 async function getAlunosPorEncarregadoId(req, res, next) {
     try {
-        const idEncarregado = parseInt(req.params.id);
+        const idEncarregado = parseInt(req.params.id, 10);
+        if (Number.isNaN(idEncarregado)) {
+            return res.status(400).json({ mensagem: 'ID de encarregado inválido.' });
+        }
 
         const alunos = await utilizadorModel.getAlunosPorEncarregado(idEncarregado);
         return res.status(200).json(alunos);
     } catch (error) {
+        next(error);
+    }
+}
+
+// ============================================================================
+// ALUNOS — criação e associação a EE (Admin)
+// POST /api/utilizadores/alunos  Body: { nome, dataNascimento? }
+// POST /api/utilizadores/associacoes/encarregado-aluno  Body: { idEncarregado, idAluno }
+// ============================================================================
+async function criarAluno(req, res, next) {
+    try {
+        const { nome, dataNascimento } = req.body;
+        if (!nome || typeof nome !== 'string') {
+            return res.status(400).json({ mensagem: 'nome é obrigatório.' });
+        }
+
+        const aluno = await utilizadorModel.criarAluno({
+            nome: nome.trim(),
+            dataNascimento: dataNascimento || null
+        });
+
+        return res.status(201).json({
+            mensagem: 'Aluno criado com sucesso.',
+            aluno
+        });
+    } catch (error) {
+        next(error);
+    }
+}
+
+async function associarEncarregadoAluno(req, res, next) {
+    try {
+        const { idEncarregado, idAluno } = req.body;
+        const idEnc = parseInt(idEncarregado, 10);
+        const idA = parseInt(idAluno, 10);
+
+        if (Number.isNaN(idEnc) || Number.isNaN(idA)) {
+            return res.status(400).json({ mensagem: 'idEncarregado e idAluno são obrigatórios e devem ser numéricos.' });
+        }
+
+        await utilizadorModel.associarEncarregadoAluno(idEnc, idA);
+        return res.status(201).json({ mensagem: 'Aluno associado ao encarregado com sucesso.' });
+    } catch (error) {
+        if (error.message && error.message.includes('já está associado')) {
+            return res.status(409).json({ mensagem: error.message });
+        }
         next(error);
     }
 }
@@ -175,5 +230,7 @@ module.exports = {
     editarUtilizador,
     alterarEstadoUtilizador,
     getAlunosPorEncarregado,
-    getAlunosPorEncarregadoId
+    getAlunosPorEncarregadoId,
+    criarAluno,
+    associarEncarregadoAluno
 };

@@ -159,6 +159,28 @@ async function removerProfessorModalidade(req, res, next) {
     }
 }
 
+// ============================================================================
+// HORÁRIOS REGULARES (HORARIO) — leitura
+// GET /api/escola/horarios?idAnoLetivo=
+// ============================================================================
+async function getHorarios(req, res, next) {
+    try {
+        const { idAnoLetivo } = req.query;
+        const id =
+            idAnoLetivo !== undefined && idAnoLetivo !== '' && idAnoLetivo != null
+                ? parseInt(idAnoLetivo, 10)
+                : null;
+        if (idAnoLetivo !== undefined && idAnoLetivo !== '' && Number.isNaN(id)) {
+            return res.status(400).json({ mensagem: 'idAnoLetivo inválido.' });
+        }
+
+        const horarios = await escolaModel.getHorariosPorAnoLetivo(id);
+        return res.status(200).json(horarios);
+    } catch (error) {
+        next(error);
+    }
+}
+
 module.exports = {
     getAnosLetivos,
     getModalidades,
@@ -168,5 +190,6 @@ module.exports = {
     getProfessoresPorModalidade,
     getModalidadesPorProfessor,
     associarProfessorModalidade,
-    removerProfessorModalidade
+    removerProfessorModalidade,
+    getHorarios
 };

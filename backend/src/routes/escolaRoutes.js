@@ -9,6 +9,9 @@ router.use(autenticar);
 // GET /api/escola/anos-letivos
 router.get('/anos-letivos', escolaController.getAnosLetivos);
 
+// GET /api/escola/horarios?idAnoLetivo= — aulas regulares (HORARIO)
+router.get('/horarios', escolaController.getHorarios);
+
 // GET /api/escola/modalidades
 router.get('/modalidades', escolaController.getModalidades);
 

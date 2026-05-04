@@ -4,6 +4,11 @@ require('dotenv').config();
 
 const { poolConnect } = require('./src/config/db');
 const authRoutes = require('./src/routes/authRoutes');
+const utilizadorRoutes = require('./src/routes/utilizadorRoutes');
+const escolaRoutes = require('./src/routes/escolaRoutes');
+const coachingRoutes = require('./src/routes/coachingRoutes');
+const inventarioRoutes = require('./src/routes/inventarioRoutes');
+const faturacaoRoutes = require('./src/routes/faturacaoRoutes');
 const errorHandler = require('./src/middlewares/errorHandler');
 
 const app = express();
@@ -30,6 +35,11 @@ app.get('/api/health', (req, res) => {
 
 // Definição de Rotas
 app.use('/api/auth', authRoutes);
+app.use('/api/utilizadores', utilizadorRoutes);
+app.use('/api/escola', escolaRoutes);
+app.use('/api/coaching', coachingRoutes);
+app.use('/api/inventario', inventarioRoutes);
+app.use('/api/faturacao', faturacaoRoutes);
 
 // Tratamento de Erros (sempre no fim)
 app.use(errorHandler);

@@ -13,6 +13,16 @@ router.get('/', autorizar('Admin'), utilizadorController.listarUtilizadores);
 // POST /api/utilizadores — criar utilizador (Admin)
 router.post('/', autorizar('Admin'), utilizadorController.criarUtilizador);
 
+// POST /api/utilizadores/alunos — criar aluno (Admin)
+router.post('/alunos', autorizar('Admin'), utilizadorController.criarAluno);
+
+// POST /api/utilizadores/associacoes/encarregado-aluno — associar aluno a EE (Admin)
+router.post(
+    '/associacoes/encarregado-aluno',
+    autorizar('Admin'),
+    utilizadorController.associarEncarregadoAluno
+);
+
 // PUT /api/utilizadores/:id — editar utilizador (Admin)
 router.put('/:id', autorizar('Admin'), utilizadorController.editarUtilizador);
 

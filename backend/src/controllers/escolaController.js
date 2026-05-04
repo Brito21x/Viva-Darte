@@ -127,7 +127,7 @@ async function associarProfessorModalidade(req, res, next) {
 
         return res.status(201).json({ mensagem: 'Modalidade associada ao professor com sucesso.' });
     } catch (error) {
-        if (error.message.includes('já existe')) {
+        if (error.message.includes('já existe') || error.message.includes('já está associado')) {
             return res.status(409).json({ mensagem: error.message });
         }
         next(error);

@@ -277,7 +277,7 @@ async function getMinhaFaturacao(req, res, next) {
 // ============================================================================
 // US18 / RF19 — EXPORTAR FATURAÇÃO (Contabilidade)
 // GET /api/faturacao/exportar?mes=10&ano=2025
-// Devolve JSON estruturado pronto para exportação CSV/Excel no frontend.
+// Devolve JSON estruturado (o cliente pode converter para CSV/Excel).
 // ============================================================================
 async function exportarFaturacao(req, res, next) {
     try {
@@ -305,7 +305,6 @@ async function exportarFaturacao(req, res, next) {
             data_geracao: f.data_geracao
         }));
 
-        // Header para download CSV no browser
         res.setHeader('Content-Type', 'application/json');
         return res.status(200).json({
             total_registos: exportData.length,

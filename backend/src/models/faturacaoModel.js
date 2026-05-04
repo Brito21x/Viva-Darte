@@ -221,17 +221,32 @@ async function gerarFaturacaoMensal(mes, ano, idUtilizador, idAnoLetivo) {
             .input('Mes', sql.Int, mes)
             .input('Ano', sql.Int, ano)
             .query(`
-                SELECT ISNULL(SUM(e.valor), 0) AS total
+                SELECT ISNULL(SUM(ISNULL(e.valor, 0)), 0) AS total
                 FROM EMPRESTIMO e 
                 WHERE e.UTILIZADORid_utilizador = @IdUtilizador 
                   AND MONTH(e.data_pedido) = @Mes 
                   AND YEAR(e.data_pedido) = @Ano
                   AND e.estado NOT IN ('Cancelado', 'Rejeitado');
             `);
+
+        const resultPenalizacoes = await transaction.request()
+            .input('IdUtilizador', sql.Int, idUtilizador)
+            .input('Mes', sql.Int, mes)
+            .input('Ano', sql.Int, ano)
+            .query(`
+                SELECT ISNULL(SUM(pp.valor), 0) AS total
+                FROM PENALIZACAO_PECA pp
+                INNER JOIN EMPRESTIMO e ON pp.EMPRESTIMOid_emprestimo = e.id_emprestimo
+                WHERE e.UTILIZADORid_utilizador = @IdUtilizador
+                  AND MONTH(pp.data_registo) = @Mes
+                  AND YEAR(pp.data_registo) = @Ano;
+            `);
  
         const totalCoachings = resultCoachings.recordset[0].total;
         const totalEmprestimos = resultEmprestimos.recordset[0].total;
-        const totalMes = Number(totalCoachings) + Number(totalEmprestimos);
+        const totalPenalizacoes = resultPenalizacoes.recordset[0].total;
+        const totalMes =
+            Number(totalCoachings) + Number(totalEmprestimos) + Number(totalPenalizacoes);
  
         if (totalMes === 0) {
             await transaction.commit();

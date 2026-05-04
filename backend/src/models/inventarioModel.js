@@ -477,18 +477,20 @@ async function colocarPecaAVenda(idPeca, preco, idVendedor) {
             throw new Error('Esta peça já está anunciada para venda.');
         }
  
+        // UTILIZADORid_utilizador2: se a BD exige NOT NULL antes da conclusão, usar o vendedor
+        // como marcador até `registarConclusaoVenda` gravar o comprador real. Preferível: coluna NULL (ver sql/patches).
         const idVenda = await transaction.request()
             .input('Preco', sql.Decimal(10, 2), preco)
             .input('IdPeca', sql.Int, idPeca)
             .input('IdVendedor', sql.Int, idVendedor)
-            .input('IdCompradorInicial', sql.Int, null)
+            .input('IdCompradorPlaceholder', sql.Int, idVendedor)
             .query(`
                 INSERT INTO VENDA_PECA (
                     preco, data_colocacao, estado, PECAid_peca, UTILIZADORid_utilizador, UTILIZADORid_utilizador2
                 )
                 OUTPUT INSERTED.id_venda
                 VALUES (
-                    @Preco, GETDATE(), 'Disponível', @IdPeca, @IdVendedor, @IdCompradorInicial
+                    @Preco, GETDATE(), 'Disponível', @IdPeca, @IdVendedor, @IdCompradorPlaceholder
                 );
             `)
             .then(r => r.recordset[0].id_venda);

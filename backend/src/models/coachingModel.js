@@ -128,7 +128,7 @@ async function getDisponibilidadeEfetiva(idModalidade, diaSemana, dataEspecifica
         const resultDisponibilidade = await pool.request()
             .input('IdModalidade', sql.Int, idModalidade)
             .input('DiaSemana', sql.Int, diaSemana)
-            .input('IdProfessorFiltro', sql.Int, idProfessorFiltro)
+            .input('IdProfessorFiltro', sql.Int, idProfessorFiltro == null ? null : idProfessorFiltro)
             .query(`
                 SELECT 
                     dp.id_disponibilidade,
@@ -324,7 +324,6 @@ async function getPedidosPorEncarregado(idEncarregado) {
                     pc.data_aula_pretendida,
                     pc.hora_inicio_pretendida,
                     pc.estado,
-                    pc.justificacao_rejeicao,
                     pc.custo_estimado,
                     m.nome AS modalidade,
                     prof.nome AS professor
@@ -676,8 +675,7 @@ async function getPedidoCoachingPorId(idPedido) {
                     UTILIZADORid_utilizador,
                     ANO_LETIVOid_ano_letivo,
                     MODALIDADEid_modalidade,
-                    UTILIZADORid_utilizador2,
-                    justificacao_rejeicao
+                    UTILIZADORid_utilizador2
                 FROM PEDIDO_COACHING
                 WHERE id_pedido_coaching = @IdPedido;
             `);
@@ -690,18 +688,16 @@ async function getPedidoCoachingPorId(idPedido) {
 }
 
 /**
- * Rejeita um pedido de coaching com justificação.
+ * Rejeita um pedido de coaching (estado → Rejeitado).
  */
-async function rejeitarPedidoCoaching(idPedido, justificacao) {
+async function rejeitarPedidoCoaching(idPedido) {
     try {
         const pool = await poolPromise;
         const result = await pool.request()
             .input('IdPedido', sql.Int, idPedido)
-            .input('Justificacao', sql.VarChar(255), justificacao)
             .query(`
                 UPDATE PEDIDO_COACHING 
-                SET estado = 'Rejeitado',
-                    justificacao_rejeicao = @Justificacao
+                SET estado = 'Rejeitado'
                 WHERE id_pedido_coaching = @IdPedido 
                   AND estado = 'Pendente';
             `);
@@ -727,7 +723,7 @@ async function getCoachingCabecalhoCancelamento(idCoaching) {
             .request()
             .input('IdCoaching', sql.Int, idCoaching)
             .query(`
-                SELECT data_aula, hora_inicio, estado
+                SELECT data_aula, hora_inicio, duracao_minutos, estado
                 FROM COACHING
                 WHERE id_coaching = @IdCoaching;
             `);
@@ -826,6 +822,14 @@ async function concluirCoachingPelaCoordenacao(idCoaching, idCoordenador, estado
     await transaction.begin();
  
     try {
+        const existe = await transaction.request()
+            .input('IdCoaching', sql.Int, idCoaching)
+            .query(`SELECT id_coaching FROM COACHING WHERE id_coaching = @IdCoaching;`);
+
+        if (existe.recordset.length === 0) {
+            throw new Error('Coaching não encontrado.');
+        }
+
         await transaction.request()
             .input('Observacoes', sql.VarChar(255), observacoes || 'Validado pela coordenação.')
             .input('IdCoordenador', sql.Int, idCoordenador)
@@ -841,10 +845,14 @@ async function concluirCoachingPelaCoordenacao(idCoaching, idCoordenador, estado
                 );
             `);
  
-        await transaction.request()
+        const upd = await transaction.request()
             .input('EstadoFinal', sql.VarChar(50), estadoFinal)
             .input('IdCoaching', sql.Int, idCoaching)
             .query(`UPDATE COACHING SET estado = @EstadoFinal WHERE id_coaching = @IdCoaching;`);
+
+        if (!upd.rowsAffected[0]) {
+            throw new Error('Coaching não encontrado.');
+        }
  
         await transaction.commit();
         return true;

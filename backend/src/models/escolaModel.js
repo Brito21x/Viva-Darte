@@ -205,7 +205,7 @@ async function associarProfessorModalidade(idProfessor, idModalidade) {
             0
         );
         if (totalAfetadas < 1) {
-            throw new Error('Esta associação professor/modalidade já existe.');
+            throw new Error('Este professor já está associado a esta modalidade.');
         }
 
         return true;

@@ -29,6 +29,37 @@ function diaSemanaCoachingFromDateValue(dataValor) {
     return day === 0 ? 7 : day;
 }
 
+/** Início da aula no fuso local (data_aula + hora_inicio). */
+function instanteInicioCoaching({ data_aula, hora_inicio }) {
+    const d = data_aula instanceof Date ? new Date(data_aula) : parseDateParts(data_aula);
+    if (!d) return null;
+    let hh = 0;
+    let mm = 0;
+    let ss = 0;
+    if (hora_inicio instanceof Date) {
+        hh = hora_inicio.getHours();
+        mm = hora_inicio.getMinutes();
+        ss = hora_inicio.getSeconds();
+    } else if (hora_inicio != null) {
+        const m = String(hora_inicio).match(/(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+        if (m) {
+            hh = parseInt(m[1], 10);
+            mm = parseInt(m[2], 10);
+            ss = m[3] ? parseInt(m[3], 10) : 0;
+        }
+    }
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate(), hh, mm, ss);
+}
+
+/** Fim previsto da aula (início + duração; fallback 60 min). */
+function instanteFimCoaching(cab) {
+    const inicio = instanteInicioCoaching(cab);
+    if (!inicio) return null;
+    const dur = Number(cab.duracao_minutos);
+    const minutos = Number.isFinite(dur) && dur > 0 ? dur : 60;
+    return new Date(inicio.getTime() + minutos * 60000);
+}
+
 /** Duração em minutos de um intervalo hora_inicio → hora_fim (mesmo dia). */
 function duracaoSlotMinutos(horaInicio, horaFim) {
     const t0 = new Date(`1970-01-01T${horaInicio}`).getTime();
@@ -463,7 +494,7 @@ async function rejeitarPedido(req, res, next) {
             return res.status(400).json({ mensagem: 'Justificação é obrigatória para rejeitar um pedido.' });
         }
 
-        const sucesso = await coachingModel.rejeitarPedidoCoaching(idPedido, justificacao);
+        const sucesso = await coachingModel.rejeitarPedidoCoaching(idPedido);
 
         if (!sucesso) {
             return res.status(404).json({ mensagem: 'Pedido não encontrado ou já não está pendente.' });
@@ -507,30 +538,10 @@ async function cancelarCoaching(req, res, next) {
                 });
             }
 
-            const inicioAula = (() => {
-                const dataAula = cab.data_aula;
-                const horaInicio = cab.hora_inicio;
-                const d =
-                    dataAula instanceof Date
-                        ? new Date(dataAula)
-                        : new Date(String(dataAula).slice(0, 10));
-                let hh = 0;
-                let mm = 0;
-                let ss = 0;
-                if (horaInicio instanceof Date) {
-                    hh = horaInicio.getHours();
-                    mm = horaInicio.getMinutes();
-                    ss = horaInicio.getSeconds();
-                } else if (horaInicio != null) {
-                    const m = String(horaInicio).match(/(\d{1,2}):(\d{2})(?::(\d{2}))?/);
-                    if (m) {
-                        hh = parseInt(m[1], 10);
-                        mm = parseInt(m[2], 10);
-                        ss = m[3] ? parseInt(m[3], 10) : 0;
-                    }
-                }
-                return new Date(d.getFullYear(), d.getMonth(), d.getDate(), hh, mm, ss);
-            })();
+            const inicioAula = instanteInicioCoaching(cab);
+            if (!inicioAula) {
+                return res.status(400).json({ mensagem: 'Dados de data/hora do coaching inválidos.' });
+            }
 
             if (inicioAula.getTime() <= Date.now()) {
                 return res.status(400).json({
@@ -571,6 +582,25 @@ async function registarValidacao(req, res, next) {
         if (!estadosValidos.includes(estadoValidacao)) {
             return res.status(400).json({
                 mensagem: `Estado inválido. Valores aceites: ${estadosValidos.join(', ')}.`
+            });
+        }
+
+        const cab = await coachingModel.getCoachingCabecalhoCancelamento(idCoaching);
+        if (!cab) {
+            return res.status(404).json({ mensagem: 'Coaching não encontrado.' });
+        }
+
+        const estadosQuePermitemValidar = ['Agendado', 'Confirmado'];
+        if (!estadosQuePermitemValidar.includes(cab.estado)) {
+            return res.status(400).json({
+                mensagem: 'Só é possível validar coachings agendados ou confirmados.'
+            });
+        }
+
+        const fimAula = instanteFimCoaching(cab);
+        if (!fimAula || fimAula.getTime() > Date.now()) {
+            return res.status(400).json({
+                mensagem: 'Só é possível validar aulas já terminadas (após a data e hora previstas).'
             });
         }
 
@@ -644,6 +674,9 @@ async function concluirCoaching(req, res, next) {
 
         return res.status(200).json({ mensagem: `Coaching marcado como "${estadoFinal}" com sucesso.` });
     } catch (error) {
+        if (error.message && error.message.includes('Coaching não encontrado')) {
+            return res.status(404).json({ mensagem: error.message });
+        }
         next(error);
     }
 }

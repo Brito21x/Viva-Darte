@@ -82,7 +82,7 @@ async function getPecaDetalhes(idPeca) {
         const resultFotos = await pool.request()
             .input('IdPeca', sql.Int, idPeca)
             .query(`
-                SELECT id_foto_peca, foto, descricao
+                SELECT id_foto_peca, foto, 
                 FROM FOTO_PECA
                 WHERE PECAid_peca = @IdPeca
                 ORDER BY id_foto_peca ASC;

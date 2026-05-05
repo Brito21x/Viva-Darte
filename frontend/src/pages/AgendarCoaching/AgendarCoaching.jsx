@@ -22,6 +22,7 @@ import {
   formatDataBarraPT
 } from '../../utils/semanaCalendario';
 import { isEncarregadoUtilizador as isEncarregado } from '../../utils/perfilUtilizador';
+import { podeMostrarValidacaoRealizacao } from '../../utils/coachingInstantes';
 
 const VISTAS = {
   calendario: { menu: 'Calendário e vagas', badge: 'Marcação' },
@@ -337,6 +338,23 @@ export default function AgendarCoaching({ irParaLanding, irParaVendaFigurinos, i
       setLoadingPedidos(false);
     }
   }, [semPermissao, authChecked]);
+
+  const validarRealizacaoEE = useCallback(
+    async (idCoaching, estadoValidacao) => {
+      const observacoes = window.prompt('Observações (opcional):', '') ?? '';
+      try {
+        await apiAuthFetch(`/api/coaching/${idCoaching}/validar`, {
+          method: 'POST',
+          body: { estadoValidacao, observacoes: observacoes.trim() || null },
+        });
+        mostrarAlerta('Validação registada.');
+        await carregarPedidos();
+      } catch (e) {
+        mostrarAlerta(e.message || 'Não foi possível validar.');
+      }
+    },
+    [carregarPedidos]
+  );
 
   useEffect(() => {
     vagaSelecionadaRef.current = vagaSelecionada;
@@ -1125,6 +1143,76 @@ export default function AgendarCoaching({ irParaLanding, irParaVendaFigurinos, i
               ))}
             </tbody>
           </table>
+        )}
+        {!loadingPedidos && pedidos.some((p) => p.id_coaching && podeMostrarValidacaoRealizacao({
+          estado_coaching: p.estado_coaching,
+          estado: p.estado_coaching,
+          data_aula_coaching: p.data_aula_coaching,
+          data_aula: p.data_aula_coaching,
+          hora_inicio_coaching: p.hora_inicio_coaching,
+          hora_inicio: p.hora_inicio_coaching,
+          duracao_minutos: p.duracao_minutos
+        })) && (
+          <div style={{ marginTop: 28 }}>
+            <h3>Confirmar realização da aula (US13)</h3>
+            <p className="sub">
+              Só após a hora de fim da aula podes indicar se a aula <strong>teve lugar</strong> ou <strong>não foi realizada</strong>.
+              A coordenação fecha depois o processo (US14).
+            </p>
+            <table className="pedidos-table-compact" style={{ marginTop: 12 }}>
+              <thead>
+                <tr>
+                  <th>Coaching</th>
+                  <th>Data / hora</th>
+                  <th>Estado</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {pedidos
+                  .filter((p) =>
+                    p.id_coaching &&
+                    podeMostrarValidacaoRealizacao({
+                      estado_coaching: p.estado_coaching,
+                      estado: p.estado_coaching,
+                      data_aula_coaching: p.data_aula_coaching,
+                      data_aula: p.data_aula_coaching,
+                      hora_inicio_coaching: p.hora_inicio_coaching,
+                      hora_inicio: p.hora_inicio_coaching,
+                      duracao_minutos: p.duracao_minutos
+                    })
+                  )
+                  .map((p) => (
+                    <tr key={`val-${p.id_coaching}`}>
+                      <td>#{p.id_coaching}</td>
+                      <td>
+                        {p.data_aula_coaching ? String(p.data_aula_coaching).split('T')[0] : '—'}
+                        <br />
+                        <small>{formatarHoraMostrar(p.hora_inicio_coaching)}</small>
+                      </td>
+                      <td>{p.estado_coaching}</td>
+                      <td>
+                        <button
+                          type="button"
+                          className="btn-coaching-primary"
+                          style={{ marginRight: 8 }}
+                          onClick={() => void validarRealizacaoEE(p.id_coaching, 'Confirmado')}
+                        >
+                          Aula realizada
+                        </button>
+                        <button
+                          type="button"
+                          className="btn-coaching-secondary"
+                          onClick={() => void validarRealizacaoEE(p.id_coaching, 'Nao_Realizado')}
+                        >
+                          Não realizada
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </section>
     </div>

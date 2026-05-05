@@ -1,8 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import './VendaFigurinos.css';
-import logoImg from '../../assets/logo.png'; 
+import logoImg from '../../assets/logo.png';
+import { API_URL, getAuthToken } from '../../services/api';
 
-export default function VendaFigurinos({ irParaLanding, irParaEmprestimos }) {
+export default function VendaFigurinos({
+  irParaLanding,
+  irParaEmprestimos,
+  irParaAgendarCoaching,
+  irParaProfessorAgendamento
+}) {
   const [utilizador, setUtilizador] = useState(null);
   const [figurinos, setFigurinos] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -29,7 +35,7 @@ export default function VendaFigurinos({ irParaLanding, irParaEmprestimos }) {
   const [metodoPagamentoCompra, setMetodoPagamentoCompra] = useState('MBWay');
   const [indicesImagens, setIndicesImagens] = useState({});
 
-  const API_URL = 'http://localhost:3000/api/inventario';
+  const inventarioBase = `${API_URL}/api/inventario`;
 
   const mostrarAlerta = (msg) => setCustomAlert({ show: true, message: msg, type: 'alert', onConfirm: null });
   const fecharAlerta = () => setCustomAlert({ show: false, message: '', type: 'alert', onConfirm: null });
@@ -48,12 +54,12 @@ export default function VendaFigurinos({ irParaLanding, irParaEmprestimos }) {
     return () => clearInterval(interval);
   }, []);
 
-  const getToken = () => localStorage.getItem('token') || '';
+  const getToken = () => getAuthToken() || '';
 
   const carregarFigurinos = async (mostrarLoading = false) => {
     if (mostrarLoading) setIsLoading(true); 
     try {
-      const response = await fetch(`${API_URL}/vendas`, {
+      const response = await fetch(`${inventarioBase}/vendas`, {
         method: 'GET',
         headers: { 
           'Authorization': `Bearer ${getToken()}`
@@ -74,6 +80,7 @@ export default function VendaFigurinos({ irParaLanding, irParaEmprestimos }) {
 
   const handleLogout = () => {
     localStorage.removeItem('viva_user');
+    localStorage.removeItem('viva_token');
     localStorage.removeItem('token');
     setUtilizador(null);
     if(irParaLanding) irParaLanding(); 
@@ -140,7 +147,7 @@ export default function VendaFigurinos({ irParaLanding, irParaEmprestimos }) {
     }
 
     try {
-        const resPeca = await fetch(API_URL, {
+        const resPeca = await fetch(inventarioBase, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` },
             body: JSON.stringify({
@@ -160,7 +167,7 @@ export default function VendaFigurinos({ irParaLanding, irParaEmprestimos }) {
         
         const dataPeca = await resPeca.json();
 
-        const resVenda = await fetch(`${API_URL}/vendas`, {
+        const resVenda = await fetch(`${inventarioBase}/vendas`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` },
             body: JSON.stringify({
@@ -202,7 +209,7 @@ export default function VendaFigurinos({ irParaLanding, irParaEmprestimos }) {
     if (!idPeca) return mostrarAlerta("Erro: ID da peça não encontrado.");
 
     try {
-      const response = await fetch(`${API_URL}/${idPeca}`, {
+      const response = await fetch(`${inventarioBase}/${idPeca}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${getToken()}` }
       });
@@ -240,7 +247,7 @@ export default function VendaFigurinos({ irParaLanding, irParaEmprestimos }) {
     }
 
     try {
-        const response = await fetch(`${API_URL}/${figurinoEmEdicao.id_peca}/editar`, {
+        const response = await fetch(`${inventarioBase}/${figurinoEmEdicao.id_peca}/editar`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` },
             body: JSON.stringify({
@@ -283,7 +290,7 @@ export default function VendaFigurinos({ irParaLanding, irParaEmprestimos }) {
     }
 
     try {
-        const response = await fetch(`${API_URL}/vendas/${figurinoSelecionado.id_venda}/concluir`, {
+        const response = await fetch(`${inventarioBase}/vendas/${figurinoSelecionado.id_venda}/concluir`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` },
             body: JSON.stringify({
@@ -330,14 +337,14 @@ export default function VendaFigurinos({ irParaLanding, irParaEmprestimos }) {
           {utilizador?.perfil === 'Professor' ? (
             <>
               <li><span className="nav-separator">|</span></li>
-              <li><a href="#" className="special-link">Coaching Agendados</a></li>
+              <li><a href="#" className="special-link" onClick={(e) => { e.preventDefault(); irParaProfessorAgendamento?.(); }}>Coaching Agendados</a></li>
               <li><a href="#" className="special-link" onClick={(e) => { e.preventDefault(); irParaEmprestimos(); }}>Empréstimos de peças</a></li>
               <li><a href="#" className="special-link active">Venda de figurinos</a></li>
             </>
           ) : utilizador ? (
             <>
               <li><span className="nav-separator">|</span></li>
-              <li><a href="#" className="special-link">Agendar Coaching</a></li>
+              <li><a href="#" className="special-link" onClick={(e) => { e.preventDefault(); irParaAgendarCoaching?.(); }}>Agendar Coaching</a></li>
               <li><a href="#" className="special-link" onClick={(e) => { e.preventDefault(); irParaEmprestimos(); }}>Empréstimos de peças</a></li>
               <li><a href="#" className="special-link active">Venda de figurinos</a></li>
             </>

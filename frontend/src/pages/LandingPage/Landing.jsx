@@ -29,6 +29,7 @@ export default function Landing({
   const handleLogout = () => {
     localStorage.removeItem('viva_user');
     localStorage.removeItem('viva_token');
+    localStorage.removeItem('token');
     setUtilizador(null);
     window.location.reload();
   };

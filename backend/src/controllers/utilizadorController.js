@@ -12,13 +12,23 @@ async function listarUtilizadores(req, res, next) {
 
 async function criarUtilizadorAdmin(req, res, next) {
     try {
-        const { nome, email, telefone, password, tipo } = req.body;
+        const { nome, email, telefone, password, tipo, idsModalidades } = req.body;
 
         if (!nome || !email || !password || !tipo) {
             return res.status(400).json({ mensagem: 'Nome, email, password e tipo (PROF ou EE) são obrigatórios.' });
         }
 
         const nomePerfil = tipo === 'PROF' ? 'Professor' : 'Encarregado';
+        let idsModalidadesProf;
+        if (tipo === 'PROF') {
+            idsModalidadesProf = Array.isArray(idsModalidades) ? idsModalidades : [];
+            if (idsModalidadesProf.length === 0) {
+                return res.status(400).json({
+                    mensagem: 'Para professor, indica pelo menos uma modalidade (idsModalidades).'
+                });
+            }
+        }
+
         const passwordHash = await bcrypt.hash(password, 10);
 
         const novo = await utilizadorModel.criarUtilizador({
@@ -26,7 +36,8 @@ async function criarUtilizadorAdmin(req, res, next) {
             email,
             passwordHash,
             telefone,
-            nomePerfil
+            nomePerfil,
+            idsModalidades: idsModalidadesProf
         });
 
         return res.status(201).json({ mensagem: 'Utilizador criado.', utilizador: novo });

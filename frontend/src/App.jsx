@@ -6,6 +6,8 @@ import RecoverPassword from './pages/Login-Registo/RecoverPassword';
 import VendaFigurinos from './pages/VendaFigurinos/VendaFigurinos';
 import EmprestimosPecas from './pages/EmprestimosPecas/EmprestimosPecas';
 import AdminDashboard from './pages/AdminDashboard/AdminDashboard';
+import AgendarCoaching from './pages/AgendarCoaching/AgendarCoaching';
+import ProfessorAgendamento from './pages/ProfessorAgendamento/ProfessorAgendamento';
 
 function App() {
   const [paginaAtual, setPaginaAtual] = useState(() => {
@@ -23,64 +25,99 @@ function App() {
     localStorage.setItem('ultimaPagina', paginaAtual);
   }, [paginaAtual]);
 
+  const nav = {
+    landing: () => setPaginaAtual('landing'),
+    login: () => setPaginaAtual('login'),
+    registo: () => setPaginaAtual('registo'),
+    recuperar: () => setPaginaAtual('recuperar'),
+    venda_figurinos: () => setPaginaAtual('venda_figurinos'),
+    emprestimos_pecas: () => setPaginaAtual('emprestimos_pecas'),
+    agendar_coaching: () => setPaginaAtual('agendar_coaching'),
+    professor_agendamento: () => setPaginaAtual('professor_agendamento'),
+  };
+
   return (
     <div className="App">
       
       {/* LANDING PAGE */}
       {paginaAtual === 'landing' && (
         <Landing 
-          irParaLogin={() => setPaginaAtual('login')} 
-          irParaRegisto={() => setPaginaAtual('registo')} 
-          irParaVendaFigurinos={() => setPaginaAtual('venda_figurinos')} 
-          irParaEmprestimos={() => setPaginaAtual('emprestimos_pecas')}
+          irParaLogin={nav.login} 
+          irParaRegisto={nav.registo} 
+          irParaVendaFigurinos={nav.venda_figurinos} 
+          irParaEmprestimos={nav.emprestimos_pecas}
+          irParaAgendarCoaching={nav.agendar_coaching}
+          irParaProfessorAgendamento={nav.professor_agendamento}
         />
       )}
       
       {/* LOGIN */}
       {paginaAtual === 'login' && (
         <Login 
-          irParaRegisto={() => setPaginaAtual('registo')} 
-          irParaLanding={() => setPaginaAtual('landing')} 
-          irParaRecuperar={() => setPaginaAtual('recuperar')} 
+          irParaRegisto={nav.registo} 
+          irParaLanding={nav.landing} 
+          irParaRecuperar={nav.recuperar} 
         />
       )}
       
       {/* REGISTO */}
       {paginaAtual === 'registo' && (
         <Registo 
-          irParaLogin={() => setPaginaAtual('login')} 
-          irParaLanding={() => setPaginaAtual('landing')} 
+          irParaLogin={nav.login} 
+          irParaLanding={nav.landing} 
         />
       )}
 
       {/* RECUPERAR PASSWORD */}
       {paginaAtual === 'recuperar' && (
         <RecoverPassword 
-          irParaLogin={() => setPaginaAtual('login')} 
-          irParaLanding={() => setPaginaAtual('landing')} 
+          irParaLogin={nav.login} 
+          irParaLanding={nav.landing} 
         />
       )}
 
       {/* VENDA DE FIGURINOS */}
       {paginaAtual === 'venda_figurinos' && (
         <VendaFigurinos 
-          irParaLanding={() => setPaginaAtual('landing')} 
-          irParaEmprestimos={() => setPaginaAtual('emprestimos_pecas')}
+          irParaLanding={nav.landing} 
+          irParaEmprestimos={nav.emprestimos_pecas}
+          irParaAgendarCoaching={nav.agendar_coaching}
+          irParaProfessorAgendamento={nav.professor_agendamento}
         />
       )}
 
       {/* EMPRÉSTIMO DE PEÇAS */}
       {paginaAtual === 'emprestimos_pecas' && (
         <EmprestimosPecas 
-          irParaLanding={() => setPaginaAtual('landing')} 
-          irParaVendaFigurinos={() => setPaginaAtual('venda_figurinos')}
+          irParaLanding={nav.landing} 
+          irParaVendaFigurinos={nav.venda_figurinos}
+          irParaAgendarCoaching={nav.agendar_coaching}
+          irParaProfessorAgendamento={nav.professor_agendamento}
+        />
+      )}
+
+      {/* AGENDAR COACHING (EE / alunos) */}
+      {paginaAtual === 'agendar_coaching' && (
+        <AgendarCoaching
+          irParaLanding={nav.landing}
+          irParaVendaFigurinos={nav.venda_figurinos}
+          irParaEmprestimos={nav.emprestimos_pecas}
+        />
+      )}
+
+      {/* PROFESSOR — disponibilidade e agenda */}
+      {paginaAtual === 'professor_agendamento' && (
+        <ProfessorAgendamento
+          irParaLanding={nav.landing}
+          irParaVendaFigurinos={nav.venda_figurinos}
+          irParaEmprestimos={nav.emprestimos_pecas}
         />
       )}
 
       {/* ADMIN DASHBOARD */}
       {paginaAtual === 'admin' && (
         <AdminDashboard 
-          irParaLanding={() => setPaginaAtual('landing')}
+          irParaLanding={nav.landing}
         />
       )}
 

@@ -675,6 +675,21 @@ async function registarValidacao(req, res, next) {
 // Body: { estadoFinal, observacoes }
 // estadoFinal: 'Realizado' | 'Nao_Realizado'
 // ============================================================================
+// GET /api/coaching/pendentes-conclusao — aulas já terminadas, aguardam decisão final (US14)
+async function getPendentesConclusaoCoordenacao(req, res, next) {
+    try {
+        const lista = await coachingModel.listarCoachingsAbertosParaCoordenacao();
+        const agora = Date.now();
+        const filtrada = lista.filter((row) => {
+            const fim = instanteFimCoaching(row);
+            return fim && fim.getTime() <= agora;
+        });
+        return res.status(200).json(filtrada);
+    } catch (error) {
+        next(error);
+    }
+}
+
 async function concluirCoaching(req, res, next) {
     try {
         const idCoordenador = req.utilizador.id;
@@ -719,5 +734,6 @@ module.exports = {
     rejeitarPedido,
     cancelarCoaching,
     registarValidacao,
+    getPendentesConclusaoCoordenacao,
     concluirCoaching
 };

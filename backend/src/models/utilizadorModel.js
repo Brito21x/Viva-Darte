@@ -76,6 +76,27 @@ async function associarProfessorATodasModalidadesAtivas(transaction, idUtilizado
         `);
 }
 
+/** Associa o professor apenas às modalidades indicadas (US03 / coaching). */
+async function associarProfessorModalidadesSelecionadas(transaction, idUtilizador, idsModalidades) {
+    const ids = [...new Set(idsModalidades.map((id) => parseInt(id, 10)).filter((n) => Number.isFinite(n) && n > 0))];
+    for (const idMod of ids) {
+        await transaction
+            .request()
+            .input('IdUser', sql.Int, idUtilizador)
+            .input('IdMod', sql.Int, idMod)
+            .query(`
+                IF EXISTS (SELECT 1 FROM MODALIDADE WHERE id_modalidade = @IdMod)
+                INSERT INTO PROFESSOR_MODALIDADE (UTILIZADORid_utilizador, MODALIDADEid_modalidade)
+                SELECT @IdUser, @IdMod
+                WHERE NOT EXISTS (
+                    SELECT 1 FROM PROFESSOR_MODALIDADE pm
+                    WHERE pm.UTILIZADORid_utilizador = @IdUser
+                      AND pm.MODALIDADEid_modalidade = @IdMod
+                );
+            `);
+    }
+}
+
 async function listarTodosUtilizadores() {
     try {
         const pool = await poolPromise;
@@ -102,7 +123,7 @@ async function listarTodosUtilizadores() {
     }
 }
  
-async function criarUtilizador({ nome, email, passwordHash, telefone, nomePerfil }) {
+async function criarUtilizador({ nome, email, passwordHash, telefone, nomePerfil, idsModalidades }) {
     const pool = await poolPromise;
     const transaction = pool.transaction();
     await transaction.begin();
@@ -159,7 +180,15 @@ async function criarUtilizador({ nome, email, passwordHash, telefone, nomePerfil
             `);
 
         if (nomePerfil === 'Professor') {
-            await associarProfessorATodasModalidadesAtivas(transaction, novoUtilizador.id_utilizador);
+            if (Array.isArray(idsModalidades) && idsModalidades.length > 0) {
+                await associarProfessorModalidadesSelecionadas(
+                    transaction,
+                    novoUtilizador.id_utilizador,
+                    idsModalidades
+                );
+            } else {
+                await associarProfessorATodasModalidadesAtivas(transaction, novoUtilizador.id_utilizador);
+            }
         }
 
         await transaction.commit();

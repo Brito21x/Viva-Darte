@@ -50,6 +50,9 @@ router.post('/pedidos/:id/aprovar', autorizar('Admin'), coachingController.aprov
 // POST /api/coaching/pedidos/:id/rejeitar — rejeitar com justificação (Coordenação)
 router.post('/pedidos/:id/rejeitar', autorizar('Admin'), coachingController.rejeitarPedido);
 
+// GET /api/coaching/pendentes-conclusao — coachings com aula já passada (US14 / painel admin)
+router.get('/pendentes-conclusao', autorizar('Admin'), coachingController.getPendentesConclusaoCoordenacao);
+
 // ── COACHINGS AGENDADOS ───────────────────────────────────────────────────────
 // DELETE /api/coaching/:id — cancelar coaching (EE ou Coordenação)
 router.delete('/:id', autorizar('EE', 'Admin'), coachingController.cancelarCoaching);

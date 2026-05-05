@@ -5,6 +5,7 @@ import { apiAuthFetch, getAuthToken } from '../../services/api';
 import { formatarHoraMostrar } from '../../utils/coachingAgendar';
 import { toYMD } from '../../utils/semanaCalendario';
 import { isProfessorUtilizador } from '../../utils/perfilUtilizador';
+import { podeMostrarValidacaoRealizacao } from '../../utils/coachingInstantes';
 
 function diaSemanaDisponibilidadeLabel(cod) {
   if (Number(cod) === 2) return 'Sábado e domingo';
@@ -101,6 +102,23 @@ export default function ProfessorAgendamento({ irParaLanding, irParaVendaFigurin
       setLoadingAgenda(false);
     }
   }, [semPermissao, dataAgendaIni, dataAgendaFim]);
+
+  const validarRealizacaoProfessor = useCallback(
+    async (idCoaching, estadoValidacao) => {
+      const observacoes = window.prompt('Observações (opcional):', '') ?? '';
+      try {
+        await apiAuthFetch(`/api/coaching/${idCoaching}/validar`, {
+          method: 'POST',
+          body: { estadoValidacao, observacoes: observacoes.trim() || null },
+        });
+        mostrarAlerta('Validação registada.');
+        await carregarAgenda();
+      } catch (e) {
+        mostrarAlerta(e.message || 'Não foi possível validar.');
+      }
+    },
+    [carregarAgenda]
+  );
 
   useEffect(() => {
     if (!authChecked || semPermissao) return;
@@ -409,6 +427,7 @@ export default function ProfessorAgendamento({ irParaLanding, irParaVendaFigurin
                       <th>Encarregado</th>
                       <th>Formato</th>
                       <th>Estado</th>
+                      <th>Realização (US13)</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -423,6 +442,30 @@ export default function ProfessorAgendamento({ irParaLanding, irParaVendaFigurin
                           {row.formato_aula || '—'} ({row.duracao_minutos || '—'} min)
                         </td>
                         <td>{row.estado || '—'}</td>
+                        <td>
+                          {podeMostrarValidacaoRealizacao(row) ? (
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                              <button
+                                type="button"
+                                className="pa-btn-primary"
+                                style={{ fontSize: '0.8rem', padding: '6px 10px' }}
+                                onClick={() => void validarRealizacaoProfessor(row.id_coaching, 'Confirmado')}
+                              >
+                                Realizada
+                              </button>
+                              <button
+                                type="button"
+                                className="pa-btn-danger"
+                                style={{ fontSize: '0.8rem', padding: '6px 10px' }}
+                                onClick={() => void validarRealizacaoProfessor(row.id_coaching, 'Nao_Realizado')}
+                              >
+                                Não realizada
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="pa-hint">—</span>
+                          )}
+                        </td>
                       </tr>
                     ))}
                   </tbody>

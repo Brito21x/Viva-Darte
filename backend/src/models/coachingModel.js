@@ -394,6 +394,7 @@ async function getPedidosPorEncarregado(idEncarregado) {
                     prof.nome AS professor,
                     cab.id_coaching,
                     cab.estado AS estado_coaching,
+                    cab.data_aula AS data_aula_coaching,
                     cab.hora_inicio AS hora_inicio_coaching,
                     s.nome AS nome_sala,
                     profAula.nome AS nome_professor_agendado
@@ -404,6 +405,7 @@ async function getPedidosPorEncarregado(idEncarregado) {
                     SELECT TOP 1
                         c.id_coaching,
                         c.estado,
+                        c.data_aula,
                         c.hora_inicio,
                         c.SALAid_sala,
                         c.UTILIZADORid_utilizador
@@ -1034,7 +1036,41 @@ async function concluirCoachingPelaCoordenacao(idCoaching, idCoordenador, estado
         throw error;
     }
 }
- 
+
+/**
+ * Coachings ainda não concluídos (Agendado / Confirmado) para a coordenação fechar o ciclo (US14).
+ * O filtro “aula já terminou” pode ser aplicado no controller para alinhar com validação EE/prof.
+ */
+async function listarCoachingsAbertosParaCoordenacao() {
+    try {
+        const pool = await poolPromise;
+        const result = await pool.request().query(`
+            SELECT
+                c.id_coaching,
+                c.data_aula,
+                c.hora_inicio,
+                c.duracao_minutos,
+                c.estado,
+                c.formato_aula,
+                m.nome AS modalidade,
+                prof.nome AS nome_professor,
+                ee.nome AS nome_encarregado,
+                ee.email AS email_encarregado
+            FROM COACHING c
+            JOIN MODALIDADE m ON c.MODALIDADEid_modalidade = m.id_modalidade
+            JOIN UTILIZADOR prof ON c.UTILIZADORid_utilizador = prof.id_utilizador
+            JOIN PEDIDO_COACHING pc ON c.PEDIDO_COACHINGid_pedido_coaching = pc.id_pedido_coaching
+            JOIN UTILIZADOR ee ON pc.UTILIZADORid_utilizador = ee.id_utilizador
+            WHERE c.estado IN (N'Agendado', N'Confirmado')
+            ORDER BY c.data_aula ASC, c.hora_inicio ASC;
+        `);
+        return result.recordset;
+    } catch (error) {
+        console.error('Erro no Modelo (listarCoachingsAbertosParaCoordenacao):', error);
+        throw error;
+    }
+}
+
 module.exports = {
     adicionarDisponibilidadeProfessor,
     getDisponibilidadesProfessor,
@@ -1054,5 +1090,6 @@ module.exports = {
     rejeitarPedidoCoaching,
     cancelarCoaching,
     registarValidacaoAula,
-    concluirCoachingPelaCoordenacao
+    concluirCoachingPelaCoordenacao,
+    listarCoachingsAbertosParaCoordenacao
 };

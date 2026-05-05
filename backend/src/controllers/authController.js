@@ -31,20 +31,54 @@ async function login(req, res, next) {
         }
 
         const perfis = await utilizadorModel.getPerfisDoUtilizador(utilizador.id_utilizador);
+        const tipoNorm = String(tipo || '').trim().toUpperCase();
 
         // VALIDAÇÃO RIGOROSA DE PERFIL PARA EVITAR CROSS-LOGIN
         let temPerfil = false;
-        if (tipo === 'PROF') {
-            temPerfil = perfis.some(p => p.toLowerCase().includes('prof'));
+        let rotuloEsperado = 'Enc. de Educação';
+
+        if (tipoNorm === 'PROF' || tipoNorm === 'PROFESSOR') {
+            rotuloEsperado = 'Professor';
+            temPerfil = perfis.some((p) => String(p).toLowerCase().includes('prof'));
+        } else if (tipoNorm === 'ADMIN' || tipoNorm === 'ADMINISTRADOR' || tipoNorm === 'COORD' || tipoNorm === 'COORDENACAO') {
+            rotuloEsperado = 'Administração ou Coordenação';
+            temPerfil = perfis.some((p) => {
+                const s = String(p).toLowerCase();
+                return (
+                    s.includes('admin') ||
+                    s.includes('coordenação') ||
+                    s.includes('coordenacao') ||
+                    s.includes('administração') ||
+                    s.includes('administracao')
+                );
+            });
         } else {
-            temPerfil = perfis.some(p => p.toLowerCase().includes('encarregado') || p.toLowerCase().includes('educação') || p.toLowerCase() === 'ee');
+            // EE — login público (Encarregado)
+            temPerfil = perfis.some(
+                (p) =>
+                    String(p).toLowerCase().includes('encarregado') ||
+                    String(p).toLowerCase().includes('educação') ||
+                    String(p).toLowerCase().includes('educacao') ||
+                    String(p).toLowerCase() === 'ee'
+            );
         }
 
         if (!temPerfil) {
-            return res.status(403).json({ mensagem: `Acesso negado: O seu email não está registado como ${tipo === 'PROF' ? 'Professor' : 'Enc. de Educação'}.` });
+            return res.status(403).json({
+                mensagem: `Acesso negado: O seu email não está registado como ${rotuloEsperado}.`
+            });
         }
 
-        const perfilFinal = tipo === 'PROF' ? 'Professor' : 'Encarregado de Educação';
+        let perfilFinal = 'Encarregado de Educação';
+        if (tipoNorm === 'PROF' || tipoNorm === 'PROFESSOR') {
+            perfilFinal = 'Professor';
+        } else if (tipoNorm === 'ADMIN' || tipoNorm === 'ADMINISTRADOR' || tipoNorm === 'COORD' || tipoNorm === 'COORDENACAO') {
+            const match = perfis.find((p) => {
+                const s = String(p).toLowerCase();
+                return s.includes('admin') || s.includes('coord');
+            });
+            perfilFinal = match || 'Admin';
+        }
 
         const token = jwt.sign(
             {

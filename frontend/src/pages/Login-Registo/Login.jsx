@@ -34,7 +34,9 @@ export default function Login({ irParaRegisto, irParaLanding, irParaRecuperar })
       const resultado = await response.json();
 
       if (response.ok) {
-        // Grava o objeto que o backend envia (inclui o perfil ativo validado)
+        if (resultado.token) {
+          localStorage.setItem('viva_token', resultado.token);
+        }
         localStorage.setItem('viva_user', JSON.stringify(resultado.utilizador));
         irParaLanding(); 
       } else {

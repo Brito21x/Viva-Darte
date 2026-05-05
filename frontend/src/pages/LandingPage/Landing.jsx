@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import './Landing.css';
 import logoImg from '../../assets/logo.png';
 
-export default function Landing({ irParaLogin, irParaRegisto, irParaVendaFigurinos, irParaEmprestimos }) {
+export default function Landing({ irParaLogin, irParaRegisto, irParaVendaFigurinos, irParaEmprestimos, irParaAgendarCoaching }) {
   const [utilizador, setUtilizador] = useState(null);
   const [modoPortal, setModoPortal] = useState(false);
 
@@ -20,6 +20,7 @@ export default function Landing({ irParaLogin, irParaRegisto, irParaVendaFigurin
 
   const handleLogout = () => {
     localStorage.removeItem('viva_user');
+    localStorage.removeItem('viva_token');
     setUtilizador(null);
     window.location.reload();
   };
@@ -99,7 +100,18 @@ export default function Landing({ irParaLogin, irParaRegisto, irParaVendaFigurin
                 </>
               ) : (
                 <>
-                  <li><a href="#coachings" className="special-link">Agendar Coaching</a></li>
+                  <li>
+                    <a
+                      href="#coachings"
+                      className="special-link"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        irParaAgendarCoaching?.();
+                      }}
+                    >
+                      Agendar Coaching
+                    </a>
+                  </li>
                   {/* Atualizado com a navegação para empréstimos */}
                   <li><a href="#emprestimos" className="special-link" onClick={(e) => { e.preventDefault(); irParaEmprestimos(); }}>Empréstimos de peças</a></li>
                   <li><a href="#figurinos" className="special-link" onClick={(e) => { e.preventDefault(); irParaVendaFigurinos(); }}>Venda de figurinos</a></li>

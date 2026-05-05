@@ -163,11 +163,24 @@ async function getProfessoresPorModalidade(idModalidade) {
             SELECT 
                 u.id_utilizador AS id_professor,
                 u.nome AS nome_professor
-            FROM MODALIDADE m
-            JOIN PROFESSOR_MODALIDADE pm ON m.id_modalidade = pm.MODALIDADEid_modalidade
-            JOIN UTILIZADOR u ON pm.UTILIZADORid_utilizador = u.id_utilizador
-            WHERE m.id_modalidade = @IdModalidade 
+            FROM UTILIZADOR u
+            JOIN UTILIZADOR_PERFIL up ON up.UTILIZADORid_utilizador = u.id_utilizador
+            JOIN PERFIL p ON p.id_perfil = up.PERFILid_perfil
+            WHERE p.nome LIKE '%Prof%'
               AND u.ativo = 1
+              AND (
+                  EXISTS (
+                      SELECT 1
+                      FROM PROFESSOR_MODALIDADE pm
+                      WHERE pm.UTILIZADORid_utilizador = u.id_utilizador
+                        AND pm.MODALIDADEid_modalidade = @IdModalidade
+                  )
+                  OR NOT EXISTS (
+                      SELECT 1
+                      FROM PROFESSOR_MODALIDADE pmAny
+                      WHERE pmAny.MODALIDADEid_modalidade = @IdModalidade
+                  )
+              )
             ORDER BY u.nome ASC;
         `;
         const result = await pool.request()

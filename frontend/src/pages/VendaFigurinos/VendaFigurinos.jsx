@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import './VendaFigurinos.css';
 import logoImg from '../../assets/logo.png'; 
 
-export default function VendaFigurinos({ irParaLanding, irParaEmprestimos }) {
+export default function VendaFigurinos({ irParaLanding, irParaEmprestimos, irParaAgendarCoaching }) {
   const [utilizador, setUtilizador] = useState(null);
   const [figurinos, setFigurinos] = useState([]);
   
@@ -68,6 +68,7 @@ export default function VendaFigurinos({ irParaLanding, irParaEmprestimos }) {
 
   const handleLogout = () => {
     localStorage.removeItem('viva_user');
+    localStorage.removeItem('viva_token');
     setUtilizador(null);
     if(irParaLanding) irParaLanding(); 
     window.location.reload();
@@ -319,7 +320,18 @@ export default function VendaFigurinos({ irParaLanding, irParaEmprestimos }) {
           ) : utilizador ? (
             <>
               <li><span className="nav-separator">|</span></li>
-              <li><a href="#" className="special-link">Agendar Coaching</a></li>
+              <li>
+                <a
+                  href="#"
+                  className="special-link"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    irParaAgendarCoaching?.();
+                  }}
+                >
+                  Agendar Coaching
+                </a>
+              </li>
               <li><a href="#" className="special-link" onClick={(e) => { e.preventDefault(); irParaEmprestimos(); }}>Empréstimos de peças</a></li>
               <li><a href="#" className="special-link active">Venda de figurinos</a></li>
             </>

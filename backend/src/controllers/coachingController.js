@@ -1,5 +1,6 @@
 const coachingModel = require('../models/coachingModel');
 const faturacaoModel = require('../models/faturacaoModel');
+const { utilizadorTemPerfil } = require('../middlewares/auth');
 
 /** Data fixa só para parsear horas (`time`) como instante; a duração depende só da diferença entre horas. */
 const DATA_REF_COMPARACAO_HORAS = '2026-01-01';
@@ -338,9 +339,9 @@ async function getPedidoCoaching(req, res, next) {
         }
 
         const perfis = req.utilizador.perfis || [];
-        const isAdmin = perfis.includes('Admin');
+        const isAdmin = utilizadorTemPerfil(perfis, 'Admin');
         const isDonoEE =
-            perfis.includes('EE') && pedido.UTILIZADORid_utilizador === req.utilizador.id;
+            utilizadorTemPerfil(perfis, 'EE') && pedido.UTILIZADORid_utilizador === req.utilizador.id;
 
         if (!isAdmin && !isDonoEE) {
             return res.status(403).json({ mensagem: 'Sem permissão para consultar este pedido.' });
@@ -485,7 +486,13 @@ async function aprovarPedido(req, res, next) {
             idCoaching
         });
     } catch (error) {
-        if (error.message.includes('Conflito')) {
+        if (
+            error.message.includes('Conflito') ||
+            error.message.includes('Compatibilidade') ||
+            error.message.includes('Capacidade') ||
+            error.message.includes('não leciona') ||
+            error.message.includes('Sala inválida')
+        ) {
             return res.status(409).json({ mensagem: error.message });
         }
         next(error);
@@ -540,7 +547,7 @@ async function cancelarCoaching(req, res, next) {
             return res.status(400).json({ mensagem: 'Este coaching já está cancelado.' });
         }
 
-        if (perfis.includes('EE') && !perfis.includes('Admin')) {
+        if (utilizadorTemPerfil(perfis, 'EE') && !utilizadorTemPerfil(perfis, 'Admin')) {
             const autorizado = await coachingModel.coachingPertenceAEncarregado(
                 idCoaching,
                 req.utilizador.id
@@ -619,7 +626,7 @@ async function registarValidacao(req, res, next) {
 
         // Determinar tipo de validador com base no perfil do utilizador autenticado
         let tipoValidador;
-        if (perfis.includes('Professor')) {
+        if (utilizadorTemPerfil(perfis, 'Professor')) {
             const ok = await coachingModel.coachingPertenceAProfessorAtivo(
                 idCoaching,
                 req.utilizador.id
@@ -630,7 +637,7 @@ async function registarValidacao(req, res, next) {
                 });
             }
             tipoValidador = 'Professor';
-        } else if (perfis.includes('EE')) {
+        } else if (utilizadorTemPerfil(perfis, 'EE')) {
             const ok = await coachingModel.coachingPertenceAEncarregado(
                 idCoaching,
                 req.utilizador.id

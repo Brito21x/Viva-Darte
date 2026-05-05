@@ -53,7 +53,29 @@ async function getPerfisDoUtilizador(idUtilizador) {
 // ============================================================================
 // 2. GESTÃO DE CONTAS PELO ADMIN (US03 / RF03)
 // ============================================================================
- 
+
+/**
+ * Professores aparecem no coaching (dropdown + vagas) via PROFESSOR_MODALIDADE.
+ * Ao registar/editar com perfil Professor, associa a todas as modalidades ativas (idempotente).
+ */
+async function associarProfessorATodasModalidadesAtivas(transaction, idUtilizador) {
+    await transaction
+        .request()
+        .input('IdUser', sql.Int, idUtilizador)
+        .query(`
+            INSERT INTO PROFESSOR_MODALIDADE (UTILIZADORid_utilizador, MODALIDADEid_modalidade)
+            SELECT @IdUser, m.id_modalidade
+            FROM MODALIDADE m
+            WHERE m.ativo = 1
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM PROFESSOR_MODALIDADE pm
+                  WHERE pm.UTILIZADORid_utilizador = @IdUser
+                    AND pm.MODALIDADEid_modalidade = m.id_modalidade
+              );
+        `);
+}
+
 async function listarTodosUtilizadores() {
     try {
         const pool = await poolPromise;
@@ -135,7 +157,11 @@ async function criarUtilizador({ nome, email, passwordHash, telefone, nomePerfil
                 INSERT INTO UTILIZADOR_PERFIL (UTILIZADORid_utilizador, PERFILid_perfil)
                 VALUES (@IdUser, @IdPerfil);
             `);
- 
+
+        if (nomePerfil === 'Professor') {
+            await associarProfessorATodasModalidadesAtivas(transaction, novoUtilizador.id_utilizador);
+        }
+
         await transaction.commit();
         return novoUtilizador;
     } catch (error) {
@@ -184,8 +210,12 @@ async function editarUtilizador(idUtilizador, { nome, telefone, nomePerfil }) {
                     INSERT INTO UTILIZADOR_PERFIL (UTILIZADORid_utilizador, PERFILid_perfil)
                     VALUES (@IdUtilizador, @IdPerfil);
                 `);
+
+            if (nomePerfil === 'Professor') {
+                await associarProfessorATodasModalidadesAtivas(transaction, idUtilizador);
+            }
         }
- 
+
         await transaction.commit();
         return true;
     } catch (error) {

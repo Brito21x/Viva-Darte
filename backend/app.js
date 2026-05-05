@@ -3,7 +3,7 @@ const cors = require('cors');
 const errorHandler = require('./src/middlewares/errorHandler');
 require('dotenv').config();
 
-const { poolConnect } = require('./src/config/db');
+const { pool, poolConnect } = require('./src/config/db');
 const authRoutes = require('./src/routes/authRoutes');
 const utilizadorRoutes = require('./src/routes/utilizadorRoutes');
 const escolaRoutes = require('./src/routes/escolaRoutes');
@@ -29,8 +29,22 @@ app.use(
     })
 );
 
-app.get('/api/health', (req, res) => {
-    res.json({ status: 'online', message: "Servidor Viva D'arte a bombar!" });
+app.get('/api/health', async (req, res) => {
+    try {
+        await pool.request().query('SELECT 1 AS ok');
+        res.json({
+            status: 'online',
+            database: 'ligada',
+            message: "Servidor Viva D'arte a bombar!"
+        });
+    } catch (err) {
+        res.status(503).json({
+            status: 'online',
+            database: 'erro',
+            message: "Servidor a correr mas a ligação à BD falhou.",
+            detail: process.env.NODE_ENV === 'development' ? err.message : undefined
+        });
+    }
 });
 
 app.use('/api/auth', authRoutes);

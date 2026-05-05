@@ -1,0 +1,1632 @@
+/* — Layout página (sem painel lateral) — */
+.coaching-layout {
+  flex: 1;
+  min-height: 0;
+}
+
+.coaching-main-area {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 24px 5% 56px;
+}
+
+.page-agendar-coaching .coaching-main-area {
+  max-width: min(1680px, 100%);
+  width: 100%;
+  padding-left: clamp(12px, 2vw, 36px);
+  padding-right: clamp(12px, 2vw, 36px);
+  padding-bottom: 40px;
+}
+
+.page-agendar-coaching .coaching-layout {
+  min-height: calc(100vh - 56px);
+}
+
+.coaching-main-area h1 {
+  font-size: 1.75rem;
+  color: #2a2724;
+  margin: 0;
+}
+
+.coaching-main-area .sub {
+  margin: 8px 0 22px 0;
+  opacity: 0.82;
+  font-size: 0.92rem;
+}
+
+/* — Cabeçalho da página — */
+.ac-page-header {
+  position: relative;
+  margin-bottom: 8px;
+  z-index: 30;
+}
+
+.ac-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.ac-vista-badge {
+  display: inline-block;
+  margin-left: 4px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #7a7268;
+  padding: 4px 10px;
+  border-radius: 20px;
+  background: rgba(179, 139, 89, 0.12);
+}
+
+.ac-voltar-cal {
+  display: inline-block;
+  margin-bottom: 14px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #b38b59;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+}
+
+.ac-voltar-cal:hover {
+  color: #7a5a32;
+}
+
+/* — Vistas internas (bloco único) — */
+.ac-vista-bloco {
+  animation: acFadeIn 0.22s ease;
+}
+
+@keyframes acFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.coaching-card {
+  background: #eeeae2;
+  border-radius: 12px;
+  padding: 18px 20px;
+  margin-bottom: 18px;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.04);
+}
+
+.coaching-card h2 {
+  margin: 0 0 12px 0;
+  font-size: 1.05rem;
+  color: #2a2724;
+}
+
+.coaching-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 12px;
+}
+
+.coaching-grid .ac-prof-qualquer-hint {
+  grid-column: 1 / -1;
+  margin: -4px 0 2px 0;
+  font-size: 0.82rem;
+}
+
+.coaching-field label {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 600;
+  margin-bottom: 4px;
+  color: #3a3632;
+}
+
+.coaching-field select,
+.coaching-field input[type='date'],
+.coaching-field input[type='text'] {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  background: #fff;
+  font-size: 0.9rem;
+}
+
+.cal-semana-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.cal-semana-titulo {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #5c564d;
+}
+
+.cal-semana-nav {
+  display: flex;
+  gap: 6px;
+}
+
+.cal-semana-nav button {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  background: #fff;
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+  color: #2a2724;
+}
+
+.cal-semana-nav button:hover {
+  border-color: #b38b59;
+  color: #b38b59;
+}
+
+.cal-dia-inline-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.cal-dia-inline-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  background: #faf8f5;
+  cursor: pointer;
+  font-size: 1.05rem;
+  line-height: 1;
+  color: #2a2724;
+  padding: 0;
+  flex-shrink: 0;
+  transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease, transform 0.18s ease;
+}
+
+.cal-dia-inline-btn:hover {
+  border-color: #b38b59;
+  color: #b38b59;
+  background: rgba(179, 139, 89, 0.1);
+}
+
+.cal-dia-inline-btn:active {
+  transform: scale(0.95);
+}
+
+.cal-dia-inline-titulo {
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: #2a2724;
+  letter-spacing: 0.02em;
+  min-width: 7.5rem;
+  text-align: center;
+}
+
+.cal-semana-dias {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+}
+
+.cal-dia-celula {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  min-height: 92px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 10px;
+  padding: 8px 4px 6px;
+  text-align: center;
+  background: #faf8f5;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.cal-dia-celula:hover {
+  border-color: #b38b59;
+  background: #fff;
+}
+
+.cal-dia-celula.selecionado {
+  border-color: #b38b59;
+  background: #fff;
+  box-shadow: 0 0 0 2px rgba(179, 139, 89, 0.2);
+}
+
+.cal-dia-celula .lbl {
+  display: block;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #8a847a;
+}
+
+.cal-dia-celula .num {
+  display: block;
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #2a2724;
+  margin-top: 2px;
+}
+
+.cal-dia-celula.hoje:not(.selecionado) .num {
+  color: #b38b59;
+}
+
+.link-cal-mais {
+  font-size: 0.8rem;
+  margin-top: 8px;
+  display: inline-block;
+  color: #6b5b45;
+  cursor: pointer;
+  text-decoration: underline;
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: inherit;
+}
+
+.vagas-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.vaga-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 10px 12px;
+  background: #fff;
+  border-radius: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.vaga-row.selecionada {
+  border-color: #b38b59;
+  box-shadow: 0 0 0 2px rgba(179, 139, 89, 0.25);
+}
+
+.vaga-row .meta {
+  font-size: 0.85rem;
+}
+
+.vaga-row .ocupado {
+  color: #8b4513;
+  font-weight: 600;
+}
+
+.resumo-submeter {
+  font-size: 0.9rem;
+  line-height: 1.6;
+  margin-bottom: 16px;
+}
+
+.resumo-submeter strong {
+  color: #2a2724;
+}
+
+.ac-submeter-pedidos-extra {
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.ac-submeter-pedidos-extra h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0 0 6px 0;
+  color: #2a2724;
+}
+
+.alunos-checks {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.alunos-checks label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 500;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+.pedidos-table-compact {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.pedidos-table-compact th,
+.pedidos-table-compact td {
+  text-align: left;
+  padding: 10px 8px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.07);
+  vertical-align: top;
+}
+
+.pedidos-table-compact th {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #6b665e;
+}
+
+.btn-coaching-primary {
+  background: #2a2724;
+  color: #fff;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-weight: 700;
+  cursor: pointer;
+  margin-top: 8px;
+  font-size: 0.95rem;
+}
+
+.btn-coaching-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-coaching-secondary {
+  background: transparent;
+  color: #2a2724;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  font-size: 0.8rem;
+}
+
+.aviso {
+  padding: 14px 16px;
+  background: #fff3cd;
+  border: 1px solid #ffc107;
+  border-radius: 8px;
+  color: #664d03;
+}
+
+.special-link.active {
+  color: #b38b59;
+  font-weight: 700;
+}
+
+/* — Menu na navbar: Agendar Coaching + seta — */
+.page-agendar-coaching .nav-menu li.nav-dd-coaching {
+  position: relative;
+  display: flex;
+  align-items: center;
+  list-style: none;
+}
+
+.page-agendar-coaching .nav-dd-coaching-inner {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.page-agendar-coaching .nav-dd-caret {
+  width: auto;
+  height: auto;
+  min-width: 0;
+  min-height: 0;
+  margin-left: 4px;
+  padding: 2px 5px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  box-shadow: none;
+  cursor: pointer;
+  font-size: 0.62rem;
+  line-height: 1;
+  color: #9a7a4a;
+  flex-shrink: 0;
+  transition: transform 0.2s ease, color 0.15s ease, background 0.15s ease;
+}
+
+.page-agendar-coaching .nav-dd-caret:hover {
+  color: #7a5a28;
+  background: rgba(179, 139, 89, 0.1);
+}
+
+.page-agendar-coaching .nav-dd-caret.aberto {
+  transform: rotate(180deg);
+}
+
+.page-agendar-coaching .nav-dd-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  min-width: 220px;
+  list-style: none;
+  margin: 0;
+  padding: 8px 0;
+  background: #f0ebe3;
+  border-radius: 12px;
+  border: 1px solid rgba(42, 39, 36, 0.1);
+  box-shadow: 0 14px 40px rgba(42, 39, 36, 0.18);
+  z-index: 100;
+}
+
+.page-agendar-coaching .nav-dd-menu button {
+  width: 100%;
+  text-align: left;
+  padding: 11px 16px;
+  border: none;
+  background: transparent;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #2a2724;
+  cursor: pointer;
+}
+
+.page-agendar-coaching .nav-dd-menu button:hover {
+  background: rgba(179, 139, 89, 0.1);
+}
+
+.page-agendar-coaching .nav-dd-menu button.ativo {
+  color: #7a5a28;
+  background: rgba(179, 139, 89, 0.08);
+}
+
+/* — Calendário com marcações da semana — */
+.cal-dia-celula.com-marcacoes {
+  background: #f7f4ee;
+}
+
+.cal-dia-marcas {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  margin-top: 6px;
+  width: 100%;
+  max-width: 100%;
+}
+
+.cal-marca {
+  font-size: 0.58rem;
+  font-weight: 700;
+  padding: 2px 5px;
+  border-radius: 4px;
+  background: #e4dfd6;
+  color: #3a3632;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cal-marca-mais {
+  font-size: 0.55rem;
+  font-weight: 800;
+  color: #8a7260;
+}
+
+.cal-marca--pendente,
+.cal-marca--pendente-professor {
+  background: #fff3cd;
+  color: #664d03;
+}
+
+.cal-marca--aguarda-confirmacao,
+.cal-marca--aguarda_confirmacao {
+  background: #e3f2fd;
+  color: #1565c0;
+}
+
+.cal-marca--aprovado,
+.cal-marca--confirmado,
+.cal-marca--agendado {
+  background: #e8f5e9;
+  color: #1b5e20;
+}
+
+.cal-marca--rejeitado,
+.cal-marca--cancelado {
+  background: #ffebee;
+  color: #b71c1c;
+}
+
+@media (max-width: 720px) {
+  .cal-semana-dias {
+    gap: 4px;
+  }
+
+  .cal-dia-celula {
+    padding: 6px 2px;
+  }
+
+  .cal-dia-celula .num {
+    font-size: 0.95rem;
+  }
+
+}
+
+/* — Tema integrado (sem branco “painel”) + transição mais suave nas vistas — */
+.page-agendar-coaching .ac-vista-bloco {
+  animation: acFadeSuave 0.38s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes acFadeSuave {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.page-agendar-coaching .coaching-field select,
+.page-agendar-coaching .coaching-field input[type='date'],
+.page-agendar-coaching .coaching-field input[type='text'] {
+  background: #e8e4dc;
+  border-color: rgba(42, 39, 36, 0.14);
+  color: #2a2724;
+  transition: border-color 0.22s ease, box-shadow 0.22s ease, background 0.22s ease;
+}
+
+.page-agendar-coaching .coaching-field select:focus,
+.page-agendar-coaching .coaching-field input[type='date']:focus,
+.page-agendar-coaching .coaching-field input[type='text']:focus {
+  outline: none;
+  border-color: rgba(179, 139, 89, 0.55);
+  box-shadow: 0 0 0 2px rgba(179, 139, 89, 0.12);
+}
+
+.page-agendar-coaching .cal-semana-nav button {
+  background: #e4e0d8;
+  border-color: rgba(42, 39, 36, 0.12);
+  transition: border-color 0.22s ease, color 0.22s ease, background 0.22s ease, transform 0.18s ease;
+}
+
+.page-agendar-coaching .cal-semana-nav button:active {
+  transform: scale(0.96);
+}
+
+.page-agendar-coaching .cal-dia-inline-btn {
+  background: #e4e0d8;
+  border-color: rgba(42, 39, 36, 0.12);
+}
+
+.page-agendar-coaching .vaga-row {
+  background: #e4e0d8;
+  border-color: rgba(42, 39, 36, 0.08);
+  transition: border-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+.page-agendar-coaching .aviso {
+  background: rgba(255, 243, 205, 0.85);
+}
+
+/* — Barra do calendário (tipo agenda) — */
+.page-agendar-coaching .coaching-cal-card {
+  padding-top: 14px;
+}
+
+.ac-cal-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #fff;
+  border: 1px solid rgba(42, 39, 36, 0.08);
+  box-shadow: 0 1px 3px rgba(42, 39, 36, 0.05);
+}
+
+.ac-cal-toolbar-left {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  flex: 1 1 200px;
+  min-width: 0;
+}
+
+.ac-cal-toolbar-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.ac-cal-toolbar-nav button {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  border: 1px solid rgba(42, 39, 36, 0.1);
+  background: #f4f2ee;
+  cursor: pointer;
+  font-size: 1.1rem;
+  line-height: 1;
+  color: #2a2724;
+  padding: 0;
+  transition: border-color 0.18s ease, background 0.18s ease, color 0.18s ease;
+}
+
+.ac-cal-toolbar-nav button:hover {
+  border-color: #b38b59;
+  color: #7a5a32;
+  background: #fff;
+}
+
+.ac-cal-btn-hoje {
+  padding: 0 12px !important;
+  width: auto !important;
+  font-size: 0.78rem !important;
+  font-weight: 700 !important;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.ac-cal-toolbar-centro {
+  flex: 2 1 200px;
+  min-width: 0;
+  text-align: center;
+}
+
+.ac-cal-toolbar-titulo {
+  display: block;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #3a3632;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ac-cal-vista-toggle {
+  display: inline-flex;
+  flex: 0 0 auto;
+  border-radius: 10px;
+  padding: 3px;
+  background: #ece9e4;
+  border: 1px solid rgba(42, 39, 36, 0.06);
+  gap: 2px;
+}
+
+.ac-cal-vista-toggle button {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #6b665e;
+  padding: 7px 12px;
+  border-radius: 8px;
+  transition: background 0.18s ease, color 0.18s ease;
+}
+
+.ac-cal-vista-toggle button:hover {
+  color: #2a2724;
+}
+
+.ac-cal-vista-toggle button.ativo {
+  background: #fff;
+  color: #2a2724;
+  box-shadow: 0 1px 2px rgba(42, 39, 36, 0.08);
+}
+
+.ac-cal-dia-nome-semana {
+  margin: 0 0 10px 0;
+  text-align: center;
+  font-size: 0.88rem;
+  font-weight: 500;
+  color: #7a7268;
+  letter-spacing: 0.02em;
+}
+
+.ac-cal-mes-panel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #faf9f7;
+  border: 1px dashed rgba(42, 39, 36, 0.12);
+}
+
+.ac-cal-mes-label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #5c564d;
+}
+
+.ac-cal-mes-input {
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(42, 39, 36, 0.12);
+  font-family: inherit;
+  font-size: 0.9rem;
+}
+
+.cal-semana-col-head-prim {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #3a3632;
+  line-height: 1.25;
+  text-align: center;
+}
+
+.cal-semana-colunas--dia {
+  justify-content: center;
+}
+
+.cal-semana-colunas--dia .cal-semana-col {
+  flex: 1 1 auto;
+  max-width: min(420px, 100%);
+  min-width: 0;
+}
+
+.cal-semana-linha--dia .cal-semana-eixo-canto {
+  height: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.cal-semana-colunas--dia .cal-semana-col-headband {
+  display: none;
+}
+
+.cal-semana-colunas--dia .cal-semana-col-canvas {
+  border-radius: 12px;
+  border-top: 1px solid rgba(42, 39, 36, 0.07);
+}
+
+.cal-semana-board--dia {
+  background: #fffefc;
+  border-color: rgba(42, 39, 36, 0.05);
+}
+
+.cal-semana-board--dia .cal-semana-col-canvas {
+  background: #fff9e6;
+  border-color: rgba(42, 39, 36, 0.06);
+}
+
+.cal-semana-board--dia .cal-semana-eixo-hora {
+  color: #9a948a;
+  border-top-color: rgba(42, 39, 36, 0.05);
+}
+
+.cal-semana-board--dia .cal-timeline-grelha {
+  border-top-color: rgba(42, 39, 36, 0.06);
+}
+
+.cal-semana-col--hoje .cal-semana-col-headband {
+  background: rgba(255, 249, 196, 0.65);
+}
+
+.cal-semana-col--hoje .cal-semana-col-canvas {
+  background: linear-gradient(180deg, rgba(255, 252, 230, 0.9) 0%, #f4f2ee 100%);
+}
+
+.cal-semana-col--hoje.cal-semana-col--ativo .cal-semana-col-headband {
+  background: rgba(255, 243, 180, 0.95);
+}
+
+/* — Grelha semanal (7 colunas, 08h–21h), estilo cartões — */
+.cal-semana-board {
+  margin-top: 10px;
+  padding: 12px 10px 14px;
+  border-radius: 16px;
+  background: #faf9f7;
+  border: 1px solid rgba(42, 39, 36, 0.06);
+  box-shadow: 0 4px 20px rgba(42, 39, 36, 0.06);
+}
+
+.cal-semana-linha {
+  display: flex;
+  gap: 8px;
+  margin-top: 0;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.cal-semana-eixo {
+  flex-shrink: 0;
+  width: 38px;
+  display: flex;
+  flex-direction: column;
+}
+
+.cal-semana-eixo-canto {
+  height: 64px;
+  flex-shrink: 0;
+}
+
+.cal-semana-eixo-horas {
+  position: relative;
+  height: clamp(440px, calc(100vh - 260px), 920px);
+  min-height: 440px;
+  width: 100%;
+}
+
+.cal-semana-eixo-hora {
+  position: absolute;
+  left: 0;
+  right: 0;
+  transform: translateY(-50%);
+  font-size: 0.6rem;
+  font-weight: 700;
+  color: #8a847a;
+  border-top: 1px solid rgba(42, 39, 36, 0.06);
+  padding-top: 1px;
+}
+
+.cal-semana-colunas {
+  display: flex;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.cal-semana-col {
+  flex: 1 1 0;
+  min-width: 100px;
+  max-width: 220px;
+  display: flex;
+  flex-direction: column;
+}
+
+.cal-semana-col-headband {
+  display: flex;
+  align-items: stretch;
+  min-height: 64px;
+  padding: 6px 8px 8px;
+  border-radius: 12px 12px 0 0;
+  background: #fff;
+  border: 1px solid rgba(42, 39, 36, 0.07);
+  border-bottom: none;
+}
+
+.cal-semana-col-head-main {
+  width: 100%;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-family: inherit;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 4px;
+  border-radius: 8px;
+  text-align: center;
+  transition: background 0.18s ease;
+}
+
+.cal-semana-col-head-main:hover {
+  background: rgba(179, 139, 89, 0.09);
+}
+
+.cal-semana-col-count {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.58rem;
+  font-weight: 600;
+  color: #8a847a;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.cal-semana-col--ativo .cal-semana-col-headband {
+  box-shadow: inset 0 0 0 2px rgba(179, 139, 89, 0.4);
+}
+
+.cal-semana-col--ativo .cal-semana-col-canvas {
+  box-shadow: inset 0 0 0 1px rgba(179, 139, 89, 0.25);
+}
+
+.cal-semana-col-dow {
+  font-size: 0.62rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #6b665e;
+}
+
+.cal-semana-col-dm {
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: #2a2724;
+}
+
+.cal-semana-col-canvas {
+  position: relative;
+  flex: 1;
+  height: clamp(440px, calc(100vh - 260px), 920px);
+  min-height: 440px;
+  border-radius: 0 0 12px 12px;
+  background: linear-gradient(180deg, #f4f2ee 0%, #ece9e4 100%);
+  border: 1px solid rgba(42, 39, 36, 0.07);
+  border-top: none;
+  overflow: hidden;
+}
+
+.cal-semana-col-hit {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 1;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: crosshair;
+}
+
+.cal-semana-col-hit:hover {
+  background: rgba(179, 139, 89, 0.04);
+}
+
+.cal-semana-col-canvas .cal-week-ped,
+.cal-semana-col-canvas .cal-week-vaga,
+.cal-semana-col-canvas .cal-week-pref {
+  left: 6%;
+  width: 88%;
+}
+
+.cal-week-pref.cal-week-card {
+  cursor: pointer;
+  font-family: inherit;
+  background: linear-gradient(180deg, rgba(227, 242, 253, 0.98) 0%, rgba(187, 222, 251, 0.88) 100%) !important;
+  color: #0d47a1;
+  border: 2px dashed rgba(21, 101, 192, 0.45) !important;
+  box-shadow: 0 2px 10px rgba(21, 101, 192, 0.12);
+}
+
+.cal-week-pref .cal-week-card-prof {
+  display: block;
+  font-size: 0.48rem;
+  font-weight: 600;
+  line-height: 1.25;
+  margin-top: 4px;
+  opacity: 0.92;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cal-week-card {
+  border-radius: 10px !important;
+  border: none !important;
+  box-shadow: 0 2px 8px rgba(42, 39, 36, 0.08), 0 1px 2px rgba(42, 39, 36, 0.04);
+  padding: 5px 7px !important;
+  z-index: 2;
+  text-align: left;
+  transition: box-shadow 0.18s ease, transform 0.15s ease;
+}
+
+.cal-week-card:hover {
+  z-index: 3;
+  box-shadow: 0 4px 14px rgba(42, 39, 36, 0.12);
+}
+
+.cal-week-ped {
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.cal-week-card-title {
+  display: block;
+  font-size: 0.58rem;
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: 0.01em;
+}
+
+.cal-week-card-time {
+  display: block;
+  font-size: 0.52rem;
+  font-weight: 600;
+  opacity: 0.9;
+  margin-top: 3px;
+}
+
+.cal-week-vaga.livre.cal-week-card {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.95) 0%, rgba(232, 242, 252, 0.92) 100%) !important;
+  color: #1a3a52;
+}
+
+.cal-week-vaga.ocupada.cal-week-card {
+  opacity: 0.62;
+}
+
+.cal-week-ped--min {
+  min-height: 10px;
+  padding: 1px 3px;
+  overflow: hidden;
+}
+
+.cal-week-ped-min-hint {
+  display: block;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(42, 39, 36, 0.35);
+}
+
+.cal-semana-loading {
+  margin: 10px 0 0;
+}
+
+.ac-painel-marcacao {
+  margin-top: 14px;
+  padding: 14px 16px;
+  border-radius: 10px;
+  border: 1px solid rgba(179, 139, 89, 0.35);
+  background: rgba(255, 250, 242, 0.96);
+}
+
+.ac-painel-marcacao-titulo {
+  margin: 0 0 6px 0;
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #5c4a32;
+}
+
+.ac-painel-marcacao-resumo {
+  margin: 0 0 12px 0;
+  font-size: 0.88rem;
+  line-height: 1.45;
+  color: #2a2724;
+}
+
+.ac-painel-marcacao-acoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+/* — Linha do tempo do dia (08h–21h) — */
+.cal-timeline-wrap {
+  margin-top: 16px;
+  padding: 12px 12px 14px;
+  border-radius: 10px;
+  background: rgba(42, 39, 36, 0.04);
+  border: 1px solid rgba(42, 39, 36, 0.07);
+}
+
+.cal-timeline-barra-topo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.cal-timeline-data {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #3a3632;
+  letter-spacing: 0.02em;
+}
+
+.cal-timeline-faixa {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #7a7268;
+}
+
+.cal-timeline-corpo {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.cal-timeline-horas {
+  position: relative;
+  width: 40px;
+  flex-shrink: 0;
+  height: min(52vh, 420px);
+  min-height: 320px;
+}
+
+.cal-timeline-hora-risco {
+  position: absolute;
+  left: 0;
+  right: 0;
+  transform: translateY(-50%);
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: #8a847a;
+  border-top: 1px solid rgba(42, 39, 36, 0.06);
+  padding-top: 2px;
+}
+
+.cal-timeline-canvas {
+  position: relative;
+  flex: 1;
+  height: min(52vh, 420px);
+  min-height: 320px;
+  border-radius: 8px;
+  background: linear-gradient(180deg, #ebe7df 0%, #e4dfd6 100%);
+  border: 1px solid rgba(42, 39, 36, 0.08);
+  overflow: hidden;
+}
+
+.cal-timeline-grelha {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 0;
+  border-top: 1px dashed rgba(42, 39, 36, 0.07);
+  pointer-events: none;
+}
+
+.cal-tl-bloco {
+  position: absolute;
+  box-sizing: border-box;
+  border-radius: 6px;
+  overflow: hidden;
+  text-align: left;
+  line-height: 1.15;
+}
+
+.cal-tl-bloco--pedido {
+  left: 2%;
+  width: 30%;
+  padding: 4px 6px;
+  font-size: 0.62rem;
+  font-weight: 700;
+  border: 1px solid rgba(42, 39, 36, 0.12);
+  color: #2a2724;
+  background: rgba(228, 223, 214, 0.95);
+}
+
+.cal-tl-bloco--pedido.cal-tl--pendente,
+.cal-tl-bloco--pedido.cal-tl--pendente-professor {
+  background: rgba(255, 243, 205, 0.92);
+  color: #5c4a20;
+}
+
+.cal-tl-bloco--pedido.cal-tl--aguarda-confirmacao,
+.cal-tl-bloco--pedido.cal-tl--aguarda_confirmacao {
+  background: rgba(227, 242, 253, 0.92);
+  color: #0d47a1;
+}
+
+.cal-tl-bloco--pedido.cal-tl--aprovado,
+.cal-tl-bloco--pedido.cal-tl--confirmado,
+.cal-tl-bloco--pedido.cal-tl--agendado {
+  background: rgba(232, 245, 233, 0.92);
+  color: #1b5e20;
+}
+
+.cal-tl-bloco--pedido.cal-tl--rejeitado,
+.cal-tl-bloco--pedido.cal-tl--cancelado {
+  background: rgba(255, 235, 238, 0.92);
+  color: #8b1010;
+}
+
+.cal-tl-bloco--vaga {
+  left: 34%;
+  width: 63%;
+  padding: 5px 8px;
+  margin: 0;
+  font-family: inherit;
+  cursor: pointer;
+  border: 1px solid rgba(42, 39, 36, 0.1);
+  color: #2a2724;
+  background: rgba(255, 255, 255, 0.35);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease, background 0.2s ease,
+    opacity 0.2s ease;
+}
+
+.cal-tl-bloco--vaga:hover:not(:disabled) {
+  border-color: rgba(179, 139, 89, 0.45);
+  background: rgba(255, 255, 255, 0.55);
+}
+
+.cal-tl-bloco--vaga:active:not(:disabled) {
+  transform: scale(0.99);
+}
+
+.cal-tl-bloco--vaga.livre.sel {
+  border-color: #b38b59;
+  box-shadow: 0 0 0 2px rgba(179, 139, 89, 0.22);
+  background: rgba(255, 250, 242, 0.9);
+}
+
+.cal-tl-bloco--vaga.ocupada {
+  opacity: 0.55;
+  cursor: not-allowed;
+  background: rgba(42, 39, 36, 0.06);
+}
+
+.cal-tl-bloco-txt {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.cal-tl-bloco-sub {
+  display: block;
+  font-size: 0.62rem;
+  font-weight: 600;
+  opacity: 0.85;
+  margin-top: 2px;
+}
+
+@media (max-width: 720px) {
+  .cal-tl-bloco--pedido {
+    width: 34%;
+    font-size: 0.58rem;
+  }
+
+  .cal-tl-bloco--vaga {
+    left: 38%;
+    width: 59%;
+  }
+
+  .cal-tl-bloco-txt {
+    font-size: 0.65rem;
+  }
+}
+
+/* — Modal detalhe do pedido (calendário) — */
+.ac-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2010;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(42, 39, 36, 0.45);
+}
+
+.ac-modal-pedido {
+  max-width: 440px;
+  width: 100%;
+  cursor: default;
+}
+
+.ac-modal-pedido-titulo {
+  margin: 0 0 12px 0;
+  font-size: 1.05rem;
+  color: #2a2724;
+}
+
+.ac-modal-pedido-ymd {
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: #7a7268;
+}
+
+.ac-modal-pedido-dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 8px 16px;
+  margin: 0 0 18px 0;
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.ac-modal-pedido-dl dt {
+  margin: 0;
+  font-weight: 700;
+  color: #5c564d;
+}
+
+.ac-modal-pedido-dl dd {
+  margin: 0;
+  color: #2a2724;
+}
+
+.ac-modal-pedido-acoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.ac-modal-overlay--slot {
+  z-index: 2020;
+}
+
+/* — Modal ao clicar na grelha (estilo formulário limpo) — */
+.ac-modal-atividade {
+  position: relative;
+  width: 100%;
+  max-width: 520px;
+  padding: 28px 26px 22px;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 18px 48px rgba(42, 39, 36, 0.18);
+  border: 1px solid rgba(42, 39, 36, 0.08);
+  cursor: default;
+}
+
+.ac-modal-atividade-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: #8a847a;
+  font-size: 1.45rem;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.ac-modal-atividade-close:hover {
+  background: rgba(42, 39, 36, 0.06);
+  color: #2a2724;
+}
+
+.ac-modal-atividade-titulo {
+  margin: 0 36px 8px 0;
+  text-align: center;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #7a5a32;
+  letter-spacing: 0.01em;
+}
+
+.ac-modal-atividade-sub {
+  margin: 0 0 22px 0;
+  text-align: center;
+  font-size: 0.84rem;
+  line-height: 1.5;
+  color: #6b665e;
+  padding: 0 8px;
+}
+
+.ac-modal-atividade-form {
+  margin-bottom: 8px;
+}
+
+.ac-modal-atividade-row--2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 16px;
+  margin-bottom: 12px;
+}
+
+.ac-modal-atividade-row--3 {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px 16px;
+}
+
+@media (max-width: 540px) {
+  .ac-modal-atividade-row--2,
+  .ac-modal-atividade-row--3 {
+    grid-template-columns: 1fr;
+  }
+}
+
+.ac-modal-atividade-field label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #3a3632;
+}
+
+.ac-modal-atividade-req {
+  color: #c62828;
+  font-weight: 700;
+}
+
+.ac-modal-atividade-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(42, 39, 36, 0.12);
+  background: #f5f4f1;
+  font-size: 0.92rem;
+  font-family: inherit;
+  color: #2a2724;
+}
+
+.ac-modal-atividade-input:focus {
+  outline: none;
+  border-color: rgba(179, 139, 89, 0.6);
+  box-shadow: 0 0 0 2px rgba(179, 139, 89, 0.14);
+  background: #fff;
+}
+
+.ac-modal-atividade-input--readonly {
+  color: #5c564d;
+  cursor: default;
+}
+
+.ac-modal-atividade-hint {
+  margin: 12px 0 0 0;
+  font-size: 0.78rem;
+  color: #7a7268;
+  line-height: 1.45;
+}
+
+.ac-modal-atividade-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 16px 28px;
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid rgba(42, 39, 36, 0.08);
+}
+
+.ac-modal-atividade-btn-texto {
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: #6b665e;
+  padding: 8px 12px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.ac-modal-atividade-btn-texto:hover {
+  color: #2a2724;
+}
+
+.ac-modal-atividade-btn-guardar {
+  border: none;
+  border-radius: 10px;
+  padding: 11px 22px;
+  font-family: inherit;
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+  background: #b38b59;
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(122, 90, 50, 0.32);
+  transition: background 0.18s ease, transform 0.15s ease;
+}
+
+.ac-modal-atividade-btn-guardar:hover {
+  background: #7a5a32;
+}
+
+.ac-modal-atividade-btn-guardar:active {
+  transform: scale(0.98);
+}
+
+.ac-modal-overlay--confirm-eliminar {
+  z-index: 2030;
+}
+
+.ac-modal-confirm-eliminar-card {
+  max-width: 420px;
+  width: 100%;
+}
+
+.ac-modal-slot-intro {
+  margin: 0 0 14px 0;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  color: #3a3632;
+}
+
+.ac-modal-slot-field {
+  margin-bottom: 16px;
+}
+
+.ac-modal-slot-field label {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #5c564d;
+  margin-bottom: 6px;
+}
+
+.ac-modal-slot-field input[type='time'] {
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(42, 39, 36, 0.14);
+  font-size: 1rem;
+  font-family: inherit;
+  max-width: 220px;
+  background: #faf9f7;
+}
+
+.ac-pref-hora-banner {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0 0 14px 0;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: rgba(227, 242, 253, 0.72);
+  border: 1px solid rgba(21, 101, 192, 0.28);
+  font-size: 0.86rem;
+  line-height: 1.45;
+  color: #2a2724;
+  box-shadow: 0 2px 10px rgba(21, 101, 192, 0.08);
+}
+
+.ac-pref-hora-banner-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.ac-pref-hora-banner-top > span {
+  flex: 1;
+  min-width: 200px;
+}
+
+.ac-pref-hora-banner-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.ac-pref-hora-banner-links .btn-coaching-secondary,
+.ac-pref-hora-banner-links .btn-coaching-primary {
+  font-size: 0.82rem;
+  padding: 8px 14px;
+}
+
+.ac-pref-hora-banner-dados {
+  margin: 0;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: #1a3a52;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.65);
+  border: 1px solid rgba(21, 101, 192, 0.12);
+}

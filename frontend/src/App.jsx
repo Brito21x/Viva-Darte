@@ -5,6 +5,7 @@ import Registo from './pages/Login-Registo/Registo';
 import RecoverPassword from './pages/Login-Registo/RecoverPassword';
 import VendaFigurinos from './pages/VendaFigurinos/VendaFigurinos';
 import EmprestimosPecas from './pages/EmprestimosPecas/EmprestimosPecas';
+import AgendarCoaching from './pages/AgendarCoaching/AgendarCoaching';
 
 function App() {
   const [paginaAtual, setPaginaAtual] = useState('landing');
@@ -19,6 +20,7 @@ function App() {
           irParaRegisto={() => setPaginaAtual('registo')} 
           irParaVendaFigurinos={() => setPaginaAtual('venda_figurinos')} 
           irParaEmprestimos={() => setPaginaAtual('emprestimos_pecas')}
+          irParaAgendarCoaching={() => setPaginaAtual('agendar_coaching')}
         />
       )}
       
@@ -51,7 +53,8 @@ function App() {
       {paginaAtual === 'venda_figurinos' && (
         <VendaFigurinos 
           irParaLanding={() => setPaginaAtual('landing')} 
-          irParaEmprestimos={() => setPaginaAtual('emprestimos_pecas')} // <- ADICIONADO AQUI
+          irParaEmprestimos={() => setPaginaAtual('emprestimos_pecas')}
+          irParaAgendarCoaching={() => setPaginaAtual('agendar_coaching')}
         />
       )}
 
@@ -59,7 +62,16 @@ function App() {
       {paginaAtual === 'emprestimos_pecas' && (
         <EmprestimosPecas 
           irParaLanding={() => setPaginaAtual('landing')} 
-          irParaVendaFigurinos={() => setPaginaAtual('venda_figurinos')} // <- ADICIONADO AQUI
+          irParaVendaFigurinos={() => setPaginaAtual('venda_figurinos')}
+          irParaAgendarCoaching={() => setPaginaAtual('agendar_coaching')}
+        />
+      )}
+
+      {paginaAtual === 'agendar_coaching' && (
+        <AgendarCoaching
+          irParaLanding={() => setPaginaAtual('landing')}
+          irParaVendaFigurinos={() => setPaginaAtual('venda_figurinos')}
+          irParaEmprestimos={() => setPaginaAtual('emprestimos_pecas')}
         />
       )}
 

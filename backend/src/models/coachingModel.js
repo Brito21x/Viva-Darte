@@ -155,11 +155,26 @@ async function getDisponibilidadeEfetiva(
                 FROM DISPONIBILIDADE_PROFESSOR dp
                 JOIN UTILIZADOR u 
                     ON dp.UTILIZADORid_utilizador = u.id_utilizador
-                JOIN PROFESSOR_MODALIDADE pm 
-                    ON u.id_utilizador = pm.UTILIZADORid_utilizador
-                WHERE pm.MODALIDADEid_modalidade = @IdModalidade
-                  AND dp.dia_semana = @DiaSemana
+                JOIN UTILIZADOR_PERFIL up 
+                    ON up.UTILIZADORid_utilizador = u.id_utilizador
+                JOIN PERFIL p 
+                    ON p.id_perfil = up.PERFILid_perfil
+                WHERE dp.dia_semana = @DiaSemana
+                  AND p.nome LIKE '%Prof%'
                   AND u.ativo = 1
+                  AND (
+                      EXISTS (
+                          SELECT 1
+                          FROM PROFESSOR_MODALIDADE pm
+                          WHERE pm.UTILIZADORid_utilizador = u.id_utilizador
+                            AND pm.MODALIDADEid_modalidade = @IdModalidade
+                      )
+                      OR NOT EXISTS (
+                          SELECT 1
+                          FROM PROFESSOR_MODALIDADE pmAny
+                          WHERE pmAny.MODALIDADEid_modalidade = @IdModalidade
+                      )
+                  )
                   AND (@IdProfessorFiltro IS NULL OR u.id_utilizador = @IdProfessorFiltro);
             `);
  
@@ -541,6 +556,74 @@ async function aprovarEAgendarCoaching(dadosAgendamento) {
     await transaction.begin();
  
     try {
+        // RF10: Compatibilidade Professor ↔ Modalidade
+        const compatProfModal = await transaction
+            .request()
+            .input('IdProfessor', sql.Int, dadosAgendamento.idProfessor)
+            .input('IdModalidade', sql.Int, dadosAgendamento.idModalidade)
+            .query(`
+                SELECT 1 AS ok
+                WHERE EXISTS (
+                    SELECT 1
+                    FROM UTILIZADOR u
+                    JOIN UTILIZADOR_PERFIL up ON up.UTILIZADORid_utilizador = u.id_utilizador
+                    JOIN PERFIL p ON p.id_perfil = up.PERFILid_perfil
+                    WHERE u.id_utilizador = @IdProfessor
+                      AND u.ativo = 1
+                      AND p.nome LIKE '%Prof%'
+                      AND (
+                          EXISTS (
+                              SELECT 1
+                              FROM PROFESSOR_MODALIDADE pm
+                              WHERE pm.UTILIZADORid_utilizador = u.id_utilizador
+                                AND pm.MODALIDADEid_modalidade = @IdModalidade
+                          )
+                          OR NOT EXISTS (
+                              SELECT 1
+                              FROM PROFESSOR_MODALIDADE pmAny
+                              WHERE pmAny.MODALIDADEid_modalidade = @IdModalidade
+                          )
+                      )
+                );
+            `);
+
+        if (compatProfModal.recordset.length === 0) {
+            throw new Error('Compatibilidade inválida: professor não leciona esta modalidade.');
+        }
+
+        // RF10: Compatibilidade Sala ↔ Modalidade
+        const compatSalaModal = await transaction
+            .request()
+            .input('IdSala', sql.Int, dadosAgendamento.idSala)
+            .input('IdModalidade', sql.Int, dadosAgendamento.idModalidade)
+            .query(`
+                SELECT 1 AS ok
+                FROM SALA_MODALIDADE
+                WHERE SALAid_sala = @IdSala
+                  AND MODALIDADEid_modalidade = @IdModalidade;
+            `);
+
+        if (compatSalaModal.recordset.length === 0) {
+            throw new Error('Compatibilidade inválida: sala não compatível com a modalidade escolhida.');
+        }
+
+        // RF10: Capacidade da sala vs participantes
+        const capacidadeSala = await transaction
+            .request()
+            .input('IdSala', sql.Int, dadosAgendamento.idSala)
+            .query(`
+                SELECT capacidade_maxima
+                FROM SALA
+                WHERE id_sala = @IdSala;
+            `);
+        const capacidadeMax = Number(capacidadeSala.recordset[0]?.capacidade_maxima);
+        if (!Number.isFinite(capacidadeMax)) {
+            throw new Error('Sala inválida: capacidade máxima não definida.');
+        }
+        if (Number(dadosAgendamento.numeroParticipantes) > capacidadeMax) {
+            throw new Error('Capacidade inválida: número de participantes excede a lotação da sala.');
+        }
+
         // RF10: Verificar conflito de horário no COACHING — professor
         const conflitoProf = await transaction.request()
             .input('IdProfessor', sql.Int, dadosAgendamento.idProfessor)

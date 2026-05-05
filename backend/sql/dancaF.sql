@@ -179,6 +179,7 @@ CREATE TABLE VENDA_PECA (
   UTILIZADORid_utilizador  int NOT NULL, 
   UTILIZADORid_utilizador2 int NOT NULL, 
   metodo_pagamento         varchar(50) NULL, 
+  metodos_aceites VARCHAR(255) NULL,
   PRIMARY KEY (id_venda));
 CREATE TABLE HORARIO (
   id_horario              int IDENTITY NOT NULL, 

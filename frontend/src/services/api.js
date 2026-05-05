@@ -1,5 +1,15 @@
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
+export function getAuthToken() {
+  return localStorage.getItem('viva_token');
+}
+
+/** Pedido autenticado (usa `viva_token` do localStorage). */
+export function apiAuthFetch(path, options = {}) {
+  const token = getAuthToken();
+  return apiFetch(path, { ...options, token });
+}
+
 async function apiFetch(path, { method = 'GET', body, token } = {}) {
   const headers = { 'Content-Type': 'application/json' };
   if (token) headers.Authorization = `Bearer ${token}`;
@@ -24,8 +34,8 @@ async function apiFetch(path, { method = 'GET', body, token } = {}) {
   return data;
 }
 
-export function authLogin({ email, password }) {
-  return apiFetch('/api/auth/login', { method: 'POST', body: { email, password } });
+export function authLogin({ email, password, tipo }) {
+  return apiFetch('/api/auth/login', { method: 'POST', body: { email, password, tipo } });
 }
 
 export function authRegister({ nome, email, telefone, password, tipo }) {

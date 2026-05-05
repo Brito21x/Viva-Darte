@@ -44,22 +44,26 @@ async function getPecaDetalhes(req, res, next) {
 //         disponivelEmprestimo, disponivelVenda, idCategoria }
 // ============================================================================
 // inventarioController.js
-
 async function registarPeca(req, res, next) {
     try {
         const { nome, descricao, tamanho, estado, idCategoria, fotos } = req.body;
-        const idUtilizador = req.utilizador.id;
+        // Ajustado para aceitar tanto id como id_utilizador, dependendo de como o token está estruturado
+        const idUtilizador = req.utilizador.id || req.utilizador.id_utilizador;
 
-        // 1. Cria a peça primeiro e espera pelo ID gerado[cite: 8]
+        // 1. Cria a peça primeiro e espera pelo ID gerado
         const idPeca = await inventarioModel.registarNovaPeca({
             nome, descricao, tamanho, estado, idUtilizador, 
             idCategoria: parseInt(idCategoria),
             disponivelVenda: true 
         });
 
-        // 2. Se o array 'fotos' (Base64) existir, grava na tabela FOTO_PECA[cite: 8, 9]
+        // 2. Se o array 'fotos' (Base64) existir, grava na tabela FOTO_PECA
         if (fotos && Array.isArray(fotos) && fotos.length > 0) {
-            await inventarioModel.registarFotosPeca(idPeca, fotos);
+            try {
+                await inventarioModel.registarFotosPeca(idPeca, fotos);
+            } catch (fotoErr) {
+                console.error("Aviso: Falha ao gravar fotos, mas a peça foi criada", fotoErr);
+            }
         }
 
         return res.status(201).json({ 
@@ -120,7 +124,7 @@ async function atualizarEstadoPeca(req, res, next) {
 // ============================================================================
 async function requisitarEmprestimo(req, res, next) {
     try {
-        const idUtilizador = req.utilizador.id;
+        const idUtilizador = req.utilizador.id || req.utilizador.id_utilizador;
         const { dataInicio, dataFim, observacoes, itens } = req.body;
 
         if (!dataInicio || !dataFim) {
@@ -287,8 +291,7 @@ async function registarPagamentoEmprestimo(req, res, next) {
 // ============================================================================
 async function getPecasAVenda(req, res, next) {
     try {
-        const incluir = req.query.incluirConcluidas === '1' || req.query.incluirConcluidas === 'true';
-        const pecas = await inventarioModel.getPecasAVenda(incluir);
+        const pecas = await inventarioModel.getPecasAVenda();
         return res.status(200).json(pecas);
     } catch (error) {
         next(error);
@@ -302,8 +305,10 @@ async function getPecasAVenda(req, res, next) {
 // ============================================================================
 async function colocarPecaAVenda(req, res, next) {
     try {
-        const idVendedor = req.utilizador.id;
-        const { idPeca, preco } = req.body;
+        const idVendedor = req.utilizador.id || req.utilizador.id_utilizador;
+        
+        // Agora recebemos também o nomePeca e condicaoPeca do frontend
+        const { idPeca, preco, nomePeca, condicaoPeca } = req.body;
 
         if (!idPeca || preco === undefined) {
             return res.status(400).json({ mensagem: 'idPeca e preco são obrigatórios.' });
@@ -316,7 +321,9 @@ async function colocarPecaAVenda(req, res, next) {
         const idVenda = await inventarioModel.colocarPecaAVenda(
             parseInt(idPeca),
             parseFloat(preco),
-            idVendedor
+            idVendedor,
+            nomePeca, // Passamos os novos campos para o Model
+            condicaoPeca
         );
 
         return res.status(201).json({
@@ -344,7 +351,9 @@ async function editarPeca(req, res, next) {
         });
 
         // 2. Atualizar Preço na tabela VENDA_PECA
-        await inventarioModel.atualizarPrecoVenda(idPeca, parseFloat(preco));
+        if (preco !== undefined) {
+            await inventarioModel.atualizarPrecoVenda(idPeca, parseFloat(preco));
+        }
 
         // 3. Atualizar Fotos (Remover antigas e inserir novas strings base64)
         if (fotos && Array.isArray(fotos)) {
@@ -398,7 +407,7 @@ async function registarConclusaoVenda(req, res, next) {
 
         return res.status(200).json({ mensagem: 'Venda concluída com sucesso.' });
     } catch (error) {
-        if (error.message.includes('não encontrada') || error.message.includes('não está disponível')) {
+        if (error.message.includes('não encontrada') || error.message.includes('não está disponível') || error.message.includes('já não está disponível')) {
             return res.status(400).json({ mensagem: error.message });
         }
         next(error);

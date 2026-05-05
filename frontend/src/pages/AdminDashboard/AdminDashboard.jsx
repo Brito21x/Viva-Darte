@@ -366,7 +366,6 @@ export default function AdminDashboard({ irParaLanding }) {
             </div>
         </div>
       )}
-
     </div>
   );
 }

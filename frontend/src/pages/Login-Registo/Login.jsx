@@ -36,6 +36,7 @@ export default function Login({ irParaRegisto, irParaLanding, irParaRecuperar })
       if (response.ok) {
         // Grava o objeto que o backend envia (inclui o perfil ativo validado)
         localStorage.setItem('viva_user', JSON.stringify(resultado.utilizador));
+        localStorage.setItem('token', resultado.token);
         irParaLanding(); 
       } else {
         mostrarAlerta(resultado.mensagem || "Dados de acesso incorretos.");

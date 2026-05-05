@@ -5,6 +5,7 @@ require('dotenv').config();
 
 const { poolConnect } = require('./src/config/db');
 const authRoutes = require('./src/routes/authRoutes');
+const inventarioRoutes = require('./src/routes/inventarioRoutes');
 
 
 const app = express();
@@ -32,6 +33,7 @@ app.get('/api/health', (req, res) => {
 
 // Definição de Rotas
 app.use('/api/auth', authRoutes);
+app.use('/api/inventario', inventarioRoutes);
 
 // Tratamento de Erros (sempre no fim)
 app.use(errorHandler);

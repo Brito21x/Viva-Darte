@@ -1,353 +1,133 @@
-const { poolPromise } = require('../config/db');
+// Localização: backend/src/models/utilizadorModel.js
 const sql = require('mssql');
- 
-// ============================================================================
-// 1. AUTENTICAÇÃO E PERFIS (US01 / RF01)
-// ============================================================================
- 
-/**
- * Procura um utilizador pelo email para validar login ou existência.
- */
+const { poolPromise } = require('../config/db');
+
+// --- DADOS DO PERFIL ---
 async function getUtilizadorByEmail(email) {
-    try {
-        const pool = await poolPromise;
-        const query = `
-            SELECT 
-                id_utilizador, 
-                nome, 
-                email, 
-                password, 
-                telefone, 
-                ativo 
-            FROM UTILIZADOR 
-            WHERE email = @Email;
-        `;
-        const result = await pool.request()
-            .input('Email', sql.VarChar(255), email)
-            .query(query);
- 
-        return result.recordset[0] || null;
-    } catch (error) {
-        console.error('Erro no Modelo (getUtilizadorByEmail):', error);
-        throw error;
-    }
+    const pool = await poolPromise;
+    const result = await pool.request()
+        .input('email', sql.VarChar, email)
+        .query('SELECT * FROM [dbo].[UTILIZADOR] WHERE email = @email');
+        
+    return result.recordset[0];
 }
- 
-/**
- * Obtém os nomes dos perfis associados a um utilizador (Admin, Professor, EE).
- */
+
 async function getPerfisDoUtilizador(idUtilizador) {
-    try {
-        const pool = await poolPromise;
-        const query = `
-            SELECT p.nome AS perfil
-            FROM UTILIZADOR_PERFIL up
-            JOIN PERFIL p ON up.PERFILid_perfil = p.id_perfil
-            WHERE up.UTILIZADORid_utilizador = @IdUtilizador;
-        `;
-        const result = await pool.request()
-            .input('IdUtilizador', sql.Int, idUtilizador)
-            .query(query);
- 
-        return result.recordset.map(row => row.perfil);
-    } catch (error) {
-        console.error('Erro no Modelo (getPerfisDoUtilizador):', error);
-        throw error;
-    }
-}
- 
-// ============================================================================
-// 2. GESTÃO DE CONTAS PELO ADMIN (US03 / RF03)
-// ============================================================================
- 
-/**
- * Lista todos os utilizadores com os seus perfis para gestão pelo Admin.
- */
-async function listarTodosUtilizadores() {
-    try {
-        const pool = await poolPromise;
-        const query = `
-            SELECT 
-                u.id_utilizador,
-                u.nome,
-                u.email,
-                u.telefone,
-                u.ativo,
-                u.data_criacao,
-                STRING_AGG(p.nome, ', ') AS perfis
-            FROM UTILIZADOR u
-            LEFT JOIN UTILIZADOR_PERFIL up ON u.id_utilizador = up.UTILIZADORid_utilizador
-            LEFT JOIN PERFIL p ON up.PERFILid_perfil = p.id_perfil
-            GROUP BY u.id_utilizador, u.nome, u.email, u.telefone, u.ativo, u.data_criacao
-            ORDER BY u.nome ASC;
-        `;
-        const result = await pool.request().query(query);
-        return result.recordset;
-    } catch (error) {
-        console.error('Erro no Modelo (listarTodosUtilizadores):', error);
-        throw error;
-    }
-}
- 
-/**
- * Cria um novo utilizador e associa-o a um perfil dentro de uma transação.
- */
-async function criarUtilizador({ nome, email, passwordHash, telefone, nomePerfil, tipo }) {
     const pool = await poolPromise;
-    const transaction = pool.transaction();
+    const result = await pool.request()
+        .input('id', sql.Int, idUtilizador)
+        .query(`
+            SELECT P.nome 
+            FROM [dbo].[PERFIL] P
+            JOIN [dbo].[UTILIZADOR_PERFIL] UP ON P.id_perfil = UP.PERFILid_perfil
+            WHERE UP.UTILIZADORid_utilizador = @id
+        `);
+        
+    return result.recordset.map(row => row.nome);
+}
+
+// --- AUTENTICAÇÃO (LOGIN / REGISTO) ---
+async function getUtilizadorLogin(email, perfilId) {
+    const pool = await poolPromise;
+    const request = pool.request();
+    request.input('email', sql.VarChar, email);
+    request.input('perfilId', sql.Int, perfilId);
+    
+    const result = await request.query(`
+        SELECT U.*, U.[password] AS password_hash, P.nome as perfil_nome
+        FROM [dbo].[UTILIZADOR] U
+        JOIN [dbo].[UTILIZADOR_PERFIL] UP ON U.id_utilizador = UP.UTILIZADORid_utilizador
+        JOIN [dbo].[PERFIL] P ON UP.PERFILid_perfil = P.id_perfil
+        WHERE U.email = @email
+          AND UP.PERFILid_perfil = @perfilId
+          AND U.ativo = 1
+    `);
+    return result.recordset;
+}
+
+async function criarUtilizador(dados) {
+    const pool = await poolPromise;
+    const transaction = new sql.Transaction(pool);
+    
     await transaction.begin();
- 
+    
     try {
-        // Obter ID do Perfil por nome (preferencial) ou por tipo conhecido
-        let idPerfil = null;
+        const reqUser = new sql.Request(transaction);
+        reqUser.input('nome', sql.VarChar, dados.nome);
+        reqUser.input('email', sql.VarChar, dados.email);
+        reqUser.input('password', sql.VarChar, dados.passwordHash);
+        reqUser.input('telefone', sql.VarChar, dados.telefone);
 
-        if (nomePerfil) {
-            const perfilResult = await transaction.request()
-                .input('NomePerfil', sql.VarChar(100), nomePerfil)
-                .query('SELECT id_perfil FROM PERFIL WHERE nome = @NomePerfil');
-            idPerfil = perfilResult.recordset[0]?.id_perfil || null;
+        // AQUI ESTÁ A CORREÇÃO: Usamos 'data_criacao' e voltamos a meter o GETDATE()
+        const resultUser = await reqUser.query(`
+            INSERT INTO [dbo].[UTILIZADOR] (nome, email, [password], telefone, ativo, data_criacao)
+            OUTPUT INSERTED.id_utilizador
+            VALUES (@nome, @email, @password, @telefone, 1, GETDATE())
+        `);
+        
+        const idUtilizador = resultUser.recordset[0].id_utilizador;
+        
+        const reqPerfil = new sql.Request(transaction);
+        reqPerfil.input('perfilNome', sql.VarChar, dados.nomePerfil);
+        
+        const resultPerfil = await reqPerfil.query(`
+            SELECT id_perfil FROM [dbo].[PERFIL] WHERE nome = @perfilNome
+        `);
+        
+        if (resultPerfil.recordset.length === 0) {
+            throw new Error(`Perfil '${dados.nomePerfil}' não encontrado na base de dados.`);
         }
-
-        if (!idPerfil && tipo) {
-            const tipoNormalizado = String(tipo).toUpperCase();
-            if (tipoNormalizado === 'EE') idPerfil = 2;
-            if (tipoNormalizado === 'PROF') idPerfil = 3;
-        }
-
-        if (!idPerfil) throw new Error('Perfil especificado não existe.');
- 
-        // Inserir Utilizador
-        const insertUserQuery = `
-            INSERT INTO UTILIZADOR (nome, email, password, telefone, ativo, data_criacao)
-            OUTPUT INSERTED.id_utilizador, INSERTED.nome, INSERTED.email, INSERTED.ativo
-            VALUES (@Nome, @Email, @Password, @Telefone, 1, GETDATE());
-        `;
-        const novoUserResult = await transaction.request()
-            .input('Nome', sql.VarChar(255), nome)
-            .input('Email', sql.VarChar(255), email)
-            .input('Password', sql.VarChar(255), passwordHash)
-            .input('Telefone', sql.VarChar(30), telefone || null)
-            .query(insertUserQuery);
- 
-        const novoUtilizador = novoUserResult.recordset[0];
- 
-        // Mapear o Utilizador ao Perfil
-        await transaction.request()
-            .input('IdUser', sql.Int, novoUtilizador.id_utilizador)
-            .input('IdPerfil', sql.Int, idPerfil)
-            .query(`
-                INSERT INTO UTILIZADOR_PERFIL (UTILIZADORid_utilizador, PERFILid_perfil)
-                VALUES (@IdUser, @IdPerfil);
-            `);
- 
+        
+        const idPerfil = resultPerfil.recordset[0].id_perfil;
+        
+        const reqAssoc = new sql.Request(transaction);
+        reqAssoc.input('idUser', sql.Int, idUtilizador);
+        reqAssoc.input('idPerfil', sql.Int, idPerfil);
+        
+        await reqAssoc.query(`
+            INSERT INTO [dbo].[UTILIZADOR_PERFIL] (UTILIZADORid_utilizador, PERFILid_perfil)
+            VALUES (@idUser, @idPerfil)
+        `);
+        
         await transaction.commit();
-        return novoUtilizador;
+        
+        return {
+            id_utilizador: idUtilizador,
+            nome: dados.nome,
+            email: dados.email,
+            telefone: dados.telefone
+        };
+        
     } catch (error) {
         await transaction.rollback();
-        console.error('Erro no Modelo Transacional (criarUtilizador):', error);
         throw error;
     }
 }
- 
-/**
- * Edita os dados de um utilizador existente (nome, telefone, perfil).
- */
-async function editarUtilizador(idUtilizador, { nome, telefone, nomePerfil }) {
+
+// --- RECUPERAÇÃO DE PASSWORD ---
+async function verificarTelefoneAtivo(telefone) {
     const pool = await poolPromise;
-    const transaction = pool.transaction();
-    await transaction.begin();
- 
-    try {
-        // Atualizar dados base
-        await transaction.request()
-            .input('Nome', sql.VarChar(255), nome)
-            .input('Telefone', sql.VarChar(30), telefone || null)
-            .input('IdUtilizador', sql.Int, idUtilizador)
-            .query(`
-                UPDATE UTILIZADOR 
-                SET nome = @Nome, telefone = @Telefone 
-                WHERE id_utilizador = @IdUtilizador;
-            `);
- 
-        // Atualizar perfil se fornecido
-        if (nomePerfil) {
-            const perfilResult = await transaction.request()
-                .input('NomePerfil', sql.VarChar(100), nomePerfil)
-                .query('SELECT id_perfil FROM PERFIL WHERE nome = @NomePerfil');
- 
-            const idPerfil = perfilResult.recordset[0]?.id_perfil;
-            if (!idPerfil) throw new Error('Perfil especificado não existe.');
- 
-            // Remove perfis existentes e associa o novo
-            await transaction.request()
-                .input('IdUtilizador', sql.Int, idUtilizador)
-                .query('DELETE FROM UTILIZADOR_PERFIL WHERE UTILIZADORid_utilizador = @IdUtilizador');
- 
-            await transaction.request()
-                .input('IdUtilizador', sql.Int, idUtilizador)
-                .input('IdPerfil', sql.Int, idPerfil)
-                .query(`
-                    INSERT INTO UTILIZADOR_PERFIL (UTILIZADORid_utilizador, PERFILid_perfil)
-                    VALUES (@IdUtilizador, @IdPerfil);
-                `);
-        }
- 
-        await transaction.commit();
-        return true;
-    } catch (error) {
-        await transaction.rollback();
-        console.error('Erro no Modelo Transacional (editarUtilizador):', error);
-        throw error;
-    }
+    const result = await pool.request()
+        .input('telefone', sql.VarChar, telefone)
+        .query('SELECT id_utilizador FROM [dbo].[UTILIZADOR] WHERE telefone = @telefone AND ativo = 1');
+    return result.recordset;
 }
- 
-/**
- * Ativa ou desativa uma conta de utilizador.
- */
-async function alterarEstadoUtilizador(idUtilizador, estadoAtivo) {
-    try {
-        const pool = await poolPromise;
-        const query = `
-            UPDATE UTILIZADOR 
-            SET ativo = @EstadoAtivo 
-            WHERE id_utilizador = @IdUtilizador;
-        `;
-        const result = await pool.request()
-            .input('EstadoAtivo', sql.Bit, estadoAtivo ? 1 : 0)
-            .input('IdUtilizador', sql.Int, idUtilizador)
-            .query(query);
- 
-        return result.rowsAffected[0] > 0;
-    } catch (error) {
-        console.error('Erro no Modelo (alterarEstadoUtilizador):', error);
-        throw error;
-    }
-}
- 
-// ============================================================================
-// 3. RECUPERAÇÃO DE PALAVRA-PASSE (US02 / RF02)
-// ============================================================================
- 
-/**
- * Regista um token de recuperação com expiração de 1 hora.
- */
-async function guardarTokenRecuperacao(idUtilizador, token) {
-    try {
-        const pool = await poolPromise;
-        const query = `
-            INSERT INTO TOKEN_RECUPERACAO (token, data_expiracao, usado, data_criacao, UTILIZADORid_utilizador)
-            VALUES (
-                @Token, 
-                DATEDIFF(SECOND, '1970-01-01', DATEADD(HOUR, 1, GETUTCDATE())), 
-                0, 
-                GETDATE(), 
-                @IdUtilizador
-            );
-        `;
-        await pool.request()
-            .input('Token', sql.VarChar(255), token)
-            .input('IdUtilizador', sql.Int, idUtilizador)
-            .query(query);
- 
-        return true;
-    } catch (error) {
-        console.error('Erro no Modelo (guardarTokenRecuperacao):', error);
-        throw error;
-    }
-}
- 
-/**
- * Verifica se um token é válido, não foi usado e não expirou.
- */
-async function validarTokenRecuperacao(token) {
-    try {
-        const pool = await poolPromise;
-        const tempoAtualUnix = Math.floor(Date.now() / 1000);
-        const query = `
-            SELECT id_token_recuperacao, UTILIZADORid_utilizador 
-            FROM TOKEN_RECUPERACAO 
-            WHERE token = @Token AND usado = 0 AND data_expiracao > @TempoAtual;
-        `;
-        const result = await pool.request()
-            .input('Token', sql.VarChar(255), token)
-            .input('TempoAtual', sql.Int, tempoAtualUnix)
-            .query(query);
- 
-        return result.recordset[0] || null;
-    } catch (error) {
-        console.error('Erro no Modelo (validarTokenRecuperacao):', error);
-        throw error;
-    }
-}
- 
-/**
- * Atualiza a password e invalida o token utilizado numa transação atómica.
- */
-async function atualizarPassword(idUtilizador, novaPasswordHash, idToken) {
+
+async function atualizarPassword(telefone, hashedPassword) {
     const pool = await poolPromise;
-    const transaction = pool.transaction();
-    await transaction.begin();
- 
-    try {
-        await transaction.request()
-            .input('IdUtilizador', sql.Int, idUtilizador)
-            .input('NovaPassword', sql.VarChar(255), novaPasswordHash)
-            .query('UPDATE UTILIZADOR SET password = @NovaPassword WHERE id_utilizador = @IdUtilizador');
- 
-        await transaction.request()
-            .input('IdToken', sql.Int, idToken)
-            .query('UPDATE TOKEN_RECUPERACAO SET usado = 1 WHERE id_token_recuperacao = @IdToken');
- 
-        await transaction.commit();
-        return true;
-    } catch (error) {
-        await transaction.rollback();
-        console.error('Erro no Modelo Transacional (atualizarPassword):', error);
-        throw error;
-    }
+    const result = await pool.request()
+        .input('telefone', sql.VarChar, telefone)
+        .input('password', sql.VarChar, hashedPassword)
+        .query('UPDATE [dbo].[UTILIZADOR] SET [password] = @password WHERE telefone = @telefone AND ativo = 1');
+    return result.rowsAffected[0];
 }
- 
-// ============================================================================
-// 4. MAPEAMENTO DE ENCARREGADOS E ALUNOS (US05 / RF05)
-// ============================================================================
- 
-/**
- * Lista os alunos ativos associados a um encarregado para o formulário de marcação.
- */
-async function getAlunosPorEncarregado(idEncarregado) {
-    try {
-        const pool = await poolPromise;
-        const query = `
-            SELECT 
-                a.id_aluno,
-                a.nome AS nome_aluno,
-                a.data_nascimento
-            FROM ENCARREGADO_ALUNO ea
-            JOIN ALUNO a ON ea.ALUNOid_aluno = a.id_aluno
-            WHERE ea.UTILIZADORid_utilizador = @IdEncarregado 
-              AND a.ativo = 1
-            ORDER BY a.nome ASC;
-        `;
-        const result = await pool.request()
-            .input('IdEncarregado', sql.Int, idEncarregado)
-            .query(query);
- 
-        return result.recordset;
-    } catch (error) {
-        console.error('Erro no Modelo (getAlunosPorEncarregado):', error);
-        throw error;
-    }
-}
- 
+
+// Exportar tudo para o Controller usar
 module.exports = {
     getUtilizadorByEmail,
     getPerfisDoUtilizador,
-    listarTodosUtilizadores,
+    getUtilizadorLogin,
     criarUtilizador,
-    editarUtilizador,
-    alterarEstadoUtilizador,
-    guardarTokenRecuperacao,
-    validarTokenRecuperacao,
-    atualizarPassword,
-    getAlunosPorEncarregado
+    verificarTelefoneAtivo,
+    atualizarPassword
 };

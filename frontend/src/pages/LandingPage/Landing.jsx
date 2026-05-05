@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import './Landing.css';
 import logoImg from '../../assets/logo.png';
 
-export default function Landing({ irParaLogin, irParaRegisto, irParaVendaFigurinos }) {
+export default function Landing({ irParaLogin, irParaRegisto, irParaVendaFigurinos, irParaEmprestimos }) {
   const [utilizador, setUtilizador] = useState(null);
   const [modoPortal, setModoPortal] = useState(false);
 
@@ -93,13 +93,15 @@ export default function Landing({ irParaLogin, irParaRegisto, irParaVendaFigurin
               {utilizador.perfil === 'Professor' ? (
                 <>
                   <li><a href="#coachings" className="special-link">Coaching Agendados</a></li>
-                  <li><a href="#emprestimos" className="special-link">Empréstimos de peças</a></li>
+                  {/* Atualizado com a navegação para empréstimos */}
+                  <li><a href="#emprestimos" className="special-link" onClick={(e) => { e.preventDefault(); irParaEmprestimos(); }}>Empréstimos de peças</a></li>
                   <li><a href="#figurinos" className="special-link" onClick={(e) => { e.preventDefault(); irParaVendaFigurinos(); }}>Venda de figurinos</a></li>
                 </>
               ) : (
                 <>
                   <li><a href="#coachings" className="special-link">Agendar Coaching</a></li>
-                  <li><a href="#emprestimos" className="special-link">Empréstimos de peças</a></li>
+                  {/* Atualizado com a navegação para empréstimos */}
+                  <li><a href="#emprestimos" className="special-link" onClick={(e) => { e.preventDefault(); irParaEmprestimos(); }}>Empréstimos de peças</a></li>
                   <li><a href="#figurinos" className="special-link" onClick={(e) => { e.preventDefault(); irParaVendaFigurinos(); }}>Venda de figurinos</a></li>
                 </>
               )}

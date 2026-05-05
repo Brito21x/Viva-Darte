@@ -7,20 +7,32 @@ export default function RecoverPassword({ irParaLogin, irParaLanding }) {
   const [codigo, setCodigo] = useState('');
   const [novaPassword, setNovaPassword] = useState('');
 
+  // Estado para o nosso Alerta Customizado
+  const [customAlert, setCustomAlert] = useState({ show: false, message: '', redirectOnClose: false });
+
   useEffect(() => {
     document.title = "Recuperar Password | Viva D'arte";
   }, []);
 
+  // --- FUNÇÕES DE ALERTA ---
+  const mostrarAlerta = (msg, redirect = false) => {
+    setCustomAlert({ show: true, message: msg, redirectOnClose: redirect });
+  };
+
+  const fecharAlerta = () => {
+    if (customAlert.redirectOnClose) {
+      irParaLogin();
+    }
+    setCustomAlert({ show: false, message: '', redirectOnClose: false });
+  };
+
   // Função para formatar o telefone como 999 999 999
   const formatarTelefone = (valor) => {
-    // Remove tudo o que não é dígito
     const apenasNumeros = valor.replace(/\D/g, '');
-    
-    // Aplica a máscara 999 999 999
     return apenasNumeros
       .replace(/(\d{3})(\d)/, '$1 $2')
       .replace(/(\d{3})(\d)/, '$1 $2')
-      .substring(0, 11); // Limita o tamanho visual
+      .substring(0, 11); 
   };
 
   const handleTelefoneChange = (e) => {
@@ -32,7 +44,6 @@ export default function RecoverPassword({ irParaLogin, irParaLanding }) {
   const lidarComTelefone = async (e) => {
     e.preventDefault();
     
-    // Limpa os espaços antes de enviar para a BD
     const telefoneLimpo = telefone.replace(/\s/g, '');
 
     try {
@@ -46,10 +57,10 @@ export default function RecoverPassword({ irParaLogin, irParaLanding }) {
         setEtapa(2);
       } else {
         const resultado = await response.json();
-        alert(resultado.error || "Número incorreto");
+        mostrarAlerta(resultado.error || "Número não encontrado.");
       }
     } catch (error) {
-      alert("Erro ao ligar ao servidor.");
+      mostrarAlerta("Erro ao ligar ao servidor. Verifica a tua ligação.");
     }
   };
 
@@ -65,7 +76,7 @@ export default function RecoverPassword({ irParaLogin, irParaLanding }) {
 
     const regexEspecial = /[!@#$%^&*(),.?":{}|<>]/;
     if (novaPassword.length < 8 || !regexEspecial.test(novaPassword)) {
-        alert("A password deve ter pelo menos 8 caracteres e um símbolo especial.");
+        mostrarAlerta("A password deve ter pelo menos 8 caracteres e um símbolo especial.");
         return;
     }
 
@@ -82,14 +93,14 @@ export default function RecoverPassword({ irParaLogin, irParaLanding }) {
         });
 
         if (response.ok) {
-            alert("Password alterada com Sucesso!");
-            irParaLogin();
+            // Sucesso! Mostra o alerta e passa 'true' para redirecionar ao fechar
+            mostrarAlerta("Password alterada com sucesso!", true);
         } else {
             const erro = await response.json();
-            alert(erro.error || "Erro ao atualizar a base de dados.");
+            mostrarAlerta(erro.error || "Erro ao atualizar a base de dados.");
         }
     } catch (error) {
-        alert("Erro de rede ao tentar ligar ao servidor.");
+        mostrarAlerta("Erro de rede ao tentar ligar ao servidor.");
     }
   };
 
@@ -164,6 +175,43 @@ export default function RecoverPassword({ irParaLogin, irParaLanding }) {
           </footer>
         </div>
       </div>
+
+      {/* --- O NOSSO ALERTA CUSTOMIZADO E ELEGANTE --- */}
+      {customAlert.show && (
+        <div 
+          style={{
+            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+            backgroundColor: 'rgba(26, 24, 22, 0.85)',
+            display: 'flex', justifyContent: 'center', alignItems: 'center',
+            zIndex: 9999, backdropFilter: 'blur(6px)'
+          }}
+        >
+          <div 
+            style={{
+              backgroundColor: '#eeeae2', padding: '35px', borderRadius: '18px',
+              maxWidth: '400px', width: '90%', textAlign: 'center',
+              boxShadow: '0 15px 50px rgba(0,0,0,0.3)'
+            }}
+          >
+            <p style={{ fontSize: '1.15rem', color: '#2a2724', marginBottom: '30px', fontWeight: '500', lineHeight: '1.4' }}>
+              {customAlert.message}
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'center' }}>
+              <button 
+                onClick={fecharAlerta}
+                style={{
+                  backgroundColor: '#2a2724', color: '#fff', border: 'none',
+                  padding: '12px 24px', borderRadius: '8px', fontWeight: '600',
+                  cursor: 'pointer', transition: 'all 0.3s ease'
+                }}
+              >
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

@@ -5,10 +5,21 @@ export default function Login({ irParaRegisto, irParaLanding, irParaRecuperar })
   const [tipo, setTipo] = useState('EE'); // 'EE' ou 'PROF'
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  
+  // Estado para o Alerta Customizado
+  const [customAlert, setCustomAlert] = useState({ show: false, message: '' });
 
   useEffect(() => {
     document.title = "Iniciar Sessão | Viva D'arte";
   }, []);
+
+  const mostrarAlerta = (msg) => {
+    setCustomAlert({ show: true, message: msg });
+  };
+
+  const fecharAlerta = () => {
+    setCustomAlert({ show: false, message: '' });
+  };
 
   const lidarComLogin = async (e) => {
     e.preventDefault();
@@ -24,13 +35,14 @@ export default function Login({ irParaRegisto, irParaLanding, irParaRecuperar })
 
       if (response.ok) {
         localStorage.setItem('viva_user', JSON.stringify(resultado.user));
-        alert(`Bem-vindo!`);
+        // Se sucesso, vai direto para a página inicial (sem alerta)
         irParaLanding(); 
       } else {
-        alert(resultado.error || "Dados de acesso incorretos.");
+        // Se erro (passe errada, email não existe), mostra o alerta bonito
+        mostrarAlerta(resultado.error || "Dados de acesso incorretos.");
       }
     } catch (error) {
-      alert("Erro ao ligar ao servidor.");
+      mostrarAlerta("Erro ao ligar ao servidor. Verifica a tua ligação.");
     }
   };
 
@@ -84,7 +96,6 @@ export default function Login({ irParaRegisto, irParaLanding, irParaRecuperar })
               />
             </div>
 
-            {/* Ajuste de margem aqui para não afastar demasiado o link */}
             <div className="input-container" style={{ marginBottom: '5px' }}>
               <label>Palavra-passe</label>
               <input 
@@ -96,7 +107,6 @@ export default function Login({ irParaRegisto, irParaLanding, irParaRecuperar })
               />
             </div>
             
-            {/* O link agora está fora da caixa da password */}
             <div className="forgot-password-link">
               <a href="#" onClick={(e) => { e.preventDefault(); irParaRecuperar(); }}>
                 Esqueceu-se da palavra-passe?
@@ -114,6 +124,43 @@ export default function Login({ irParaRegisto, irParaLanding, irParaRecuperar })
           </footer>
         </div>
       </div>
+
+      {/* --- O NOSSO ALERTA CUSTOMIZADO E ELEGANTE --- */}
+      {customAlert.show && (
+        <div 
+          style={{
+            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+            backgroundColor: 'rgba(26, 24, 22, 0.85)',
+            display: 'flex', justifyContent: 'center', alignItems: 'center',
+            zIndex: 9999, backdropFilter: 'blur(6px)'
+          }}
+        >
+          <div 
+            style={{
+              backgroundColor: '#eeeae2', padding: '35px', borderRadius: '18px',
+              maxWidth: '400px', width: '90%', textAlign: 'center',
+              boxShadow: '0 15px 50px rgba(0,0,0,0.3)'
+            }}
+          >
+            <p style={{ fontSize: '1.15rem', color: '#2a2724', marginBottom: '30px', fontWeight: '500', lineHeight: '1.4' }}>
+              {customAlert.message}
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'center' }}>
+              <button 
+                onClick={fecharAlerta}
+                style={{
+                  backgroundColor: '#2a2724', color: '#fff', border: 'none',
+                  padding: '12px 24px', borderRadius: '8px', fontWeight: '600',
+                  cursor: 'pointer', transition: 'all 0.3s ease'
+                }}
+              >
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

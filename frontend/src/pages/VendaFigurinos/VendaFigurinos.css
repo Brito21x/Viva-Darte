@@ -32,7 +32,28 @@
 .vendas-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 40px; flex-wrap: wrap; gap: 20px; }
 .vendas-header h1 { font-size: 2.2rem; color: #2a2724; margin: 0 0 8px 0; letter-spacing: -0.5px; }
 .vendas-header p { margin: 0; font-size: 1.05rem; opacity: 0.8; }
-.btn-publicar { padding: 12px 28px; font-size: 1.05rem; box-shadow: 0 6px 15px rgba(0,0,0,0.1); }
+.btn-publicar {
+  background-color: #2a2724;
+  color: #ffffff;
+  border: none;
+  height: 46px; 
+  padding: 0 24px;
+  border-radius: 8px;
+  font-size: 0.95rem; 
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.08); 
+}
+
+.btn-publicar:hover {
+  background-color: #1a1816;
+  transform: translateY(-2px);
+}
 
 /* ========================================= */
 /* --- GRID E CARTÕES ---                    */
@@ -58,7 +79,7 @@
 .figurino-card.vendido { 
   opacity: 1; 
   filter: none; 
-  background-color: #d1cdc3; /* Tom de quadrado mais escuro[cite: 2] */
+  background-color: #d1cdc3; 
 }
 .figurino-card.vendido .figurino-info {
   opacity: 0.6;
@@ -68,7 +89,7 @@
   content: '';
   position: absolute;
   top: 0; left: 0; right: 0; bottom: 0;
-  background-color: rgba(0, 0, 0, 0.25); /* Véu mais escuro para destacar botões[cite: 2] */
+  background-color: rgba(0, 0, 0, 0.25); 
   backdrop-filter: grayscale(100%);
   z-index: 5;
 }
@@ -111,7 +132,6 @@
 
 .acoes-dono { position: absolute; top: 12px; left: 12px; display: flex; gap: 8px; z-index: 10; }
 
-/* Botões com o mesmo tamanho (38px)[cite: 1] */
 .btn-icon { 
   border: none; 
   border-radius: 50%; 
@@ -139,10 +159,13 @@
 }
 .btn-icon.delete:hover { background-color: #c0392b; transform: scale(1.1); }
 
-/* --- INFO --- */
+/* --- INFO (Com suporte a tamanho e descrição) --- */
 .figurino-info { padding: 18px; display: flex; flex-direction: column; flex-grow: 1; }
-.figurino-info h3 { margin: 0 0 6px 0; color: #2a2724; font-size: 1.1rem; line-height: 1.3; font-weight: 700; }
-.badge-condicao { display: inline-block; font-size: 0.7rem; background-color: #dfdbd2; color: #555; padding: 3px 8px; border-radius: 4px; margin-bottom: 8px; font-weight: 600; width: fit-content; }
+.figurino-info h3 { margin: 0 0 8px 0; color: #2a2724; font-size: 1.1rem; line-height: 1.3; font-weight: 700; }
+.tags-container { display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+.badge-condicao, .badge-tamanho { display: inline-block; font-size: 0.7rem; background-color: #dfdbd2; color: #555; padding: 4px 8px; border-radius: 4px; font-weight: 600; width: fit-content; }
+.badge-tamanho { background-color: #d1cdc3; color: #2a2724; }
+.descricao-peca { font-size: 0.8rem; color: #666; margin: 0 0 10px 0; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .vendedor { font-size: 0.8rem; color: #b38b59; font-weight: 600; margin-bottom: 15px; }
 
 .metodos-pagamento-tags { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 15px; }
@@ -185,20 +208,26 @@
 .footer-bottom p { font-size: 0.8rem; opacity: 0.5; margin: 0; letter-spacing: 0.5px;}
 
 /* ========================================= */
-/* --- MODAIS ---                            */
+/* --- MODAIS & ALERTAS ---                  */
 /* ========================================= */
 .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(26, 24, 22, 0.85); display: flex; justify-content: center; align-items: center; z-index: 2000; backdrop-filter: blur(6px); }
 .modal-content { background-color: #eeeae2; padding: 40px; border-radius: 18px; width: 100%; max-width: 520px; box-shadow: 0 15px 50px rgba(0,0,0,0.3); }
 .modal-content.form-venda { max-height: 90vh; overflow-y: auto; }
 .modal-content h2 { margin-top: 0; color: #2a2724; margin-bottom: 30px; font-size: 1.8rem; letter-spacing: -0.5px; }
 
+/* Estilo específico do nosso novo Modal de Alerta */
+.modal-content.alert-box { max-width: 400px; text-align: center; padding: 35px; }
+.alert-message { font-size: 1.15rem; color: #2a2724; margin-bottom: 30px; font-weight: 500; line-height: 1.4; }
+.alert-buttons { display: flex; justify-content: center; gap: 15px; }
+
 /* Formulários */
 .form-group { margin-bottom: 22px; display: flex; flex-direction: column; }
 .form-row { display: flex; gap: 15px; }
 .form-row .form-group { flex: 1; }
 .form-group label { font-size: 0.9rem; font-weight: 600; margin-bottom: 8px; color: #4a4540; }
-.form-group input:not([type="checkbox"]), .form-group select { width: 100%; box-sizing: border-box; padding: 12px 16px; border: 1px solid rgba(0,0,0,0.12); border-radius: 8px; background-color: #fff; font-family: 'Inter', sans-serif; font-size: 1rem; transition: all 0.3s ease; color: #2a2724; }
-.form-group input:not([type="checkbox"]):focus, .form-group select:focus { outline: none; border-color: #b38b59; box-shadow: 0 0 0 4px rgba(179, 139, 89, 0.15); }
+.form-group input:not([type="checkbox"]), .form-group select, .form-group textarea { width: 100%; box-sizing: border-box; padding: 12px 16px; border: 1px solid rgba(0,0,0,0.12); border-radius: 8px; background-color: #fff; font-family: 'Inter', sans-serif; font-size: 1rem; transition: all 0.3s ease; color: #2a2724; }
+.form-group textarea { resize: vertical; min-height: 80px; }
+.form-group input:not([type="checkbox"]):focus, .form-group select:focus, .form-group textarea:focus { outline: none; border-color: #b38b59; box-shadow: 0 0 0 4px rgba(179, 139, 89, 0.15); }
 
 /* Checkboxes */
 .checkbox-group { display: flex; flex-direction: column; gap: 8px; }

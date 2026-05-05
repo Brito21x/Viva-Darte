@@ -1,7 +1,7 @@
+// Localização: backend/src/controllers/utilizadorController.js
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const userModel = require('../models/utilizadorModel');
-const { pool, poolConnect } = require('../config/db');
+const utilizadorModel = require('../models/utilizadorModel'); 
 
 const PERFIL_MAP = {
     EE: 'EE',
@@ -30,6 +30,7 @@ function gerarToken(utilizador) {
     );
 }
 
+// 1. REGISTAR
 async function registar(req, res, next) {
     try {
         const { nome, email, password, telefone, tipo } = req.body;
@@ -43,22 +44,18 @@ async function registar(req, res, next) {
             return res.status(400).json({ error: 'tipo inválido. Use EE ou PROF' });
         }
 
-        const existente = await userModel.getUtilizadorByEmail(email);
+        const existente = await utilizadorModel.getUtilizadorByEmail(email);
         if (existente) {
             return res.status(409).json({ error: 'Email já registado' });
         }
 
         const passwordHash = await bcrypt.hash(password, 10);
-        const novoUtilizador = await userModel.criarUtilizador({
-            nome,
-            email,
-            passwordHash,
-            telefone,
-            nomePerfil: perfilNome,
-            tipo
+        
+        const novoUtilizador = await utilizadorModel.criarUtilizador({
+            nome, email, passwordHash, telefone, nomePerfil: perfilNome, tipo
         });
 
-        const perfis = await userModel.getPerfisDoUtilizador(novoUtilizador.id_utilizador);
+        const perfis = await utilizadorModel.getPerfisDoUtilizador(novoUtilizador.id_utilizador);
         const token = gerarToken({ ...novoUtilizador, perfis });
 
         return res.status(201).json({
@@ -77,6 +74,7 @@ async function registar(req, res, next) {
     }
 }
 
+// 2. LOGIN
 async function login(req, res, next) {
     try {
         const { email, password, tipo } = req.body;
@@ -86,26 +84,14 @@ async function login(req, res, next) {
         }
 
         const perfilId = tipo === 'EE' ? 3 : 2;
-        const request = pool.request();
+        
+        const result = await utilizadorModel.getUtilizadorLogin(email, perfilId);
 
-        request.input('email', email);
-        request.input('perfilId', perfilId);
-
-        const result = await request.query(`
-            SELECT U.*, U.[password] AS password_hash, P.nome as perfil_nome
-            FROM [dbo].[UTILIZADOR] U
-            JOIN [dbo].[UTILIZADOR_PERFIL] UP ON U.id_utilizador = UP.UTILIZADORid_utilizador
-            JOIN [dbo].[PERFIL] P ON UP.PERFILid_perfil = P.id_perfil
-            WHERE U.email = @email
-              AND UP.PERFILid_perfil = @perfilId
-              AND U.ativo = 1
-        `);
-
-        if (result.recordset.length === 0) {
+        if (result.length === 0) {
             return res.status(401).json({ error: 'Email ou palavra-passe incorretos.' });
         }
 
-        const utilizador = result.recordset[0];
+        const utilizador = result[0];
         const passwordValida = await bcrypt.compare(password, utilizador.password_hash);
         if (!passwordValida) {
             return res.status(401).json({ error: 'Email ou palavra-passe incorretos.' });
@@ -124,14 +110,15 @@ async function login(req, res, next) {
     }
 }
 
+// 3. ME (Informação do utilizador logado)
 async function me(req, res, next) {
     try {
-        const utilizador = await userModel.getUtilizadorByEmail(req.utilizador.email);
+        const utilizador = await utilizadorModel.getUtilizadorByEmail(req.utilizador.email);
         if (!utilizador) {
             return res.status(404).json({ error: 'Utilizador não encontrado' });
         }
 
-        const perfis = await userModel.getPerfisDoUtilizador(utilizador.id_utilizador);
+        const perfis = await utilizadorModel.getPerfisDoUtilizador(utilizador.id_utilizador);
 
         return res.json({
             utilizador: {
@@ -146,14 +133,13 @@ async function me(req, res, next) {
     }
 }
 
+// 4. VERIFICAR TELEFONE
 async function verificarTelefone(req, res, next) {
     const { telefone } = req.body;
     try {
-        const result = await pool.request()
-            .input('telefone', telefone)
-            .query('SELECT id_utilizador FROM [dbo].[UTILIZADOR] WHERE telefone = @telefone AND ativo = 1');
+        const result = await utilizadorModel.verificarTelefoneAtivo(telefone);
 
-        if (result.recordset.length === 0) {
+        if (result.length === 0) {
             return res.status(404).json({ error: 'Telefone incorreto!' });
         }
 
@@ -163,10 +149,10 @@ async function verificarTelefone(req, res, next) {
     }
 }
 
+// 5. RESET PASSWORD
 async function resetPassword(req, res, next) {
     const { telefone, novaPassword } = req.body;
 
-    // Verificação básica de entrada
     if (!telefone || !novaPassword) {
         return res.status(400).json({ error: 'Telefone e nova password são obrigatórios.' });
     }
@@ -174,15 +160,11 @@ async function resetPassword(req, res, next) {
     try {
         const salt = await bcrypt.genSalt(10);
         const hashedPw = await bcrypt.hash(novaPassword, salt);
-
         const telefoneLimpo = telefone.replace(/\s/g, '');
 
-        const result = await pool.request()
-            .input('telefone', telefoneLimpo)
-            .input('password', hashedPw)
-            .query('UPDATE [dbo].[UTILIZADOR] SET [password] = @password WHERE telefone = @telefone AND ativo = 1');
+        const rowsAffected = await utilizadorModel.atualizarPassword(telefoneLimpo, hashedPw);
 
-        if (result.rowsAffected[0] === 0) {
+        if (rowsAffected === 0) {
             return res.status(404).json({ error: 'Utilizador não encontrado com este número de telefone.' });
         }
 

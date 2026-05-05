@@ -3,7 +3,7 @@ const cors = require('cors');
 require('dotenv').config();
 
 const { poolConnect } = require('./src/config/db');
-const authRoutes = require('./src/routes/authRoutes');
+const authRoutes = require('./src/routes/utilizadorRoutes');
 const vendaRoutes = require('./src/routes/vendaRoutes');
 const errorHandler = require('./src/middlewares/errorHandler');
 

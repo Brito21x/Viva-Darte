@@ -466,7 +466,8 @@ export default function VendaFigurinos({ irParaLanding, irParaEmprestimos }) {
               <div className="form-row">
                 <div className="form-group">
                   <label>Preço (€)</label>
-                  <input type="number" placeholder="Ex: 15.45" step="0.01" value={novaVenda.preco} onChange={(e) => setNovaVenda({...novaVenda, preco: e.target.value})} required />
+                  {/* LIMITA O PREÇO MINIMO AQUI */}
+                  <input type="number" placeholder="Ex: 15.45" step="0.01" min="0.01" value={novaVenda.preco} onChange={(e) => setNovaVenda({...novaVenda, preco: e.target.value})} required />
                 </div>
                 <div className="form-group">
                   <label>Tamanho</label>
@@ -484,7 +485,8 @@ export default function VendaFigurinos({ irParaLanding, irParaEmprestimos }) {
               </div>
               <div className="form-group">
                 <label>Descrição e Detalhes</label>
-                <textarea rows="3" placeholder="Descreve o material, detalhes ou marcas de uso..." value={novaVenda.descricao} onChange={(e) => setNovaVenda({...novaVenda, descricao: e.target.value})} required></textarea>
+                {/* LIMITA A DESCRIÇÃO A 120 CARACTERES AQUI */}
+                <textarea rows="3" maxLength="120" placeholder="Descreve o material, detalhes ou marcas de uso... (Máx: 120 caracteres)" value={novaVenda.descricao} onChange={(e) => setNovaVenda({...novaVenda, descricao: e.target.value})} required></textarea>
               </div>
               <div className="form-group">
                 <label>Métodos de Pagamento Opcional</label>
@@ -536,7 +538,8 @@ export default function VendaFigurinos({ irParaLanding, irParaEmprestimos }) {
               <div className="form-row">
                 <div className="form-group">
                   <label>Preço (€)</label>
-                  <input type="number" step="0.01" value={figurinoEmEdicao.preco} onChange={(e) => setFigurinoEmEdicao({...figurinoEmEdicao, preco: e.target.value})} required />
+                  {/* LIMITA O PREÇO MINIMO AQUI */}
+                  <input type="number" step="0.01" min="0.01" value={figurinoEmEdicao.preco} onChange={(e) => setFigurinoEmEdicao({...figurinoEmEdicao, preco: e.target.value})} required />
                 </div>
                 <div className="form-group">
                   <label>Tamanho</label>
@@ -554,7 +557,8 @@ export default function VendaFigurinos({ irParaLanding, irParaEmprestimos }) {
               </div>
               <div className="form-group">
                 <label>Descrição e Detalhes</label>
-                <textarea rows="3" value={figurinoEmEdicao.descricao} onChange={(e) => setFigurinoEmEdicao({...figurinoEmEdicao, descricao: e.target.value})} required></textarea>
+                {/* LIMITA A DESCRIÇÃO A 120 CARACTERES AQUI */}
+                <textarea rows="3" maxLength="120" value={figurinoEmEdicao.descricao} onChange={(e) => setFigurinoEmEdicao({...figurinoEmEdicao, descricao: e.target.value})} required></textarea>
               </div>
               <div className="modal-actions">
                 <button type="button" className="btn-text" onClick={() => setIsEditModalOpen(false)}>Cancelar</button>

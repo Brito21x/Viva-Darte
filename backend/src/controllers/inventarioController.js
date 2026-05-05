@@ -345,14 +345,19 @@ async function editarPeca(req, res, next) {
 
         if (isNaN(idPeca)) return res.status(400).json({ mensagem: 'ID inválido.' });
 
-        // 1. Atualizar dados da Peça no Modelo (necessário criar esta função no inventarioModel)
+        // Validação extra no backend para impedir preços negativos ou a zero
+        if (preco !== undefined && Number(preco) <= 0) {
+            return res.status(400).json({ mensagem: 'O preço não pode ser negativo ou nulo.' });
+        }
+
+        // 1. Atualizar dados da Peça na tabela principal (PECA)
         await inventarioModel.atualizarDadosCompletosPeca(idPeca, {
             nome, descricao, tamanho, estado
         });
 
-        // 2. Atualizar Preço na tabela VENDA_PECA
+        // 2. Atualizar Preço, Nome e Condição na tabela VENDA_PECA
         if (preco !== undefined) {
-            await inventarioModel.atualizarPrecoVenda(idPeca, parseFloat(preco));
+            await inventarioModel.atualizarDadosVenda(idPeca, parseFloat(preco), nome, estado);
         }
 
         // 3. Atualizar Fotos (Remover antigas e inserir novas strings base64)

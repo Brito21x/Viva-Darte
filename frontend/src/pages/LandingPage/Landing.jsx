@@ -1,8 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react';
 import './Landing.css';
 import logoImg from '../../assets/logo.png';
+import { isProfessorUtilizador } from '../../utils/perfilUtilizador';
 
-export default function Landing({ irParaLogin, irParaRegisto, irParaVendaFigurinos, irParaEmprestimos, irParaAgendarCoaching }) {
+export default function Landing({
+  irParaLogin,
+  irParaRegisto,
+  irParaVendaFigurinos,
+  irParaEmprestimos,
+  irParaAgendarCoaching,
+  irParaProfessorAgendamento
+}) {
   const [utilizador, setUtilizador] = useState(null);
   const [modoPortal, setModoPortal] = useState(false);
 
@@ -74,26 +82,89 @@ export default function Landing({ irParaLogin, irParaRegisto, irParaVendaFigurin
               <li><a href="#sobre">Sobre Nós</a></li>
               <li><a href="#modalidades">Modalidades</a></li>
               <li><a href="#professores">Professores</a></li>
-              
+
               <li className="nav-separator">|</li>
-              <li className="student-menu-group" onClick={(e) => {
+              {isProfessorUtilizador(utilizador) ? (
+                <>
+                  <li>
+                    <a
+                      href="#agenda-professor"
+                      className="special-link"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        irParaProfessorAgendamento?.();
+                      }}
+                    >
+                      Disponibilidade e agenda
+                    </a>
+                  </li>
+                  <li>
+                    <a
+                      href="#emprestimos"
+                      className="special-link"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        irParaEmprestimos();
+                      }}
+                    >
+                      Empréstimos de peças
+                    </a>
+                  </li>
+                  <li>
+                    <a
+                      href="#figurinos"
+                      className="special-link"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        irParaVendaFigurinos();
+                      }}
+                    >
+                      Venda de figurinos
+                    </a>
+                  </li>
+                  <li className="student-menu-group" onClick={(e) => {
+                    e.preventDefault();
+                    setModoPortal(true);
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}>
+                    <div className="student-menu-bg" style={{ cursor: 'pointer', padding: '8px 20px' }}>
+                      <a href="#portal" className="student-link" onClick={(e) => e.preventDefault()}>
+                        Atalhos do portal
+                      </a>
+                    </div>
+                  </li>
+                </>
+              ) : (
+                <li className="student-menu-group" onClick={(e) => {
                   e.preventDefault();
                   setModoPortal(true);
                   window.scrollTo({ top: 0, behavior: 'smooth' });
-              }}>
-                <div className="student-menu-bg" style={{ cursor: 'pointer', padding: '8px 20px' }}>
-                  <a href="#portal" className="student-link" onClick={(e) => e.preventDefault()}>
-                    Portal do {utilizador.perfil === 'Professor' ? 'Professor' : 'EE'}
-                  </a>
-                </div>
-              </li>
+                }}>
+                  <div className="student-menu-bg" style={{ cursor: 'pointer', padding: '8px 20px' }}>
+                    <a href="#portal" className="student-link" onClick={(e) => e.preventDefault()}>
+                      Portal do EE
+                    </a>
+                  </div>
+                </li>
+              )}
             </>
           ) : (
             <>
               <li className="nav-separator">|</li>
-              {utilizador.perfil === 'Professor' ? (
+              {isProfessorUtilizador(utilizador) ? (
                 <>
-                  <li><a href="#coachings" className="special-link">Coaching Agendados</a></li>
+                  <li>
+                    <a
+                      href="#agenda-professor"
+                      className="special-link"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        irParaProfessorAgendamento?.();
+                      }}
+                    >
+                      Disponibilidade e agenda
+                    </a>
+                  </li>
                   {/* Atualizado com a navegação para empréstimos */}
                   <li><a href="#emprestimos" className="special-link" onClick={(e) => { e.preventDefault(); irParaEmprestimos(); }}>Empréstimos de peças</a></li>
                   <li><a href="#figurinos" className="special-link" onClick={(e) => { e.preventDefault(); irParaVendaFigurinos(); }}>Venda de figurinos</a></li>

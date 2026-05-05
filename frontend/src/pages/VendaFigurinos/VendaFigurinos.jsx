@@ -1,8 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import './VendaFigurinos.css';
-import logoImg from '../../assets/logo.png'; 
+import logoImg from '../../assets/logo.png';
+import { isProfessorUtilizador } from '../../utils/perfilUtilizador'; 
 
-export default function VendaFigurinos({ irParaLanding, irParaEmprestimos, irParaAgendarCoaching }) {
+export default function VendaFigurinos({
+  irParaLanding,
+  irParaEmprestimos,
+  irParaAgendarCoaching,
+  irParaProfessorAgendamento
+}) {
   const [utilizador, setUtilizador] = useState(null);
   const [figurinos, setFigurinos] = useState([]);
   
@@ -310,10 +316,21 @@ export default function VendaFigurinos({ irParaLanding, irParaEmprestimos, irPar
         <ul className="nav-menu">
           <li><a href="#" onClick={(e) => { e.preventDefault(); irParaLanding(); }}>Início</a></li>
           
-          {utilizador?.perfil === 'Professor' ? (
+          {isProfessorUtilizador(utilizador) ? (
             <>
               <li><span className="nav-separator">|</span></li>
-              <li><a href="#" className="special-link">Coaching Agendados</a></li>
+              <li>
+                <a
+                  href="#"
+                  className="special-link"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    irParaProfessorAgendamento?.();
+                  }}
+                >
+                  Disponibilidade e agenda
+                </a>
+              </li>
               <li><a href="#" className="special-link" onClick={(e) => { e.preventDefault(); irParaEmprestimos(); }}>Empréstimos de peças</a></li>
               <li><a href="#" className="special-link active">Venda de figurinos</a></li>
             </>

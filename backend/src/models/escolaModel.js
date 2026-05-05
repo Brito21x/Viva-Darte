@@ -153,8 +153,33 @@ async function getModalidadesPorProfessor(idProfessor) {
 }
  
 /**
- * Retorna os professores ativos que lecionam uma modalidade específica.
- * Usado na US05 para preencher a dropdown de professores disponíveis.
+ * Professores com perfil ativo (para US11 — painel de associação modalidades).
+ */
+async function getProfessoresAtivos() {
+    try {
+        const pool = await poolPromise;
+        const query = `
+            SELECT DISTINCT
+                u.id_utilizador AS id_professor,
+                u.nome AS nome_professor
+            FROM UTILIZADOR u
+            JOIN UTILIZADOR_PERFIL up ON up.UTILIZADORid_utilizador = u.id_utilizador
+            JOIN PERFIL p ON p.id_perfil = up.PERFILid_perfil
+            WHERE p.nome LIKE '%Prof%'
+              AND u.ativo = 1
+            ORDER BY u.nome ASC;
+        `;
+        const result = await pool.request().query(query);
+        return result.recordset;
+    } catch (error) {
+        console.error('Erro no Modelo (getProfessoresAtivos):', error);
+        throw error;
+    }
+}
+
+/**
+ * US05 + US11/RF13: só professores explicitamente associados à modalidade em PROFESSOR_MODALIDADE.
+ * (Removido o fallback que listava todos os professores quando a modalidade ainda não tinha associações.)
  */
 async function getProfessoresPorModalidade(idModalidade) {
     try {
@@ -166,21 +191,11 @@ async function getProfessoresPorModalidade(idModalidade) {
             FROM UTILIZADOR u
             JOIN UTILIZADOR_PERFIL up ON up.UTILIZADORid_utilizador = u.id_utilizador
             JOIN PERFIL p ON p.id_perfil = up.PERFILid_perfil
+            INNER JOIN PROFESSOR_MODALIDADE pm
+                ON pm.UTILIZADORid_utilizador = u.id_utilizador
+               AND pm.MODALIDADEid_modalidade = @IdModalidade
             WHERE p.nome LIKE '%Prof%'
               AND u.ativo = 1
-              AND (
-                  EXISTS (
-                      SELECT 1
-                      FROM PROFESSOR_MODALIDADE pm
-                      WHERE pm.UTILIZADORid_utilizador = u.id_utilizador
-                        AND pm.MODALIDADEid_modalidade = @IdModalidade
-                  )
-                  OR NOT EXISTS (
-                      SELECT 1
-                      FROM PROFESSOR_MODALIDADE pmAny
-                      WHERE pmAny.MODALIDADEid_modalidade = @IdModalidade
-                  )
-              )
             ORDER BY u.nome ASC;
         `;
         const result = await pool.request()
@@ -304,6 +319,7 @@ module.exports = {
     getCompatibilidadeSalasModalidades,
     getSalasPorModalidade,
     getModalidadesPorProfessor,
+    getProfessoresAtivos,
     getProfessoresPorModalidade,
     associarProfessorModalidade,
     removerProfessorModalidade,

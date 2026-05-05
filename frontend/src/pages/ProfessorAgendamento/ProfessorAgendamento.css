@@ -1,0 +1,214 @@
+/* US09 / US10 — disponibilidades + agenda do professor (coerente com AgendarCoaching) */
+.page-prof-ag {
+  min-height: 100vh;
+  background: #fdfaf5;
+  color: #2a2724;
+}
+
+.pa-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 14px 22px;
+  background: #3a3530;
+  color: #fdfaf5;
+}
+
+.pa-nav-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.pa-nav-logo {
+  height: 36px;
+  width: auto;
+  object-fit: contain;
+}
+
+.pa-nav-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.pa-nav-links a,
+.pa-nav-links button {
+  background: none;
+  border: none;
+  color: #c5a47e;
+  cursor: pointer;
+  font: inherit;
+  text-decoration: none;
+  padding: 4px 0;
+}
+
+.pa-nav-links a:hover,
+.pa-nav-links button:hover {
+  color: #fff;
+}
+
+.pa-main {
+  max-width: 920px;
+  margin: 0 auto;
+  padding: 24px 18px 48px;
+}
+
+.pa-titulo {
+  font-size: 1.55rem;
+  font-weight: 700;
+  margin: 0 0 8px;
+}
+
+.pa-sub {
+  color: #5c564d;
+  font-size: 0.95rem;
+  margin: 0 0 22px;
+}
+
+.pa-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid rgba(58, 53, 48, 0.12);
+  padding-bottom: 2px;
+}
+
+.pa-tab {
+  padding: 10px 18px;
+  border: none;
+  background: transparent;
+  font: inherit;
+  font-weight: 600;
+  color: #6b645a;
+  cursor: pointer;
+  border-radius: 8px 8px 0 0;
+}
+
+.pa-tab.ativo {
+  background: #fff;
+  color: #3a3530;
+  box-shadow: 0 -1px 0 #fff;
+  margin-bottom: -1px;
+}
+
+.pa-card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 20px 22px;
+  box-shadow: 0 2px 12px rgba(58, 53, 48, 0.06);
+  border: 1px solid rgba(58, 53, 48, 0.08);
+}
+
+.pa-card h2 {
+  font-size: 1.1rem;
+  margin: 0 0 14px;
+}
+
+.pa-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 14px;
+  align-items: end;
+  margin-bottom: 16px;
+}
+
+.pa-field label {
+  display: block;
+  font-size: 0.82rem;
+  font-weight: 600;
+  margin-bottom: 6px;
+  color: #4a4540;
+}
+
+.pa-field input,
+.pa-field select {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid rgba(58, 53, 48, 0.2);
+  border-radius: 8px;
+  font: inherit;
+  background: #fffef9;
+}
+
+.pa-btn-primary {
+  padding: 10px 20px;
+  background: #3a3530;
+  color: #fdfaf5;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.pa-btn-primary:hover {
+  background: #2a2520;
+}
+
+.pa-btn-primary:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.pa-btn-danger {
+  padding: 6px 12px;
+  font-size: 0.85rem;
+  border-radius: 6px;
+  border: 1px solid #c0392b;
+  background: #fff;
+  color: #c0392b;
+  cursor: pointer;
+}
+
+.pa-btn-danger:hover {
+  background: #fde8e6;
+}
+
+.pa-table-wrap {
+  overflow-x: auto;
+  margin-top: 8px;
+}
+
+.pa-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.pa-table th,
+.pa-table td {
+  text-align: left;
+  padding: 10px 8px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.pa-table th {
+  font-weight: 600;
+  color: #5c564d;
+  font-size: 0.8rem;
+}
+
+.pa-aviso {
+  padding: 48px 20px;
+  text-align: center;
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+.pa-aviso strong {
+  color: #3a3530;
+}
+
+.pa-hint {
+  font-size: 0.85rem;
+  color: #6b645a;
+  margin-top: 12px;
+  line-height: 1.45;
+}

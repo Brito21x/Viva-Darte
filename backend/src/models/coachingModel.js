@@ -162,18 +162,11 @@ async function getDisponibilidadeEfetiva(
                 WHERE dp.dia_semana = @DiaSemana
                   AND p.nome LIKE '%Prof%'
                   AND u.ativo = 1
-                  AND (
-                      EXISTS (
-                          SELECT 1
-                          FROM PROFESSOR_MODALIDADE pm
-                          WHERE pm.UTILIZADORid_utilizador = u.id_utilizador
-                            AND pm.MODALIDADEid_modalidade = @IdModalidade
-                      )
-                      OR NOT EXISTS (
-                          SELECT 1
-                          FROM PROFESSOR_MODALIDADE pmAny
-                          WHERE pmAny.MODALIDADEid_modalidade = @IdModalidade
-                      )
+                  AND EXISTS (
+                      SELECT 1
+                      FROM PROFESSOR_MODALIDADE pm
+                      WHERE pm.UTILIZADORid_utilizador = u.id_utilizador
+                        AND pm.MODALIDADEid_modalidade = @IdModalidade
                   )
                   AND (@IdProfessorFiltro IS NULL OR u.id_utilizador = @IdProfessorFiltro);
             `);
@@ -283,6 +276,34 @@ async function getAgendaProfessor(idProfessor, dataInicio = null, dataFim = null
 // ============================================================================
  
 /**
+ * RF05 — Garante que cada aluno está ligado ao encarregado em ENCARREGADO_ALUNO e activo em ALUNO.
+ */
+async function assertAlunosPertencemAoEncarregado(transaction, idEncarregado, idsAlunos) {
+    for (const idAluno of idsAlunos) {
+        const check = await transaction
+            .request()
+            .input('IdEnc', sql.Int, idEncarregado)
+            .input('IdAluno', sql.Int, idAluno)
+            .query(`
+                SELECT 1 AS ok
+                FROM ENCARREGADO_ALUNO ea
+                INNER JOIN ALUNO a ON a.id_aluno = ea.ALUNOid_aluno
+                WHERE ea.UTILIZADORid_utilizador = @IdEnc
+                  AND ea.ALUNOid_aluno = @IdAluno
+                  AND a.ativo = 1
+            `);
+        if (!check.recordset.length) {
+            const e = new Error(
+                `O aluno (ID ${idAluno}) não está associado à tua conta na escola ou encontra-se inativo.`
+            );
+            e.isOperational = true;
+            e.statusCode = 403;
+            throw e;
+        }
+    }
+}
+
+/**
  * Cria um pedido de coaching e os seus participantes numa transação.
  */
 async function criarPedidoCoaching(dadosPedido, alunosIds) {
@@ -291,10 +312,21 @@ async function criarPedidoCoaching(dadosPedido, alunosIds) {
     await transaction.begin();
  
     try {
+        const idsUnicos = [
+            ...new Set(alunosIds.map((id) => Number(id)).filter((n) => Number.isFinite(n) && n > 0))
+        ];
+        if (idsUnicos.length === 0) {
+            const e = new Error('Indica pelo menos um aluno com identificador válido.');
+            e.isOperational = true;
+            throw e;
+        }
+
+        await assertAlunosPertencemAoEncarregado(transaction, dadosPedido.idEncarregado, idsUnicos);
+
         const idPedido = await transaction.request()
             .input('Formato', sql.VarChar(50), dadosPedido.formatoAula)
             .input('Duracao', sql.Int, dadosPedido.duracaoMinutos)
-            .input('NumParticipantes', sql.Int, alunosIds.length)
+            .input('NumParticipantes', sql.Int, idsUnicos.length)
             .input('DataAula', sql.Date, dadosPedido.dataAula)
             .input('HoraInicio', sql.Time, dadosPedido.horaInicio)
             .input('CustoEstimado', sql.Decimal(10, 2), dadosPedido.custoEstimado)
@@ -319,7 +351,7 @@ async function criarPedidoCoaching(dadosPedido, alunosIds) {
             `)
             .then(r => r.recordset[0].id_pedido_coaching);
  
-        for (const idAluno of alunosIds) {
+        for (const idAluno of idsUnicos) {
             await transaction.request()
                 .input('IdAluno', sql.Int, idAluno)
                 .input('IdPedido', sql.Int, idPedido)
@@ -359,10 +391,29 @@ async function getPedidosPorEncarregado(idEncarregado) {
                     pc.estado,
                     pc.custo_estimado,
                     m.nome AS modalidade,
-                    prof.nome AS professor
+                    prof.nome AS professor,
+                    cab.id_coaching,
+                    cab.estado AS estado_coaching,
+                    cab.hora_inicio AS hora_inicio_coaching,
+                    s.nome AS nome_sala,
+                    profAula.nome AS nome_professor_agendado
                 FROM PEDIDO_COACHING pc
                 JOIN MODALIDADE m ON pc.MODALIDADEid_modalidade = m.id_modalidade
                 LEFT JOIN UTILIZADOR prof ON pc.UTILIZADORid_utilizador2 = prof.id_utilizador
+                OUTER APPLY (
+                    SELECT TOP 1
+                        c.id_coaching,
+                        c.estado,
+                        c.hora_inicio,
+                        c.SALAid_sala,
+                        c.UTILIZADORid_utilizador
+                    FROM COACHING c
+                    WHERE c.PEDIDO_COACHINGid_pedido_coaching = pc.id_pedido_coaching
+                      AND c.estado <> 'Cancelado'
+                    ORDER BY c.id_coaching DESC
+                ) AS cab
+                LEFT JOIN SALA s ON cab.SALAid_sala = s.id_sala
+                LEFT JOIN UTILIZADOR profAula ON cab.UTILIZADORid_utilizador = profAula.id_utilizador
                 WHERE pc.UTILIZADORid_utilizador = @IdEE
                 ORDER BY pc.data_pedido DESC, pc.id_pedido_coaching DESC;
             `);
@@ -507,6 +558,8 @@ async function getPedidosPendentes() {
         const query = `
             SELECT 
                 pc.id_pedido_coaching,
+                pc.MODALIDADEid_modalidade AS id_modalidade,
+                pc.UTILIZADORid_utilizador2 AS id_professor_desejado,
                 pc.data_aula_pretendida,
                 pc.hora_inicio_pretendida,
                 pc.formato_aula,
@@ -529,9 +582,19 @@ async function getPedidosPendentes() {
                 ON pc.id_pedido_coaching = pcp.PEDIDO_COACHINGid_pedido_coaching
             WHERE pc.estado = 'Pendente'
             GROUP BY 
-                pc.id_pedido_coaching, pc.data_aula_pretendida, pc.hora_inicio_pretendida, 
-                pc.formato_aula, pc.duracao_minutos, pc.estado, pc.custo_estimado, 
-                m.nome, ee.nome, ee.email, prof.nome
+                pc.id_pedido_coaching,
+                pc.MODALIDADEid_modalidade,
+                pc.UTILIZADORid_utilizador2,
+                pc.data_aula_pretendida,
+                pc.hora_inicio_pretendida,
+                pc.formato_aula,
+                pc.duracao_minutos,
+                pc.estado,
+                pc.custo_estimado,
+                m.nome,
+                ee.nome,
+                ee.email,
+                prof.nome
             ORDER BY pc.data_aula_pretendida ASC;
         `;
         const result = await pool.request().query(query);
@@ -571,18 +634,11 @@ async function aprovarEAgendarCoaching(dadosAgendamento) {
                     WHERE u.id_utilizador = @IdProfessor
                       AND u.ativo = 1
                       AND p.nome LIKE '%Prof%'
-                      AND (
-                          EXISTS (
-                              SELECT 1
-                              FROM PROFESSOR_MODALIDADE pm
-                              WHERE pm.UTILIZADORid_utilizador = u.id_utilizador
-                                AND pm.MODALIDADEid_modalidade = @IdModalidade
-                          )
-                          OR NOT EXISTS (
-                              SELECT 1
-                              FROM PROFESSOR_MODALIDADE pmAny
-                              WHERE pmAny.MODALIDADEid_modalidade = @IdModalidade
-                          )
+                      AND EXISTS (
+                          SELECT 1
+                          FROM PROFESSOR_MODALIDADE pm
+                          WHERE pm.UTILIZADORid_utilizador = u.id_utilizador
+                            AND pm.MODALIDADEid_modalidade = @IdModalidade
                       )
                 );
             `);

@@ -357,6 +357,31 @@
   cursor: pointer;
 }
 
+.ac-alunos-selecao-bloco {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.ac-alunos-selecao-bloco--modal {
+  margin-top: 16px;
+  padding-top: 16px;
+}
+
+.ac-alunos-selecao-titulo {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0 0 6px 0;
+  color: #2a2724;
+}
+
+.ac-modal-atividade-form .ac-alunos-checks--scrollable {
+  max-height: 220px;
+  overflow-y: auto;
+  margin-top: 8px;
+  padding-right: 4px;
+}
+
 .pedidos-table-compact {
   width: 100%;
   border-collapse: collapse;
@@ -376,6 +401,18 @@
   text-transform: uppercase;
   letter-spacing: 0.03em;
   color: #6b665e;
+}
+
+.ac-pedido-agenda-cell {
+  display: block;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: #3a3632;
+}
+
+.ac-pedido-agenda-cell strong {
+  font-weight: 700;
+  color: #5c564d;
 }
 
 .btn-coaching-primary {
@@ -635,10 +672,11 @@
 }
 
 .ac-cal-toolbar {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
-  gap: 10px 14px;
+  column-gap: 12px;
+  row-gap: 10px;
   margin-bottom: 12px;
   padding: 10px 12px;
   border-radius: 12px;
@@ -647,13 +685,37 @@
   box-shadow: 0 1px 3px rgba(42, 39, 36, 0.05);
 }
 
+@media (max-width: 720px) {
+  .ac-cal-toolbar {
+    grid-template-columns: 1fr;
+    justify-items: stretch;
+  }
+
+  .ac-cal-toolbar-left,
+  .ac-cal-toolbar-centro,
+  .ac-cal-vista-toggle {
+    justify-self: center;
+    width: 100%;
+    justify-content: center;
+  }
+
+  .ac-cal-toolbar-left {
+    justify-content: center;
+  }
+
+  .ac-cal-vista-toggle {
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+}
+
 .ac-cal-toolbar-left {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 10px;
-  flex: 1 1 200px;
   min-width: 0;
+  justify-self: start;
 }
 
 .ac-cal-toolbar-nav {
@@ -692,9 +754,10 @@
 }
 
 .ac-cal-toolbar-centro {
-  flex: 2 1 200px;
   min-width: 0;
+  max-width: 100%;
   text-align: center;
+  justify-self: center;
 }
 
 .ac-cal-toolbar-titulo {
@@ -702,13 +765,15 @@
   font-size: 0.95rem;
   font-weight: 600;
   color: #3a3632;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  text-align: center;
+  line-height: 1.35;
+  white-space: normal;
+  word-break: break-word;
 }
 
 .ac-cal-vista-toggle {
   display: inline-flex;
+  justify-self: end;
   flex: 0 0 auto;
   border-radius: 10px;
   padding: 3px;

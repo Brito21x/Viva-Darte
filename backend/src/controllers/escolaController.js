@@ -72,6 +72,19 @@ async function getSalasPorModalidade(req, res, next) {
 }
 
 // ============================================================================
+// LISTA DE PROFESSORES (US11 — painel Admin / Coordenação)
+// GET /api/escola/professores
+// ============================================================================
+async function getProfessoresAtivos(req, res, next) {
+    try {
+        const lista = await escolaModel.getProfessoresAtivos();
+        return res.status(200).json(lista);
+    } catch (error) {
+        next(error);
+    }
+}
+
+// ============================================================================
 // PROFESSORES POR MODALIDADE (US05 — dropdown no pedido de coaching)
 // GET /api/escola/modalidades/:id/professores
 // ============================================================================
@@ -187,6 +200,7 @@ module.exports = {
     getSalas,
     getCompatibilidade,
     getSalasPorModalidade,
+    getProfessoresAtivos,
     getProfessoresPorModalidade,
     getModalidadesPorProfessor,
     associarProfessorModalidade,

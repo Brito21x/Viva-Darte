@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import './LoginRegisto.css'; 
+import './LoginRegisto.css';
+import { API_URL } from '../../services/api'; 
 
 export default function Registo({ irParaLogin, irParaLanding }) {
   const [tipo, setTipo] = useState('EE'); 
@@ -54,7 +55,7 @@ export default function Registo({ irParaLogin, irParaLanding }) {
     const telefoneLimpo = telefone.replace(/\s/g, '');
 
     try {
-        const response = await fetch('http://localhost:3000/api/auth/register', {
+        const response = await fetch(`${API_URL}/api/auth/register`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ nome, email, telefone: telefoneLimpo, password, tipo })

@@ -1,7 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import './LoginRegisto.css'; 
+import './LoginRegisto.css';
+import { API_URL } from '../../services/api'; 
 
-export default function Login({ irParaRegisto, irParaLanding, irParaRecuperar }) {
+export default function Login({
+  irParaRegisto,
+  irParaLanding,
+  irParaRecuperar,
+  irParaProfessorAgendamento
+}) {
   const [tipo, setTipo] = useState('EE'); 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -24,7 +30,7 @@ export default function Login({ irParaRegisto, irParaLanding, irParaRecuperar })
     e.preventDefault();
 
     try {
-      const response = await fetch('http://localhost:3000/api/auth/login', {
+      const response = await fetch(`${API_URL}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         // AGORA ENVIAMOS O "tipo" PARA O BACKEND VALIDAR
@@ -38,7 +44,11 @@ export default function Login({ irParaRegisto, irParaLanding, irParaRecuperar })
           localStorage.setItem('viva_token', resultado.token);
         }
         localStorage.setItem('viva_user', JSON.stringify(resultado.utilizador));
-        irParaLanding(); 
+        if (tipo === 'PROF' && typeof irParaProfessorAgendamento === 'function') {
+          irParaProfessorAgendamento();
+        } else {
+          irParaLanding();
+        }
       } else {
         mostrarAlerta(resultado.mensagem || "Dados de acesso incorretos.");
       }

@@ -21,6 +21,7 @@ import {
   nomeDiaSemanaCompletoPT,
   formatDataBarraPT
 } from '../../utils/semanaCalendario';
+import { isEncarregadoUtilizador as isEncarregado } from '../../utils/perfilUtilizador';
 
 const VISTAS = {
   calendario: { menu: 'Calendário e vagas', badge: 'Marcação' },
@@ -28,16 +29,6 @@ const VISTAS = {
   pedidos: { menu: 'Ver pedidos', badge: 'Pedidos' },
   submeter: { menu: 'Submeter pedido', badge: 'Submeter' }
 };
-
-function isEncarregado(u) {
-  if (!u) return false;
-  if (u.perfil && String(u.perfil).toLowerCase().includes('encarregado')) return true;
-  const perfis = u.perfis || [];
-  return perfis.some(p => {
-    const s = String(p).toLowerCase();
-    return s.includes('encarregado') || s === 'ee' || s.includes('educação') || s.includes('educacao');
-  });
-}
 
 /** Linha do tempo do dia: 08h00 → 21h00 (780 min). */
 const TL_MIN = 8 * 60;
@@ -145,6 +136,25 @@ function ymdAulaPedido(val) {
   const d = new Date(s);
   if (!Number.isNaN(d.getTime())) return toYMD(d);
   return '';
+}
+
+/** Resposta SQL/JSON pode variar no casing dos campos; IDs como número para os checkboxes. */
+function normalizarListaAlunosApi(raw) {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((row) => {
+      const id = row.id_aluno ?? row.ID_ALUNO ?? row.idAluno;
+      const idAluno = Number(id);
+      if (!Number.isFinite(idAluno)) return null;
+      const nome =
+        row.nome_aluno ?? row.NOME_ALUNO ?? row.nomeAluno ?? row.nome ?? '—';
+      return {
+        id_aluno: idAluno,
+        nome_aluno: nome,
+        data_nascimento: row.data_nascimento ?? row.DATA_NASCIMENTO ?? null
+      };
+    })
+    .filter(Boolean);
 }
 
 export default function AgendarCoaching({ irParaLanding, irParaVendaFigurinos, irParaEmprestimos }) {
@@ -347,22 +357,47 @@ export default function AgendarCoaching({ irParaLanding, irParaVendaFigurinos, i
     if (!authChecked || semPermissao || !getAuthToken()) return;
 
     (async () => {
+      const avisos = [];
+      let mods = [];
+      let ans = [];
+      let als = [];
+
       try {
-        const [mods, ans, als] = await Promise.all([
-          apiAuthFetch('/api/escola/modalidades'),
-          apiAuthFetch('/api/escola/anos-letivos'),
-          apiAuthFetch('/api/utilizadores/me/alunos')
-        ]);
-        setModalidades(Array.isArray(mods) ? mods : []);
-        setAnos(Array.isArray(ans) ? ans : []);
-        setAlunos(Array.isArray(als) ? als : []);
-        setIdAnoLetivo((prev) => {
-          if (prev) return prev;
-          if (Array.isArray(ans) && ans.length > 0) return String(ans[0].id_ano_letivo);
-          return '';
-        });
+        const r = await apiAuthFetch('/api/escola/modalidades');
+        mods = Array.isArray(r) ? r : [];
       } catch (e) {
-        mostrarAlerta(e.message || 'Erro ao carregar dados da escola.');
+        avisos.push(`Modalidades: ${e.message || 'erro'}.`);
+      }
+
+      try {
+        const r = await apiAuthFetch('/api/escola/anos-letivos');
+        ans = Array.isArray(r) ? r : [];
+      } catch (e) {
+        avisos.push(`Anos letivos: ${e.message || 'erro'}.`);
+      }
+
+      try {
+        const r = await apiAuthFetch('/api/utilizadores/me/alunos');
+        als = normalizarListaAlunosApi(r);
+      } catch (e) {
+        avisos.push(`Alunos (BD): ${e.message || 'erro'}.`);
+      }
+
+      setModalidades(mods);
+      setAnos(ans);
+      setAlunos(als);
+      setIdAnoLetivo((prev) => {
+        if (prev) return prev;
+        if (ans.length > 0) return String(ans[0].id_ano_letivo);
+        return '';
+      });
+
+      if (avisos.length > 0) {
+        mostrarAlerta(
+          avisos.length === 3
+            ? 'Não foi possível carregar dados da escola. Verifica sessão, URL da API (VITE_API_URL) e se o servidor está a correr.'
+            : `Alguns dados não carregaram: ${avisos.join(' ')}`
+        );
       }
     })();
   }, [semPermissao, authChecked]);
@@ -508,11 +543,41 @@ export default function AgendarCoaching({ irParaLanding, irParaVendaFigurinos, i
   }, [slotPedidoModal]);
 
   const toggleAluno = (id) => {
+    const n = Number(id);
+    if (!Number.isFinite(n)) return;
     setAlunosIds((prev) => {
-      if (prev.includes(id)) return prev.filter((x) => x !== id);
-      return [...prev, id];
+      if (prev.some((x) => Number(x) === n)) return prev.filter((x) => Number(x) !== n);
+      return [...prev, n];
     });
   };
+
+  /** Checkboxes de alunos reutilizáveis no modal de preferência e no ecrã Submeter. */
+  const renderSelecaoAlunosCheckboxes = (idPrefix) => (
+    <>
+      {alunos.length === 0 ? (
+        <p className="sub" style={{ margin: '6px 0 0' }}>
+          Nenhum aluno associado à tua conta. Contacta a escola para te ligarem a alunos na base de dados.
+        </p>
+      ) : (
+        <div className="alunos-checks ac-alunos-checks--scrollable" role="group" aria-label="Alunos participantes">
+          {alunos.map((a) => {
+            const cid = `${idPrefix}-${a.id_aluno}`;
+            return (
+              <label key={a.id_aluno} htmlFor={cid}>
+                <input
+                  id={cid}
+                  type="checkbox"
+                  checked={alunosIds.some((x) => Number(x) === a.id_aluno)}
+                  onChange={() => toggleAluno(a.id_aluno)}
+                />
+                {a.nome_aluno}
+              </label>
+            );
+          })}
+        </div>
+      )}
+    </>
+  );
 
   const handleLogout = () => {
     localStorage.removeItem('viva_user');
@@ -638,7 +703,7 @@ export default function AgendarCoaching({ irParaLanding, irParaVendaFigurinos, i
           dataAula,
           horaInicio,
           idAnoLetivo: parseInt(idAnoLetivo, 10),
-          alunosIds
+          alunosIds: alunosIds.map((x) => Number(x)).filter((n) => Number.isFinite(n))
         }
       });
       mostrarAlerta('Pedido submetido com sucesso! Aguarda confirmação da coordenação.');
@@ -972,22 +1037,12 @@ export default function AgendarCoaching({ irParaLanding, irParaVendaFigurinos, i
       </button>
       <section className="coaching-card">
         <h2>Escolher alunos</h2>
-        <p className="sub">Alunos associados à tua conta. Marca quem participa no coaching.</p>
-        {alunos.length === 0 && <p className="sub">Nenhum aluno associado. Contacta a escola.</p>}
-        {alunos.length > 0 && (
-          <div className="alunos-checks">
-            {alunos.map((a) => (
-              <label key={a.id_aluno}>
-                <input
-                  type="checkbox"
-                  checked={alunosIds.includes(a.id_aluno)}
-                  onChange={() => toggleAluno(a.id_aluno)}
-                />
-                {a.nome_aluno}
-              </label>
-            ))}
-          </div>
-        )}
+        <p className="sub">Alunos associados à tua conta (vindos da base de dados). Marca quem participa no coaching.</p>
+        <p className="sub">
+          A <strong>sala</strong> não é escolhida aqui: a coordenação atribui sala e professor ao{' '}
+          <strong>aprovar</strong> o pedido.
+        </p>
+        {renderSelecaoAlunosCheckboxes('ac-vista-aluno')}
       </section>
     </div>
   );
@@ -1009,6 +1064,7 @@ export default function AgendarCoaching({ irParaLanding, irParaVendaFigurinos, i
                 <th>Data / hora</th>
                 <th>Estado</th>
                 <th>Modalidade</th>
+                <th>Sala / professor (após aprovação)</th>
                 <th />
               </tr>
             </thead>
@@ -1023,6 +1079,37 @@ export default function AgendarCoaching({ irParaLanding, irParaVendaFigurinos, i
                   </td>
                   <td>{p.estado}</td>
                   <td>{p.modalidade}</td>
+                  <td>
+                    {p.nome_sala || p.nome_professor_agendado || p.hora_inicio_coaching ? (
+                      <span className="ac-pedido-agenda-cell">
+                        {p.nome_sala && (
+                          <>
+                            <strong>Sala:</strong> {p.nome_sala}
+                            <br />
+                          </>
+                        )}
+                        {p.hora_inicio_coaching && (
+                          <>
+                            <strong>Hora confirmada:</strong> {formatarHoraMostrar(p.hora_inicio_coaching)}
+                            <br />
+                          </>
+                        )}
+                        {p.nome_professor_agendado && (
+                          <>
+                            <strong>Professor:</strong> {p.nome_professor_agendado}
+                            {p.estado_coaching && (
+                              <>
+                                <br />
+                                <small className="sub">Aula: {p.estado_coaching}</small>
+                              </>
+                            )}
+                          </>
+                        )}
+                      </span>
+                    ) : (
+                      <span className="sub">—</span>
+                    )}
+                  </td>
                   <td>
                     {p.estado === 'Pendente' && (
                       <button
@@ -1086,15 +1173,26 @@ export default function AgendarCoaching({ irParaLanding, irParaVendaFigurinos, i
               </span>
             )}
           </p>
-          <p>
-            <strong>Alunos:</strong>{' '}
-            {alunosIds.length === 0 ? 'Nenhum (menu no topo → Escolher alunos)' : `${alunosIds.length} selecionado(s)`}
-          </p>
+          <div className="ac-alunos-selecao-bloco">
+            <h3 className="ac-alunos-selecao-titulo">Alunos participantes</h3>
+            <p className="sub">
+              Obrigatório: marca pelo menos um aluno. A lista vem da base de dados (conta do encarregado).
+            </p>
+            {alunosIds.length > 0 && (
+              <p className="sub" style={{ marginBottom: 8 }}>
+                <strong>Selecionados:</strong> {alunosIds.length}
+              </p>
+            )}
+            {renderSelecaoAlunosCheckboxes('ac-submeter-aluno')}
+          </div>
           {precoEstimado != null && (
             <p>
               <strong>Custo estimado:</strong> {precoEstimado.toFixed(2)} €
             </p>
           )}
+          <p className="sub">
+            <strong>Sala:</strong> será definida pela coordenação na aprovação (não faz parte deste formulário).
+          </p>
         </div>
         <form onSubmit={submeterPedido}>
           <button type="submit" className="btn-coaching-primary" disabled={submitting}>
@@ -1303,6 +1401,32 @@ export default function AgendarCoaching({ irParaLanding, irParaVendaFigurinos, i
                   <dd>{pedidoDetalheModal.pedido.nome_professor}</dd>
                 </>
               )}
+              {pedidoDetalheModal.pedido.nome_professor_agendado &&
+                String(pedidoDetalheModal.pedido.nome_professor_agendado).trim() !==
+                  String(pedidoDetalheModal.pedido.nome_professor || '').trim() && (
+                  <>
+                    <dt>Professor (após aprovação)</dt>
+                    <dd>{pedidoDetalheModal.pedido.nome_professor_agendado}</dd>
+                  </>
+                )}
+              {pedidoDetalheModal.pedido.nome_sala && (
+                <>
+                  <dt>Sala</dt>
+                  <dd>{pedidoDetalheModal.pedido.nome_sala}</dd>
+                </>
+              )}
+              {pedidoDetalheModal.pedido.hora_inicio_coaching && (
+                <>
+                  <dt>Hora confirmada (agendamento)</dt>
+                  <dd>{formatarHoraMostrar(pedidoDetalheModal.pedido.hora_inicio_coaching)}</dd>
+                </>
+              )}
+              {pedidoDetalheModal.pedido.estado_coaching && (
+                <>
+                  <dt>Estado da aula</dt>
+                  <dd>{pedidoDetalheModal.pedido.estado_coaching}</dd>
+                </>
+              )}
               {pedidoDetalheModal.pedido.custo_estimado != null &&
                 pedidoDetalheModal.pedido.custo_estimado !== '' &&
                 Number.isFinite(Number(pedidoDetalheModal.pedido.custo_estimado)) && (
@@ -1504,6 +1628,15 @@ export default function AgendarCoaching({ irParaLanding, irParaVendaFigurinos, i
               <p className="ac-modal-atividade-hint">
                 Duração usada: <strong>{Number(duracaoMinutos) > 0 ? Number(duracaoMinutos) : 60} min</strong>.
               </p>
+              <div className="ac-alunos-selecao-bloco ac-alunos-selecao-bloco--modal">
+                <p className="ac-alunos-selecao-titulo">
+                  Alunos participantes <span className="ac-modal-atividade-req" aria-hidden="true">*</span>
+                </p>
+                <p className="ac-modal-atividade-hint" style={{ marginTop: 0 }}>
+                  Marca quem vai a esta aula de coaching (podes alterar mais tarde no ecrã «Submeter pedido»).
+                </p>
+                {renderSelecaoAlunosCheckboxes('ac-slot-aluno')}
+              </div>
             </div>
             <div className="ac-modal-atividade-footer">
               <button type="button" className="ac-modal-atividade-btn-texto" onClick={() => setSlotPedidoModal(null)}>

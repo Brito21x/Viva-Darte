@@ -19,6 +19,20 @@ function utilizadorTemPerfil(perfisUtilizador, perfilRequerido) {
         return lista.some(p => String(p).toLowerCase().includes('prof'));
     }
 
+    if (r === 'Admin') {
+        return lista.some((p) => {
+            const s = String(p).toLowerCase();
+            return (
+                s === 'admin' ||
+                s.includes('admin') ||
+                s.includes('coordenação') ||
+                s.includes('coordenacao') ||
+                s.includes('administração') ||
+                s.includes('administracao')
+            );
+        });
+    }
+
     return lista.some(p => String(p) === r);
 }
 

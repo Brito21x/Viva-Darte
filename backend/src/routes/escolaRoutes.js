@@ -27,6 +27,9 @@ router.get('/modalidades/:id/salas', escolaController.getSalasPorModalidade);
 // GET /api/escola/modalidades/:id/professores — dropdown para pedido de coaching (US05)
 router.get('/modalidades/:id/professores', escolaController.getProfessoresPorModalidade);
 
+// GET /api/escola/professores — lista para US11 (Admin)
+router.get('/professores', autorizar('Admin'), escolaController.getProfessoresAtivos);
+
 // GET /api/escola/professores/:id/modalidades
 router.get('/professores/:id/modalidades', escolaController.getModalidadesPorProfessor);
 

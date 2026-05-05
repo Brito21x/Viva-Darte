@@ -20,9 +20,12 @@ function errorHandler(err, req, res, next) {
         });
     }
 
-    // Erros de negócio lançados pelos modelos
+    // Erros de negócio lançados pelos modelos (ex.: alunos que não pertencem ao EE)
     if (err.isOperational) {
-        return res.status(400).json({ mensagem: err.message });
+        const status = Number.isInteger(err.statusCode) && err.statusCode >= 400 && err.statusCode < 600
+            ? err.statusCode
+            : 400;
+        return res.status(status).json({ mensagem: err.message });
     }
 
     // Erro genérico (não expõe detalhes em produção)

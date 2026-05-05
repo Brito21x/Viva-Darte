@@ -5,12 +5,7 @@ const inventarioModel = require('../models/inventarioModel');
 // GET /api/inventario
 // ============================================================================
 async function getCatalogo(req, res, next) {
-    try {
-        const pecas = await inventarioModel.getCatalogoPecas();
-        return res.status(200).json(pecas);
-    } catch (error) {
-        next(error);
-    }
+    try { return res.status(200).json(await inventarioModel.getCatalogoPecas()); } catch (error) { next(error); }
 }
 
 // ============================================================================
@@ -20,21 +15,11 @@ async function getCatalogo(req, res, next) {
 async function getPecaDetalhes(req, res, next) {
     try {
         const idPeca = parseInt(req.params.id);
-
-        if (isNaN(idPeca)) {
-            return res.status(400).json({ mensagem: 'ID de peça inválido.' });
-        }
-
+        if (isNaN(idPeca)) return res.status(400).json({ mensagem: 'ID de peça inválido.' });
         const peca = await inventarioModel.getPecaDetalhes(idPeca);
-
-        if (!peca) {
-            return res.status(404).json({ mensagem: 'Peça não encontrada.' });
-        }
-
+        if (!peca) return res.status(404).json({ mensagem: 'Peça não encontrada.' });
         return res.status(200).json(peca);
-    } catch (error) {
-        next(error);
-    }
+    } catch (error) { next(error); }
 }
 
 // ============================================================================
@@ -47,32 +32,16 @@ async function getPecaDetalhes(req, res, next) {
 async function registarPeca(req, res, next) {
     try {
         const { nome, descricao, tamanho, estado, idCategoria, fotos } = req.body;
-        // Ajustado para aceitar tanto id como id_utilizador, dependendo de como o token está estruturado
         const idUtilizador = req.utilizador.id || req.utilizador.id_utilizador;
-
-        // 1. Cria a peça primeiro e espera pelo ID gerado
         const idPeca = await inventarioModel.registarNovaPeca({
             nome, descricao, tamanho, estado, idUtilizador, 
-            idCategoria: parseInt(idCategoria),
-            disponivelVenda: true 
+            idCategoria: parseInt(idCategoria), disponivelVenda: true 
         });
-
-        // 2. Se o array 'fotos' (Base64) existir, grava na tabela FOTO_PECA
         if (fotos && Array.isArray(fotos) && fotos.length > 0) {
-            try {
-                await inventarioModel.registarFotosPeca(idPeca, fotos);
-            } catch (fotoErr) {
-                console.error("Aviso: Falha ao gravar fotos, mas a peça foi criada", fotoErr);
-            }
+            try { await inventarioModel.registarFotosPeca(idPeca, fotos); } catch (e) { console.error("Aviso fotos:", e); }
         }
-
-        return res.status(201).json({ 
-            mensagem: 'Peça e fotos guardadas com sucesso!', 
-            idPeca 
-        });
-    } catch (error) {
-        next(error);
-    }
+        return res.status(201).json({ mensagem: 'Guardado com sucesso!', idPeca });
+    } catch (error) { next(error); }
 }
 
 // ============================================================================
@@ -84,37 +53,14 @@ async function atualizarEstadoPeca(req, res, next) {
     try {
         const idPeca = parseInt(req.params.id);
         const { estado, disponivelEmprestimo, disponivelVenda, localizacao } = req.body;
-
-        if (isNaN(idPeca)) {
-            return res.status(400).json({ mensagem: 'ID de peça inválido.' });
-        }
-
-        if (!estado) {
-            return res.status(400).json({ mensagem: 'Estado é obrigatório.' });
-        }
-
-        const estadosValidos = ['Novo', 'Bom', 'Usado', 'Danificado'];
-        if (!estadosValidos.includes(estado)) {
-            return res.status(400).json({
-                mensagem: `Estado inválido. Valores aceites: ${estadosValidos.join(', ')}.`
-            });
-        }
-
+        if (isNaN(idPeca)) return res.status(400).json({ mensagem: 'ID inválido.' });
         const sucesso = await inventarioModel.atualizarEstadoPeca(idPeca, {
-            estado,
-            disponivelEmprestimo: disponivelEmprestimo ?? false,
-            disponivelVenda: disponivelVenda ?? false,
-            localizacao: localizacao || null
+            estado, disponivelEmprestimo: disponivelEmprestimo ?? false,
+            disponivelVenda: disponivelVenda ?? false, localizacao: localizacao || null
         });
-
-        if (!sucesso) {
-            return res.status(404).json({ mensagem: 'Peça não encontrada.' });
-        }
-
-        return res.status(200).json({ mensagem: 'Peça atualizada com sucesso.' });
-    } catch (error) {
-        next(error);
-    }
+        if (!sucesso) return res.status(404).json({ mensagem: 'Peça não encontrada.' });
+        return res.status(200).json({ mensagem: 'Atualizada com sucesso.' });
+    } catch (error) { next(error); }
 }
 
 // ============================================================================
@@ -290,12 +236,7 @@ async function registarPagamentoEmprestimo(req, res, next) {
 // GET /api/inventario/vendas
 // ============================================================================
 async function getPecasAVenda(req, res, next) {
-    try {
-        const pecas = await inventarioModel.getPecasAVenda();
-        return res.status(200).json(pecas);
-    } catch (error) {
-        next(error);
-    }
+    try { return res.status(200).json(await inventarioModel.getPecasAVenda()); } catch (error) { next(error); }
 }
 
 // ============================================================================
@@ -306,69 +247,38 @@ async function getPecasAVenda(req, res, next) {
 async function colocarPecaAVenda(req, res, next) {
     try {
         const idVendedor = req.utilizador.id || req.utilizador.id_utilizador;
-        
-        // Agora recebemos também o nomePeca e condicaoPeca do frontend
-        const { idPeca, preco, nomePeca, condicaoPeca } = req.body;
+        const { idPeca, preco, nomePeca, condicaoPeca, metodosPagamento } = req.body;
 
-        if (!idPeca || preco === undefined) {
-            return res.status(400).json({ mensagem: 'idPeca e preco são obrigatórios.' });
-        }
+        if (!idPeca || preco === undefined) return res.status(400).json({ mensagem: 'Faltam dados.' });
+        if (Number(preco) <= 0) return res.status(400).json({ mensagem: 'Preço inválido.' });
 
-        if (Number(preco) <= 0) {
-            return res.status(400).json({ mensagem: 'O preço deve ser um valor positivo.' });
-        }
+        const metodosStr = (metodosPagamento && Array.isArray(metodosPagamento) && metodosPagamento.length > 0)
+            ? metodosPagamento.join(',') 
+            : 'MBWay,Transferência,Numerário';
 
-        const idVenda = await inventarioModel.colocarPecaAVenda(
-            parseInt(idPeca),
-            parseFloat(preco),
-            idVendedor,
-            nomePeca, // Passamos os novos campos para o Model
-            condicaoPeca
-        );
-
-        return res.status(201).json({
-            mensagem: 'Peça colocada à venda com sucesso.',
-            idVenda
-        });
-    } catch (error) {
-        if (error.message.includes('não está disponível') || error.message.includes('já está anunciada') || error.message.includes('não encontrada')) {
-            return res.status(409).json({ mensagem: error.message });
-        }
-        next(error);
-    }
+        const idVenda = await inventarioModel.colocarPecaAVenda(parseInt(idPeca), parseFloat(preco), idVendedor, nomePeca, condicaoPeca, metodosStr);
+        return res.status(201).json({ mensagem: 'Sucesso.', idVenda });
+    } catch (error) { next(error); }
 }
 
 async function editarPeca(req, res, next) {
     try {
         const idPeca = parseInt(req.params.id);
-        const { nome, descricao, tamanho, estado, preco, fotos } = req.body;
-
+        const { nome, descricao, tamanho, estado, preco, fotos, metodosPagamento } = req.body;
+        
         if (isNaN(idPeca)) return res.status(400).json({ mensagem: 'ID inválido.' });
+        if (preco !== undefined && Number(preco) <= 0) return res.status(400).json({ mensagem: 'Preço inválido.' });
 
-        // Validação extra no backend para impedir preços negativos ou a zero
-        if (preco !== undefined && Number(preco) <= 0) {
-            return res.status(400).json({ mensagem: 'O preço não pode ser negativo ou nulo.' });
-        }
+        const metodosStr = (metodosPagamento && Array.isArray(metodosPagamento) && metodosPagamento.length > 0)
+            ? metodosPagamento.join(',') 
+            : 'MBWay,Transferência,Numerário';
 
-        // 1. Atualizar dados da Peça na tabela principal (PECA)
-        await inventarioModel.atualizarDadosCompletosPeca(idPeca, {
-            nome, descricao, tamanho, estado
-        });
+        await inventarioModel.atualizarDadosCompletosPeca(idPeca, { nome, descricao, tamanho, estado });
+        if (preco !== undefined) await inventarioModel.atualizarDadosVenda(idPeca, parseFloat(preco), nome, estado, metodosStr);
+        if (fotos && Array.isArray(fotos)) await inventarioModel.atualizarFotosPeca(idPeca, fotos);
 
-        // 2. Atualizar Preço, Nome e Condição na tabela VENDA_PECA
-        if (preco !== undefined) {
-            await inventarioModel.atualizarDadosVenda(idPeca, parseFloat(preco), nome, estado);
-        }
-
-        // 3. Atualizar Fotos (Remover antigas e inserir novas strings base64)
-        if (fotos && Array.isArray(fotos)) {
-            await inventarioModel.atualizarFotosPeca(idPeca, fotos);
-        }
-
-        return res.status(200).json({ mensagem: 'Produto editado com sucesso.' });
-    } catch (error) {
-        next(error);
-    }
+        return res.status(200).json({ mensagem: 'Sucesso.' });
+    } catch (error) { next(error); }
 }
 
 // APAGAR PRODUTO
@@ -376,14 +286,10 @@ async function apagarPeca(req, res, next) {
     try {
         const idPeca = parseInt(req.params.id);
         if (isNaN(idPeca)) return res.status(400).json({ mensagem: 'ID inválido.' });
-
         const sucesso = await inventarioModel.eliminarPecaCompleta(idPeca);
-        
-        if (!sucesso) return res.status(404).json({ mensagem: 'Peça não encontrada.' });
-        return res.status(200).json({ mensagem: 'Produto removido com sucesso.' });
-    } catch (error) {
-        next(error);
-    }
+        if (!sucesso) return res.status(404).json({ mensagem: 'Não encontrada.' });
+        return res.status(200).json({ mensagem: 'Removido com sucesso.' });
+    } catch (error) { next(error); }
 }
 
 // ============================================================================
@@ -395,42 +301,25 @@ async function registarConclusaoVenda(req, res, next) {
     try {
         const idVenda = parseInt(req.params.id);
         const { idComprador, metodoPagamento } = req.body;
+        if (isNaN(idVenda) || !idComprador) return res.status(400).json({ mensagem: 'Dados inválidos.' });
 
-        if (isNaN(idVenda)) {
-            return res.status(400).json({ mensagem: 'ID de venda inválido.' });
-        }
-
-        if (!idComprador || !metodoPagamento) {
-            return res.status(400).json({ mensagem: 'idComprador e metodoPagamento são obrigatórios.' });
-        }
-
-        await inventarioModel.registarConclusaoVenda(
-            idVenda,
-            parseInt(idComprador),
-            metodoPagamento
-        );
-
-        return res.status(200).json({ mensagem: 'Venda concluída com sucesso.' });
-    } catch (error) {
-        if (error.message.includes('não encontrada') || error.message.includes('não está disponível') || error.message.includes('já não está disponível')) {
-            return res.status(400).json({ mensagem: error.message });
-        }
-        next(error);
-    }
+        await inventarioModel.registarConclusaoVenda(idVenda, parseInt(idComprador), metodoPagamento);
+        return res.status(200).json({ mensagem: 'Sucesso.' });
+    } catch (error) { next(error); }
 }
 
 module.exports = {
-    getCatalogo,
-    getPecaDetalhes,
-    registarPeca,
+    getCatalogo, 
+    getPecaDetalhes, 
+    registarPeca, 
     atualizarEstadoPeca,
-    requisitarEmprestimo,
-    registarDevolucao,
+    requisitarEmprestimo, 
+    registarDevolucao, 
     registarPenalizacao,
-    registarPagamentoEmprestimo,
-    getPecasAVenda,
+    registarPagamentoEmprestimo, 
+    getPecasAVenda, 
     colocarPecaAVenda,
-    editarPeca,
-    apagarPeca,
+    editarPeca, 
+    apagarPeca, 
     registarConclusaoVenda
 };

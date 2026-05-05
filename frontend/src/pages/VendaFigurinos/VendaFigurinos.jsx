@@ -33,25 +33,38 @@ export default function VendaFigurinos({ irParaLanding, irParaEmprestimos }) {
     const userGuardado = localStorage.getItem('viva_user');
     if (userGuardado) setUtilizador(JSON.parse(userGuardado));
     document.title = "Venda de Figurinos | Viva D'arte";
-    carregarFigurinos();
+    
+    // 1. Carrega a primeira vez mostrando o ecrã de "A carregar figurinos..."
+    carregarFigurinos(true);
+
+    // 2. Cria um ciclo que atualiza silenciosamente a cada 5 segundos (5000 ms)
+    const interval = setInterval(() => {
+      carregarFigurinos(false);
+    }, 5000);
+
+    return () => clearInterval(interval);
   }, []);
 
   const getToken = () => localStorage.getItem('token') || '';
 
-  const carregarFigurinos = async () => {
-    setIsLoading(true); 
+  const carregarFigurinos = async (mostrarLoading = false) => {
+    if (mostrarLoading) setIsLoading(true); 
     try {
       const response = await fetch(`${API_URL}/vendas`, {
-        headers: { 'Authorization': `Bearer ${getToken()}` }
+        method: 'GET',
+        headers: { 
+          'Authorization': `Bearer ${getToken()}`
+        },
+        cache: 'no-store' 
       });
       if (response.ok) {
         const data = await response.json();
-        setFigurinos(data);
+        setFigurinos(data); // O React atualiza a grelha automaticamente se houver mudanças
       }
     } catch (error) {
       console.error("Erro a carregar figurinos:", error);
     } finally {
-      setIsLoading(false); 
+      if (mostrarLoading) setIsLoading(false); 
     }
   };
 
@@ -116,6 +129,11 @@ export default function VendaFigurinos({ irParaLanding, irParaEmprestimos }) {
         mostrarAlerta("Erro: Sessão inválida.");
         setIsSubmitting(false); return;
     }
+    
+    if (novaVenda.metodos_pagamento.length === 0) {
+        mostrarAlerta("Tens de selecionar pelo menos um método de pagamento.");
+        setIsSubmitting(false); return;
+    }
 
     try {
         const resPeca = await fetch(API_URL, {
@@ -145,7 +163,8 @@ export default function VendaFigurinos({ irParaLanding, irParaEmprestimos }) {
                 idPeca: dataPeca.idPeca,
                 preco: parseFloat(novaVenda.preco),
                 nomePeca: novaVenda.PECA_nome,
-                condicaoPeca: novaVenda.condicao
+                condicaoPeca: novaVenda.condicao,
+                metodosPagamento: novaVenda.metodos_pagamento
             })
         });
 
@@ -153,7 +172,7 @@ export default function VendaFigurinos({ irParaLanding, irParaEmprestimos }) {
             mostrarAlerta('Figurino colocado à venda com sucesso!');
             setNovaVenda({ PECA_nome: '', preco: '', condicao: 'Novo', tamanho: '', descricao: '', metodos_pagamento: ['MBWay'], fotos: [] });
             setIsModalOpen(false);
-            carregarFigurinos();
+            carregarFigurinos(false);
         } else {
             const erro = await resVenda.json();
             throw new Error(erro.mensagem || "Erro ao colocar a peça à venda.");
@@ -186,7 +205,7 @@ export default function VendaFigurinos({ irParaLanding, irParaEmprestimos }) {
 
       if (response.ok) {
         mostrarAlerta("Produto removido com sucesso!");
-        carregarFigurinos();
+        carregarFigurinos(false);
       } else {
         const data = await response.json();
         mostrarAlerta(data.mensagem || "Erro ao apagar o produto.");
@@ -203,13 +222,19 @@ export default function VendaFigurinos({ irParaLanding, irParaEmprestimos }) {
       preco: figurino.preco,
       tamanho: figurino.tamanho || '',
       estadoPeca: figurino.condicao_peca || 'Usado',
-      descricao: figurino.descricao || ''
+      descricao: figurino.descricao || '',
+      metodos_pagamento: figurino.metodos_aceites ? figurino.metodos_aceites.split(',') : ['MBWay', 'Transferência', 'Numerário']
     });
     setIsEditModalOpen(true);
   };
 
   const handleGuardarEdicao = async (e) => {
     e.preventDefault();
+    if (figurinoEmEdicao.metodos_pagamento.length === 0) {
+        mostrarAlerta("Tens de selecionar pelo menos um método de pagamento.");
+        return;
+    }
+
     try {
         const response = await fetch(`${API_URL}/${figurinoEmEdicao.id_peca}/editar`, {
             method: 'PUT',
@@ -219,14 +244,15 @@ export default function VendaFigurinos({ irParaLanding, irParaEmprestimos }) {
                 preco: parseFloat(figurinoEmEdicao.preco),
                 tamanho: figurinoEmEdicao.tamanho,
                 estado: figurinoEmEdicao.estadoPeca,
-                descricao: figurinoEmEdicao.descricao
+                descricao: figurinoEmEdicao.descricao,
+                metodosPagamento: figurinoEmEdicao.metodos_pagamento
             })
         });
 
         if (response.ok) {
             mostrarAlerta('Figurino atualizado com sucesso!');
             setIsEditModalOpen(false);
-            carregarFigurinos();
+            carregarFigurinos(false);
         } else {
             const data = await response.json();
             mostrarAlerta(data.mensagem || 'Erro ao guardar as alterações.');
@@ -238,7 +264,9 @@ export default function VendaFigurinos({ irParaLanding, irParaEmprestimos }) {
 
   const handleComprar = (figurino) => {
     setFigurinoSelecionado(figurino);
-    setMetodoPagamentoCompra('MBWay');
+    // Definimos por defeito o primeiro método de pagamento que o vendedor aceita
+    const acceptedMethods = figurino.metodos_aceites ? figurino.metodos_aceites.split(',') : ['MBWay'];
+    setMetodoPagamentoCompra(acceptedMethods[0]);
     setIsCompraModalOpen(true);
   };
 
@@ -264,10 +292,10 @@ export default function VendaFigurinos({ irParaLanding, irParaEmprestimos }) {
         if (response.ok) {
             mostrarAlerta(`Compra de ${figurinoSelecionado.nome_peca} confirmada!`);
             setIsCompraModalOpen(false);
-            carregarFigurinos(); 
+            carregarFigurinos(false); 
         } else {
             const err = await response.json();
-            mostrarAlerta(err.mensagem || 'Ocorreu um erro ou não tens permissões (Admin) para concluir a venda.');
+            mostrarAlerta(err.mensagem || 'Ocorreu um erro.');
         }
     } catch (error) {
         mostrarAlerta("Erro de rede.");
@@ -340,7 +368,7 @@ export default function VendaFigurinos({ irParaLanding, irParaEmprestimos }) {
             const fotoExibida = totalFotos > 0 && fig.fotos[idxImg] ? fig.fotos[idxImg] : null;
 
             return (
-              <div className={`figurino-card ${fig.estado_venda === 'Concluída' ? 'vendido' : ''}`} key={fig.id_venda}>
+              <div className={`figurino-card ${fig.estado_venda === 'Concluída' || fig.estado_venda === 'Concluida' ? 'vendido' : ''}`} key={fig.id_venda}>
                 <div 
                   className="figurino-img" 
                   style={{ 
@@ -354,8 +382,8 @@ export default function VendaFigurinos({ irParaLanding, irParaEmprestimos }) {
                     </div>
                   )}
 
-                  <span className={`badge-estado ${fig.estado_venda === 'Concluída' ? 'bg-red' : 'bg-green'}`}>
-                    {fig.estado_venda === 'Concluída' ? 'Vendido' : 'Disponível'}
+                  <span className={`badge-estado ${fig.estado_venda === 'Concluída' || fig.estado_venda === 'Concluida' ? 'bg-red' : 'bg-green'}`}>
+                    {fig.estado_venda === 'Concluída' || fig.estado_venda === 'Concluida' ? 'Vendido' : 'Disponível'}
                   </span>
 
                   {totalFotos > 1 && (
@@ -372,7 +400,7 @@ export default function VendaFigurinos({ irParaLanding, irParaEmprestimos }) {
 
                   {(utilizador?.nome === fig.vendedor) && (
                     <div className="acoes-dono">
-                      {fig.estado_venda !== 'Concluída' && (
+                      {(fig.estado_venda !== 'Concluída' && fig.estado_venda !== 'Concluida') && (
                         <button className="btn-icon edit" title="Editar Informações" onClick={() => abrirEdicao(fig)}>✎</button>
                       )}
                       <button className="btn-icon delete" title="Apagar" onClick={() => confirmarEliminacao(fig.id_venda, fig.id_peca)}>🗑️</button>
@@ -388,19 +416,26 @@ export default function VendaFigurinos({ irParaLanding, irParaEmprestimos }) {
                   </div>
                   {fig.descricao && <p className="descricao-peca">{fig.descricao}</p>}
                   <p className="vendedor">Por: {fig.vendedor}</p>
+                  
+                  {/* --- TAGS DE PAGAMENTO AQUI NO CARTÃO --- */}
+                  <div className="metodos-pagamento-tags">
+                    {fig.metodos_aceites && fig.metodos_aceites.split(',').map(m => (
+                      <span key={m} className="tag-pagamento">{m}</span>
+                    ))}
+                  </div>
+
                   <div className="figurino-footer">
                     <span className="preco">{Number(fig.preco).toFixed(2)} €</span>
                     
-                    {fig.estado_venda === 'Disponível' && utilizador?.nome !== fig.vendedor && (
+                    {(fig.estado_venda === 'Disponível' || fig.estado_venda === 'Disponivel') && utilizador?.nome !== fig.vendedor && (
                       <button className="btn-outline btn-sm" onClick={() => handleComprar(fig)} disabled={!utilizador}>Comprar</button>
                     )}
                     
-                    {fig.estado_venda === 'Disponível' && utilizador?.nome === fig.vendedor && (
+                    {(fig.estado_venda === 'Disponível' || fig.estado_venda === 'Disponivel') && utilizador?.nome === fig.vendedor && (
                       <span className="texto-teu-item">O teu item</span>
                     )}
                     
-                    {/* Alteração Principal: Mostra quem comprou */}
-                    {fig.estado_venda === 'Concluída' && (
+                    {(fig.estado_venda === 'Concluída' || fig.estado_venda === 'Concluida') && (
                       <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
                         <span className="texto-teu-item" style={{ color: '#b38b59', fontWeight: 'bold' }}>Vendido</span>
                         {fig.comprador && (
@@ -408,7 +443,6 @@ export default function VendaFigurinos({ irParaLanding, irParaEmprestimos }) {
                         )}
                       </div>
                     )}
-
                   </div>
                 </div>
               </div>
@@ -419,7 +453,6 @@ export default function VendaFigurinos({ irParaLanding, irParaEmprestimos }) {
       </div>
 
       <footer className="main-footer">
-        {/* ... (Footer mantém-se igual) ... */}
         <div className="footer-container">
           <div className="footer-column">
             <h3>Contacto</h3>
@@ -466,7 +499,6 @@ export default function VendaFigurinos({ irParaLanding, irParaEmprestimos }) {
               <div className="form-row">
                 <div className="form-group">
                   <label>Preço (€)</label>
-                  {/* LIMITA O PREÇO MINIMO AQUI */}
                   <input type="number" placeholder="Ex: 15.45" step="0.01" min="0.01" value={novaVenda.preco} onChange={(e) => setNovaVenda({...novaVenda, preco: e.target.value})} required />
                 </div>
                 <div className="form-group">
@@ -485,11 +517,10 @@ export default function VendaFigurinos({ irParaLanding, irParaEmprestimos }) {
               </div>
               <div className="form-group">
                 <label>Descrição e Detalhes</label>
-                {/* LIMITA A DESCRIÇÃO A 120 CARACTERES AQUI */}
                 <textarea rows="3" maxLength="120" placeholder="Descreve o material, detalhes ou marcas de uso... (Máx: 120 caracteres)" value={novaVenda.descricao} onChange={(e) => setNovaVenda({...novaVenda, descricao: e.target.value})} required></textarea>
               </div>
               <div className="form-group">
-                <label>Métodos de Pagamento Opcional</label>
+                <label>Métodos de Pagamento Aceites</label>
                 <div className="checkbox-group">
                   {['MBWay', 'Transferência', 'Numerário'].map(metodo => (
                     <label className="checkbox-label" key={metodo}>
@@ -525,7 +556,7 @@ export default function VendaFigurinos({ irParaLanding, irParaEmprestimos }) {
         </div>
       )}
 
-      {/* --- MODAL 2: EDIÇÃO (AGORA COM TODOS OS CAMPOS) --- */}
+      {/* --- MODAL 2: EDIÇÃO --- */}
       {isEditModalOpen && figurinoEmEdicao && (
         <div className="modal-overlay">
           <div className="modal-content form-venda">
@@ -538,7 +569,6 @@ export default function VendaFigurinos({ irParaLanding, irParaEmprestimos }) {
               <div className="form-row">
                 <div className="form-group">
                   <label>Preço (€)</label>
-                  {/* LIMITA O PREÇO MINIMO AQUI */}
                   <input type="number" step="0.01" min="0.01" value={figurinoEmEdicao.preco} onChange={(e) => setFigurinoEmEdicao({...figurinoEmEdicao, preco: e.target.value})} required />
                 </div>
                 <div className="form-group">
@@ -557,8 +587,29 @@ export default function VendaFigurinos({ irParaLanding, irParaEmprestimos }) {
               </div>
               <div className="form-group">
                 <label>Descrição e Detalhes</label>
-                {/* LIMITA A DESCRIÇÃO A 120 CARACTERES AQUI */}
                 <textarea rows="3" maxLength="120" value={figurinoEmEdicao.descricao} onChange={(e) => setFigurinoEmEdicao({...figurinoEmEdicao, descricao: e.target.value})} required></textarea>
+              </div>
+              <div className="form-group">
+                <label>Métodos de Pagamento Aceites</label>
+                <div className="checkbox-group">
+                  {['MBWay', 'Transferência', 'Numerário'].map(metodo => (
+                    <label className="checkbox-label" key={metodo}>
+                      <input 
+                        type="checkbox" 
+                        checked={figurinoEmEdicao.metodos_pagamento?.includes(metodo)} 
+                        onChange={() => {
+                          setFigurinoEmEdicao(prev => ({
+                            ...prev, 
+                            metodos_pagamento: prev.metodos_pagamento.includes(metodo) 
+                              ? prev.metodos_pagamento.filter(m => m !== metodo) 
+                              : [...(prev.metodos_pagamento || []), metodo]
+                          }));
+                        }} 
+                      />
+                      {metodo}
+                    </label>
+                  ))}
+                </div>
               </div>
               <div className="modal-actions">
                 <button type="button" className="btn-text" onClick={() => setIsEditModalOpen(false)}>Cancelar</button>
@@ -582,10 +633,10 @@ export default function VendaFigurinos({ irParaLanding, irParaEmprestimos }) {
             <form onSubmit={confirmarCompra}>
               <div className="form-group">
                 <label>Método de Pagamento</label>
-                <select value={metodoPagamentoCompra} onChange={(e) => setMetodoPagamentoCompra(e.target.value)}>
-                  <option value="MBWay">MBWay</option>
-                  <option value="Transferência">Transferência</option>
-                  <option value="Numerário">Numerário</option>
+                <select value={metodoPagamentoCompra} onChange={(e) => setMetodoPagamentoCompra(e.target.value)} required>
+                  {figurinoSelecionado.metodos_aceites?.split(',').map(m => (
+                    <option key={m} value={m}>{m}</option>
+                  ))}
                 </select>
               </div>
               <div className="modal-actions">

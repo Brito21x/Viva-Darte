@@ -9,36 +9,21 @@ async function getCatalogoPecas() {
     try {
         const pool = await poolPromise;
         const query = `
-            SELECT 
-                p.id_peca,
-                p.nome AS nome_peca,
-                p.descricao,
-                p.tamanho,
-                p.estado AS condicao_peca,
-                p.origem,
-                p.localizacao,
-                p.disponivel_para_emprestimo,
-                p.disponivel_para_venda,
-                p.data_registo,
-                cp.nome AS categoria,
-                u.nome AS registado_por,
-                f.foto AS foto_principal
+            SELECT p.id_peca, p.nome AS nome_peca, p.descricao, p.tamanho, p.estado AS condicao_peca,
+                   p.origem, p.localizacao, p.disponivel_para_emprestimo, p.disponivel_para_venda,
+                   p.data_registo, cp.nome AS categoria, u.nome AS registado_por, f.foto AS foto_principal
             FROM PECA p
             JOIN CATEGORIA_PECA cp ON p.CATEGORIA_PECAid_categoria_peca = cp.id_categoria_peca
             JOIN UTILIZADOR u ON p.UTILIZADORid_utilizador = u.id_utilizador
             LEFT JOIN (
                 SELECT PECAid_peca, MIN(CAST(foto AS NVARCHAR(MAX))) AS foto 
-                FROM FOTO_PECA 
-                GROUP BY PECAid_peca
+                FROM FOTO_PECA GROUP BY PECAid_peca
             ) f ON p.id_peca = f.PECAid_peca
             ORDER BY p.nome ASC;
         `;
         const result = await pool.request().query(query);
         return result.recordset;
-    } catch (error) {
-        console.error('Erro no Modelo (getCatalogoPecas):', error);
-        throw error;
-    }
+    } catch (error) { throw error; }
 }
  
 async function getPecaDetalhes(idPeca) {
@@ -47,36 +32,22 @@ async function getPecaDetalhes(idPeca) {
         const resultPeca = await pool.request()
             .input('IdPeca', sql.Int, idPeca)
             .query(`
-                SELECT 
-                    p.id_peca, p.nome AS nome_peca, p.descricao, p.tamanho,
-                    p.estado AS condicao_peca, p.origem, p.localizacao,
-                    p.disponivel_para_emprestimo, p.disponivel_para_venda,
-                    p.data_registo, cp.nome AS categoria, u.nome AS registado_por
+                SELECT p.id_peca, p.nome AS nome_peca, p.descricao, p.tamanho, p.estado AS condicao_peca,
+                       p.origem, p.localizacao, p.disponivel_para_emprestimo, p.disponivel_para_venda,
+                       p.data_registo, cp.nome AS categoria, u.nome AS registado_por
                 FROM PECA p
                 JOIN CATEGORIA_PECA cp ON p.CATEGORIA_PECAid_categoria_peca = cp.id_categoria_peca
                 JOIN UTILIZADOR u ON p.UTILIZADORid_utilizador = u.id_utilizador
                 WHERE p.id_peca = @IdPeca;
             `);
- 
         if (resultPeca.recordset.length === 0) return null;
  
         const resultFotos = await pool.request()
             .input('IdPeca', sql.Int, idPeca)
-            .query(`
-                SELECT id_foto_peca, foto 
-                FROM FOTO_PECA
-                WHERE PECAid_peca = @IdPeca
-                ORDER BY id_foto_peca ASC;
-            `);
+            .query(`SELECT id_foto_peca, foto FROM FOTO_PECA WHERE PECAid_peca = @IdPeca ORDER BY id_foto_peca ASC;`);
  
-        return {
-            ...resultPeca.recordset[0],
-            fotos: resultFotos.recordset
-        };
-    } catch (error) {
-        console.error('Erro no Modelo (getPecaDetalhes):', error);
-        throw error;
-    }
+        return { ...resultPeca.recordset[0], fotos: resultFotos.recordset };
+    } catch (error) { throw error; }
 }
  
 async function registarNovaPeca(dadosPeca) {
@@ -94,24 +65,12 @@ async function registarNovaPeca(dadosPeca) {
             .input('IdUtilizador', sql.Int, dadosPeca.idUtilizador)
             .input('IdCategoria', sql.Int, dadosPeca.idCategoria)
             .query(`
-                INSERT INTO PECA (
-                    nome, descricao, tamanho, estado, origem, localizacao, 
-                    disponivel_para_emprestimo, disponivel_para_venda, data_registo, 
-                    UTILIZADORid_utilizador, CATEGORIA_PECAid_categoria_peca
-                )
+                INSERT INTO PECA (nome, descricao, tamanho, estado, origem, localizacao, disponivel_para_emprestimo, disponivel_para_venda, data_registo, UTILIZADORid_utilizador, CATEGORIA_PECAid_categoria_peca)
                 OUTPUT INSERTED.id_peca
-                VALUES (
-                    @Nome, @Descricao, @Tamanho, @Estado, @Origem, @Localizacao, 
-                    @DispEmprestimo, @DispVenda, GETDATE(), 
-                    @IdUtilizador, @IdCategoria
-                );
+                VALUES (@Nome, @Descricao, @Tamanho, @Estado, @Origem, @Localizacao, @DispEmprestimo, @DispVenda, GETDATE(), @IdUtilizador, @IdCategoria);
             `);
- 
         return result.recordset[0].id_peca;
-    } catch (error) {
-        console.error('Erro no Modelo (registarNovaPeca):', error);
-        throw error;
-    }
+    } catch (error) { throw error; }
 }
  
 async function atualizarEstadoPeca(idPeca, { estado, disponivelEmprestimo, disponivelVenda, localizacao }) {
@@ -123,22 +82,14 @@ async function atualizarEstadoPeca(idPeca, { estado, disponivelEmprestimo, dispo
             .input('DispEmprestimo', sql.Bit, disponivelEmprestimo ? 1 : 0)
             .input('DispVenda', sql.Bit, disponivelVenda ? 1 : 0)
             .input('Localizacao', sql.VarChar(255), localizacao || null)
-            .query(`
-                UPDATE PECA
-                SET estado = @Estado, disponivel_para_emprestimo = @DispEmprestimo,
-                    disponivel_para_venda = @DispVenda, localizacao = @Localizacao
-                WHERE id_peca = @IdPeca;
-            `);
+            .query(`UPDATE PECA SET estado = @Estado, disponivel_para_emprestimo = @DispEmprestimo, disponivel_para_venda = @DispVenda, localizacao = @Localizacao WHERE id_peca = @IdPeca;`);
         return result.rowsAffected[0] > 0;
-    } catch (error) {
-        throw error;
-    }
+    } catch (error) { throw error; }
 }
 
 async function eliminarPecaCompleta(idPeca) {
     const pool = await poolPromise; 
     const transaction = pool.transaction();
-    
     try {
         await transaction.begin();
         await transaction.request().input('IdPeca', sql.Int, idPeca).query('DELETE FROM FOTO_PECA WHERE PECAid_peca = @IdPeca');
@@ -166,17 +117,18 @@ async function atualizarDadosCompletosPeca(idPeca, dados) {
 // ============================================================================
 // ATUALIZAR DADOS DA VENDA (Preço, Nome e Condição)
 // ============================================================================
-async function atualizarDadosVenda(idPeca, preco, nome, condicao) {
+async function atualizarDadosVenda(idPeca, preco, nome, condicao, metodosAceites) {
     const pool = await poolPromise;
     await pool.request()
         .input('IdPeca', sql.Int, idPeca)
         .input('Preco', sql.Decimal(10, 2), preco)
         .input('NomePeca', sql.VarChar(255), nome)
         .input('Condicao', sql.VarChar(50), condicao)
+        .input('Metodos', sql.VarChar(255), metodosAceites)
         .query(`
             UPDATE VENDA_PECA 
-            SET preco = @Preco, nome_peca = @NomePeca, condicao = @Condicao 
-            WHERE PECAid_peca = @IdPeca AND estado = 'Disponível'
+            SET preco = @Preco, nome_peca = @NomePeca, condicao = @Condicao, metodos_aceites = @Metodos
+            WHERE PECAid_peca = @IdPeca AND estado IN ('Disponível', 'Disponivel')
         `);
 }
 
@@ -185,28 +137,19 @@ async function atualizarFotosPeca(idPeca, fotosBase64) {
     const transaction = pool.transaction();
     await transaction.begin();
     try {
-        // 1. Descobrir se há uma venda ativa para esta peça para reaproveitar o ID
         const vendaAtiva = await transaction.request()
             .input('IdPeca', sql.Int, idPeca)
-            .query(`SELECT id_venda FROM VENDA_PECA WHERE PECAid_peca = @IdPeca AND estado = 'Disponível'`);
+            .query(`SELECT id_venda FROM VENDA_PECA WHERE PECAid_peca = @IdPeca AND estado IN ('Disponível', 'Disponivel')`);
         
         const idVenda = vendaAtiva.recordset.length > 0 ? vendaAtiva.recordset[0].id_venda : null;
 
-        // 2. Apagar as fotos antigas
-        await transaction.request()
-            .input('IdPeca', sql.Int, idPeca)
-            .query('DELETE FROM FOTO_PECA WHERE PECAid_peca = @IdPeca');
-        
-        // 3. Inserir as novas fotos já com o VENDAid_venda (se existir)
+        await transaction.request().input('IdPeca', sql.Int, idPeca).query('DELETE FROM FOTO_PECA WHERE PECAid_peca = @IdPeca');
         for (const foto of fotosBase64) {
             await transaction.request()
                 .input('IdPeca', sql.Int, idPeca)
-                .input('IdVenda', sql.Int, idVenda) // Passa o ID ou NULL se não estiver à venda
+                .input('IdVenda', sql.Int, idVenda) 
                 .input('Foto', sql.VarChar(sql.MAX), foto)
-                .query(`
-                    INSERT INTO FOTO_PECA (PECAid_peca, VENDAid_venda, foto) 
-                    VALUES (@IdPeca, @IdVenda, @Foto)
-                `);
+                .query(`INSERT INTO FOTO_PECA (PECAid_peca, VENDAid_venda, foto) VALUES (@IdPeca, @IdVenda, @Foto)`);
         }
         await transaction.commit();
         return true;
@@ -342,13 +285,13 @@ async function getPecasAVenda() {
         const pool = await poolPromise;
         const result = await pool.request().query(`
             SELECT 
-                vp.id_venda, vp.preco, vp.estado AS estado_venda, vp.data_venda,
+                vp.id_venda, vp.preco, vp.estado AS estado_venda, vp.data_venda, vp.metodos_aceites,
                 p.id_peca, 
                 COALESCE(vp.nome_peca, p.nome) AS nome_peca, 
                 p.descricao, p.tamanho, 
                 COALESCE(vp.condicao, p.estado) AS condicao_peca,
                 u.nome AS vendedor,
-                c.nome AS comprador, -- Traz o nome de quem comprou
+                c.nome AS comprador,
                 (SELECT STRING_AGG(CAST(foto AS NVARCHAR(MAX)), '|||') 
                  FROM FOTO_PECA 
                  WHERE PECAid_peca = p.id_peca) AS fotos_agrupadas
@@ -356,7 +299,7 @@ async function getPecasAVenda() {
             JOIN PECA p ON vp.PECAid_peca = p.id_peca
             JOIN UTILIZADOR u ON vp.UTILIZADORid_utilizador = u.id_utilizador
             LEFT JOIN UTILIZADOR c ON vp.UTILIZADORid_utilizador2 = c.id_utilizador
-            WHERE vp.estado IN ('Disponível', 'Concluída')
+            WHERE vp.estado IN ('Disponível', 'Disponivel', 'Concluída', 'Concluida')
             ORDER BY vp.data_colocacao DESC;
         `);
 
@@ -364,17 +307,14 @@ async function getPecasAVenda() {
             ...row,
             fotos: row.fotos_agrupadas ? row.fotos_agrupadas.split('|||') : []
         }));
-    } catch (error) {
-        throw error;
-    }
+    } catch (error) { throw error; }
 }
  
-async function colocarPecaAVenda(idPeca, preco, idVendedor, nomePeca = null, condicaoPeca = null) {
+async function colocarPecaAVenda(idPeca, preco, idVendedor, nomePeca = null, condicaoPeca = null, metodosAceites = '') {
     const pool = await poolPromise;
     const transaction = pool.transaction();
     await transaction.begin();
     try {
-        // Verificar se a peça existe e está disponível para venda
         const pecaResult = await transaction.request()
             .input('IdPeca', sql.Int, idPeca)
             .query(`SELECT disponivel_para_venda, nome, estado FROM PECA WHERE id_peca = @IdPeca;`);
@@ -382,39 +322,32 @@ async function colocarPecaAVenda(idPeca, preco, idVendedor, nomePeca = null, con
         if (pecaResult.recordset.length === 0) throw new Error('Peça não encontrada.');
         if (!pecaResult.recordset[0].disponivel_para_venda) throw new Error('Esta peça não está disponível para venda.');
  
-        // Se o frontend não enviar nome e condição, vamos buscar os dados reais da tabela PECA
         const nomeFinal = nomePeca || pecaResult.recordset[0].nome;
         const condicaoFinal = condicaoPeca || pecaResult.recordset[0].estado;
 
-        // Verificar se já existe um anúncio de venda ativo para esta peça
         const vendaExiste = await transaction.request()
             .input('IdPeca', sql.Int, idPeca)
-            .query(`SELECT 1 FROM VENDA_PECA WHERE PECAid_peca = @IdPeca AND estado = 'Disponível';`);
+            .query(`SELECT 1 FROM VENDA_PECA WHERE PECAid_peca = @IdPeca AND estado IN ('Disponível', 'Disponivel');`);
             
         if (vendaExiste.recordset.length > 0) throw new Error('Esta peça já está anunciada para venda.');
  
-        // 1. Criar a Venda com os campos novos (nome_peca e condicao)
         const idVenda = await transaction.request()
             .input('Preco', sql.Decimal(10, 2), preco)
             .input('IdPeca', sql.Int, idPeca)
             .input('IdVendedor', sql.Int, idVendedor)
             .input('NomePeca', sql.VarChar(255), nomeFinal)
             .input('Condicao', sql.VarChar(50), condicaoFinal)
+            .input('Metodos', sql.VarChar(255), metodosAceites)
             .query(`
-                INSERT INTO VENDA_PECA (preco, data_colocacao, estado, PECAid_peca, UTILIZADORid_utilizador, nome_peca, condicao)
+                INSERT INTO VENDA_PECA (preco, data_colocacao, estado, PECAid_peca, UTILIZADORid_utilizador, nome_peca, condicao, metodos_aceites)
                 OUTPUT INSERTED.id_venda
-                VALUES (@Preco, GETDATE(), 'Disponível', @IdPeca, @IdVendedor, @NomePeca, @Condicao);
+                VALUES (@Preco, GETDATE(), 'Disponível', @IdPeca, @IdVendedor, @NomePeca, @Condicao, @Metodos);
             `).then(r => r.recordset[0].id_venda);
  
-        // 2. Atualizar a tabela FOTO_PECA para preencher o VENDAid_venda
         await transaction.request()
             .input('IdVenda', sql.Int, idVenda)
             .input('IdPeca', sql.Int, idPeca)
-            .query(`
-                UPDATE FOTO_PECA 
-                SET VENDAid_venda = @IdVenda 
-                WHERE PECAid_peca = @IdPeca AND VENDAid_venda IS NULL;
-            `);
+            .query(`UPDATE FOTO_PECA SET VENDAid_venda = @IdVenda WHERE PECAid_peca = @IdPeca AND VENDAid_venda IS NULL;`);
 
         await transaction.commit();
         return idVenda;
@@ -433,17 +366,14 @@ async function registarConclusaoVenda(idVenda, idComprador, metodoPagamento) {
             .input('IdVenda', sql.Int, idVenda)
             .query(`
                 SELECT v.PECAid_peca, v.estado, p.nome, p.estado AS condicao 
-                FROM VENDA_PECA v
-                JOIN PECA p ON v.PECAid_peca = p.id_peca
-                WHERE v.id_venda = @IdVenda;
+                FROM VENDA_PECA v JOIN PECA p ON v.PECAid_peca = p.id_peca WHERE v.id_venda = @IdVenda;
             `);
  
         if (vendaResult.recordset.length === 0) throw new Error('Venda não encontrada.');
-        if (vendaResult.recordset[0].estado !== 'Disponível') throw new Error('Esta venda já não está disponível.');
+        if (!['Disponível', 'Disponivel'].includes(vendaResult.recordset[0].estado)) throw new Error('Esta venda já não está disponível.');
  
-        const { PECAid_peca: idPeca, nome, condicao } = vendaResult.recordset[0];
+        const { nome, condicao } = vendaResult.recordset[0];
  
-        // Atualiza a venda gravando o Comprador, o Método, o Nome e a Condição
         await transaction.request()
             .input('IdComprador', sql.Int, idComprador)
             .input('MetodoPagamento', sql.VarChar(50), metodoPagamento)
@@ -452,17 +382,10 @@ async function registarConclusaoVenda(idVenda, idComprador, metodoPagamento) {
             .input('Condicao', sql.VarChar(50), condicao)
             .query(`
                 UPDATE VENDA_PECA 
-                SET data_venda = GETDATE(), 
-                    estado = 'Concluída', 
-                    UTILIZADORid_utilizador2 = @IdComprador, 
-                    metodo_pagamento = @MetodoPagamento,
-                    nome_peca = @NomePeca,
-                    condicao = @Condicao
+                SET data_venda = GETDATE(), estado = 'Concluída', UTILIZADORid_utilizador2 = @IdComprador, 
+                    metodo_pagamento = @MetodoPagamento, nome_peca = @NomePeca, condicao = @Condicao
                 WHERE id_venda = @IdVenda;
             `);
- 
-        // NOTA: O "UPDATE PECA SET disponivel_para_venda = 0" foi removido
-        // para que o disponivel_para_venda fique sempre a 1 como pediste.
  
         await transaction.commit();
         return true;
@@ -482,26 +405,24 @@ async function registarFotosPeca(idPeca, fotosBase64) {
                 .query(`INSERT INTO FOTO_PECA (PECAid_peca, foto) VALUES (@IdPeca, @Foto)`);
         }
         return true;
-    } catch (error) {
-        throw error;
-    }
+    } catch (error) { throw error; }
 }
  
 module.exports = {
-    getCatalogoPecas,
-    getPecaDetalhes,
-    registarNovaPeca,
+    getCatalogoPecas, 
+    getPecaDetalhes, 
+    registarNovaPeca, 
     atualizarEstadoPeca,
-    requisitarEmprestimo,
-    registarDevolucaoEmprestimo,
+    requisitarEmprestimo, 
+    registarDevolucaoEmprestimo, 
     registarPenalizacao,
-    atualizarPagamentoEmprestimo,
-    getPecasAVenda,
+    atualizarPagamentoEmprestimo, 
+    getPecasAVenda, 
     colocarPecaAVenda,
-    eliminarPecaCompleta,
-    atualizarDadosCompletosPeca,
+    eliminarPecaCompleta, 
+    atualizarDadosCompletosPeca, 
     atualizarDadosVenda,
-    atualizarFotosPeca,
-    registarFotosPeca,
+    atualizarFotosPeca, 
+    registarFotosPeca, 
     registarConclusaoVenda
 };

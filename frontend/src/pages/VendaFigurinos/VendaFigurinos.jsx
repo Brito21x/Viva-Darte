@@ -33,8 +33,41 @@ export default function VendaFigurinos({ irParaLanding, irParaEmprestimos }) {
   const [metodoPagamentoCompra, setMetodoPagamentoCompra] = useState('MBWay');
   const [indicesImagens, setIndicesImagens] = useState({});
 
-  // URL BASE DO BACKEND
-  const API_URL = 'http://localhost:3000/api/vendas';
+  const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+
+  const authHeaders = () => {
+    const headers = { 'Content-Type': 'application/json' };
+    try {
+      const raw = localStorage.getItem('viva_user');
+      if (raw && raw !== 'undefined' && raw !== 'null') {
+        const u = JSON.parse(raw);
+        if (u?.token) headers.Authorization = `Bearer ${u.token}`;
+      }
+    } catch {
+      /* ignorar */
+    }
+    return headers;
+  };
+
+  const mapearVendaInventario = (v) => {
+    const estadoUi = v.estado_venda === 'Concluída' ? 'Vendido' : v.estado_venda;
+    const fotos = v.foto_principal ? [v.foto_principal] : [];
+    return {
+      id_venda: v.id_venda,
+      id_peca: v.id_peca,
+      PECA_nome: v.nome_peca,
+      preco: v.preco,
+      estado: estadoUi,
+      tamanho: v.tamanho,
+      descricao: v.descricao,
+      condicao: v.condicao_peca,
+      UTILIZADOR_nome: v.vendedor,
+      id_utilizador: v.id_utilizador,
+      COMPRADOR_nome: v.comprador_nome,
+      metodos_pagamento: [],
+      fotos
+    };
+  };
 
   // --- FUNÇÕES DE ALERTA ---
   const mostrarAlerta = (msg) => {
@@ -57,13 +90,18 @@ export default function VendaFigurinos({ irParaLanding, irParaEmprestimos }) {
 
   const carregarFigurinos = async () => {
     try {
-      const response = await fetch(API_URL);
+      const response = await fetch(`${API_BASE}/api/inventario/vendas`, {
+        headers: authHeaders()
+      });
       if (response.ok) {
         const data = await response.json();
-        setFigurinos(data);
+        setFigurinos(Array.isArray(data) ? data.map(mapearVendaInventario) : []);
+      } else if (response.status === 401) {
+        setFigurinos([]);
+        mostrarAlerta('Inicia sessão para veres o mercado de figurinos.');
       }
     } catch (error) {
-      console.error("Erro a carregar figurinos:", error);
+      console.error('Erro a carregar figurinos:', error);
     }
   };
 
@@ -164,25 +202,66 @@ export default function VendaFigurinos({ irParaLanding, irParaEmprestimos }) {
       return;
     }
 
-    const payload = {
-        ...novaVenda,
-        id_utilizador: userId
+    const estadoPecaMap = {
+      Novo: 'Novo',
+      'Usado - Como Novo': 'Bom',
+      'Usado - Bom estado': 'Usado',
+      'Usado - Marcas de uso': 'Danificado'
     };
+    const estadoPeca = estadoPecaMap[novaVenda.condicao] || 'Usado';
 
     try {
-        const response = await fetch(API_URL, {
+        const rPeca = await fetch(`${API_BASE}/api/inventario`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
+            headers: authHeaders(),
+            body: JSON.stringify({
+                nome: novaVenda.PECA_nome,
+                descricao: novaVenda.descricao || null,
+                tamanho: novaVenda.tamanho || null,
+                estado: estadoPeca,
+                origem: null,
+                localizacao: null,
+                disponivelEmprestimo: false,
+                disponivelVenda: true,
+                idCategoria: 1
+            })
         });
+        const bodyPeca = await rPeca.json().catch(() => ({}));
+        if (!rPeca.ok) {
+            mostrarAlerta(bodyPeca.mensagem || 'Não foi possível registar a peça (verifica sessão e categoria).');
+            return;
+        }
+        const idPeca = bodyPeca.idPeca ?? bodyPeca.id_peca;
+        if (idPeca == null) {
+            mostrarAlerta('Resposta do servidor sem id da peça.');
+            return;
+        }
 
-        if (response.ok) {
+        const rVenda = await fetch(`${API_BASE}/api/inventario/vendas`, {
+            method: 'POST',
+            headers: authHeaders(),
+            body: JSON.stringify({
+                idPeca,
+                preco: parseFloat(String(novaVenda.preco).replace(',', '.'))
+            })
+        });
+        const bodyVenda = await rVenda.json().catch(() => ({}));
+
+        if (rVenda.ok) {
             mostrarAlerta('Figurino colocado à venda com sucesso!');
-            setNovaVenda({ PECA_nome: '', preco: '', condicao: 'Novo', tamanho: '', descricao: '', metodos_pagamento: ['MBWay'], fotos: [] });
+            setNovaVenda({
+                PECA_nome: '',
+                preco: '',
+                condicao: 'Novo',
+                tamanho: '',
+                descricao: '',
+                metodos_pagamento: ['MBWay'],
+                fotos: []
+            });
             setIsModalOpen(false);
             carregarFigurinos();
         } else {
-            mostrarAlerta('Ocorreu um erro ao guardar na base de dados.');
+            mostrarAlerta(bodyVenda.mensagem || 'Erro ao criar o anúncio de venda.');
         }
     } catch (error) {
         console.error("Erro:", error);
@@ -200,12 +279,9 @@ export default function VendaFigurinos({ irParaLanding, irParaEmprestimos }) {
       message: 'Tens a certeza absoluta que queres apagar este figurino?',
       onConfirm: async () => {
         try {
-            const response = await fetch(`${API_URL}/${id_venda}`, { method: 'DELETE' });
-            if (response.ok) {
-                carregarFigurinos();
-            } else {
-                mostrarAlerta('Erro ao apagar o figurino.');
-            }
+            mostrarAlerta(
+                'Remover anúncios não está disponível nesta versão. Contacta a Coordenação se precisares de ajuda.'
+            );
         } catch (error) {
             console.error("Erro ao apagar:", error);
         }
@@ -223,24 +299,29 @@ export default function VendaFigurinos({ irParaLanding, irParaEmprestimos }) {
   const handleGuardarEdicao = async (e) => {
     e.preventDefault();
     try {
-        const response = await fetch(`${API_URL}/${figurinoEmEdicao.id_venda}`, {
+        const idPeca = figurinoEmEdicao.id_peca;
+        if (!idPeca) {
+            mostrarAlerta('Não foi possível identificar a peça para atualizar.');
+            return;
+        }
+        const response = await fetch(`${API_BASE}/api/inventario/${idPeca}`, {
             method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
+            headers: authHeaders(),
             body: JSON.stringify({
-                PECA_nome: figurinoEmEdicao.PECA_nome,
-                preco: figurinoEmEdicao.preco,
-                estado: figurinoEmEdicao.estado,
-                tamanho: figurinoEmEdicao.tamanho,
-                descricao: figurinoEmEdicao.descricao
+                estado: figurinoEmEdicao.condicao || 'Bom',
+                disponivelEmprestimo: false,
+                disponivelVenda: figurinoEmEdicao.estado !== 'Vendido',
+                localizacao: null
             })
         });
+        const body = await response.json().catch(() => ({}));
 
         if (response.ok) {
-            mostrarAlerta('Alterações guardadas com sucesso!');
+            mostrarAlerta('Dados da peça atualizados. O preço do anúncio só pode ser alterado pela Coordenação.');
             setIsEditModalOpen(false);
             carregarFigurinos();
         } else {
-          mostrarAlerta('Erro ao guardar as alterações.');
+            mostrarAlerta(body.mensagem || 'Erro ao guardar as alterações.');
         }
     } catch (error) {
         console.error("Erro ao editar:", error);
@@ -269,23 +350,25 @@ export default function VendaFigurinos({ irParaLanding, irParaEmprestimos }) {
     }
 
     try {
-        const response = await fetch(`${API_URL}/${figurinoSelecionado.id_venda}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                PECA_nome: figurinoSelecionado.PECA_nome,
-                preco: figurinoSelecionado.preco,
-                estado: 'Vendido', 
-                UTILIZADORid_utilizador2: idComprador 
-            })
-        });
+        const response = await fetch(
+            `${API_BASE}/api/inventario/vendas/${figurinoSelecionado.id_venda}/concluir`,
+            {
+                method: 'PUT',
+                headers: authHeaders(),
+                body: JSON.stringify({
+                    idComprador,
+                    metodoPagamento: metodoPagamentoCompra || 'MBWay'
+                })
+            }
+        );
+        const body = await response.json().catch(() => ({}));
 
         if (response.ok) {
-            mostrarAlerta(`Compra de ${figurinoSelecionado.PECA_nome} confirmada!`);
+            mostrarAlerta(`Compra de ${figurinoSelecionado.PECA_nome} registada.`);
             setIsCompraModalOpen(false);
-            carregarFigurinos(); 
+            carregarFigurinos();
         } else {
-            mostrarAlerta('Ocorreu um erro ao confirmar a compra.');
+            mostrarAlerta(body.mensagem || 'Ocorreu um erro ao confirmar a compra.');
         }
     } catch (error) {
         console.error("Erro a confirmar compra:", error);
@@ -368,7 +451,7 @@ export default function VendaFigurinos({ irParaLanding, irParaEmprestimos }) {
                     </>
                   )}
 
-                  {utilizador?.id_utilizador === fig.id_utilizador && (
+                  {(utilizador?.id_utilizador ?? utilizador?.id) === fig.id_utilizador && (
                     <div className="acoes-dono">
                       {fig.estado !== 'Vendido' && (
                         <button className="btn-icon edit" title="Editar" onClick={() => abrirEdicao(fig)}>✎</button>
@@ -395,13 +478,15 @@ export default function VendaFigurinos({ irParaLanding, irParaEmprestimos }) {
                   <div className="figurino-footer">
                     <span className="preco">{Number(fig.preco).toFixed(2)} €</span>
                     
-                    {fig.estado === 'Disponível' && utilizador?.id_utilizador !== fig.id_utilizador && (
+                    {fig.estado === 'Disponível' &&
+                      (utilizador?.id_utilizador ?? utilizador?.id) !== fig.id_utilizador && (
                       <button className="btn-outline btn-sm" onClick={() => handleComprar(fig)} disabled={!utilizador}>
                         Comprar
                       </button>
                     )}
                     
-                    {fig.estado === 'Disponível' && utilizador?.id_utilizador === fig.id_utilizador && (
+                    {fig.estado === 'Disponível' &&
+                      (utilizador?.id_utilizador ?? utilizador?.id) === fig.id_utilizador && (
                       <span className="texto-teu-item">O teu item</span>
                     )}
 

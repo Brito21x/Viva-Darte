@@ -422,18 +422,21 @@ async function getPecasAVenda() {
                 p.tamanho,
                 p.estado AS condicao_peca,
                 cp.nome AS categoria,
+                u.id_utilizador AS id_utilizador,
                 u.nome AS vendedor,
+                u2.nome AS comprador_nome,
                 f.foto AS foto_principal
             FROM VENDA_PECA vp
             JOIN PECA p ON vp.PECAid_peca = p.id_peca
             JOIN CATEGORIA_PECA cp ON p.CATEGORIA_PECAid_categoria_peca = cp.id_categoria_peca
             JOIN UTILIZADOR u ON vp.UTILIZADORid_utilizador = u.id_utilizador
+            LEFT JOIN UTILIZADOR u2 ON vp.UTILIZADORid_utilizador2 = u2.id_utilizador
             LEFT JOIN (
                 SELECT PECAid_peca, MIN(foto) AS foto 
                 FROM FOTO_PECA 
                 GROUP BY PECAid_peca
             ) f ON p.id_peca = f.PECAid_peca
-            WHERE vp.estado = 'Disponível'
+            WHERE vp.estado IN ('Disponível', 'Concluída')
             ORDER BY vp.data_colocacao DESC;
         `);
         return result.recordset;

@@ -40,6 +40,10 @@ router.put('/emprestimos/:id/pagamento', autorizar('Admin'), inventarioControlle
 router.post('/vendas', inventarioController.colocarPecaAVenda);
 
 // PUT  /api/inventario/vendas/:id/concluir — registar conclusão de venda
-router.put('/vendas/:id/concluir', autorizar('Admin'), inventarioController.registarConclusaoVenda);
+router.put(
+    '/vendas/:id/concluir',
+    autorizar('Admin', 'EE', 'Professor'),
+    inventarioController.registarConclusaoVenda
+);
 
 module.exports = router;

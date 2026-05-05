@@ -4,9 +4,6 @@ const router = express.Router();
 const authController = require('../controllers/authController');
 const { autenticar } = require('../middlewares/auth');
 
-// POST /api/auth/register — registo público (EE / Professor)
-router.post('/register', authController.register);
-
 // POST /api/auth/login
 router.post('/login', authController.login);
 
@@ -18,5 +15,8 @@ router.post('/recuperar-password', authController.solicitarRecuperacaoPassword);
 
 // POST /api/auth/redefinir-password
 router.post('/redefinir-password', authController.redefinirPassword);
+
+// POST /api/auth/register
+router.post('/register', authController.register);
 
 module.exports = router;

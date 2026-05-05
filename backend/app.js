@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const errorHandler = require('./src/middlewares/errorHandler');
 require('dotenv').config();
 
 const { poolConnect } = require('./src/config/db');

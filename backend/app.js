@@ -10,7 +10,6 @@ const escolaRoutes = require('./src/routes/escolaRoutes');
 const coachingRoutes = require('./src/routes/coachingRoutes');
 const inventarioRoutes = require('./src/routes/inventarioRoutes');
 const faturacaoRoutes = require('./src/routes/faturacaoRoutes');
-const errorHandler = require('./src/middlewares/errorHandler');
 
 const app = express();
 

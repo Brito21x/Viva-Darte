@@ -7,6 +7,11 @@ export default function VendaFigurinos({ irParaLanding, irParaEmprestimos }) {
   const [figurinos, setFigurinos] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   
+  // --- NOVOS ESTADOS PARA OS FILTROS ---
+  const [pesquisa, setPesquisa] = useState('');
+  const [filtroEstado, setFiltroEstado] = useState('Todos');
+  const [ordenacao, setOrdenacao] = useState('recentes'); // recentes, preco_asc, preco_desc
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isCompraModalOpen, setIsCompraModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -34,10 +39,8 @@ export default function VendaFigurinos({ irParaLanding, irParaEmprestimos }) {
     if (userGuardado) setUtilizador(JSON.parse(userGuardado));
     document.title = "Venda de Figurinos | Viva D'arte";
     
-    // 1. Carrega a primeira vez mostrando o ecrã de "A carregar figurinos..."
     carregarFigurinos(true);
 
-    // 2. Cria um ciclo que atualiza silenciosamente a cada 5 segundos (5000 ms)
     const interval = setInterval(() => {
       carregarFigurinos(false);
     }, 5000);
@@ -57,9 +60,10 @@ export default function VendaFigurinos({ irParaLanding, irParaEmprestimos }) {
         },
         cache: 'no-store' 
       });
+      
       if (response.ok) {
         const data = await response.json();
-        setFigurinos(data); // O React atualiza a grelha automaticamente se houver mudanças
+        setFigurinos(data);
       }
     } catch (error) {
       console.error("Erro a carregar figurinos:", error);
@@ -129,7 +133,7 @@ export default function VendaFigurinos({ irParaLanding, irParaEmprestimos }) {
         mostrarAlerta("Erro: Sessão inválida.");
         setIsSubmitting(false); return;
     }
-    
+
     if (novaVenda.metodos_pagamento.length === 0) {
         mostrarAlerta("Tens de selecionar pelo menos um método de pagamento.");
         setIsSubmitting(false); return;
@@ -264,7 +268,6 @@ export default function VendaFigurinos({ irParaLanding, irParaEmprestimos }) {
 
   const handleComprar = (figurino) => {
     setFigurinoSelecionado(figurino);
-    // Definimos por defeito o primeiro método de pagamento que o vendedor aceita
     const acceptedMethods = figurino.metodos_aceites ? figurino.metodos_aceites.split(',') : ['MBWay'];
     setMetodoPagamentoCompra(acceptedMethods[0]);
     setIsCompraModalOpen(true);
@@ -303,6 +306,17 @@ export default function VendaFigurinos({ irParaLanding, irParaEmprestimos }) {
         setIsSubmitting(false);
     }
   };
+
+  // --- LÓGICA DOS FILTROS E ORDENAÇÃO ---
+  const figurinosFiltrados = figurinos
+    .filter(fig => fig.nome_peca?.toLowerCase().includes(pesquisa.toLowerCase()))
+    .filter(fig => filtroEstado === 'Todos' ? true : fig.condicao_peca === filtroEstado)
+    .sort((a, b) => {
+      if (ordenacao === 'preco_asc') return parseFloat(a.preco) - parseFloat(b.preco);
+      if (ordenacao === 'preco_desc') return parseFloat(b.preco) - parseFloat(a.preco);
+      // 'recentes' - assume IDs maiores como sendo mais recentes
+      return b.id_venda - a.id_venda;
+    });
 
   return (
     <div className="page-wrapper">
@@ -352,6 +366,39 @@ export default function VendaFigurinos({ irParaLanding, irParaEmprestimos }) {
           )}
         </div>
 
+        {/* --- BARRA DE FILTROS --- */}
+        {!isLoading && figurinos.length > 0 && (
+          <div style={{ display: 'flex', gap: '15px', marginBottom: '25px', flexWrap: 'wrap' }}>
+            <input 
+              type="text" 
+              placeholder="Pesquisar por nome..." 
+              value={pesquisa} 
+              onChange={(e) => setPesquisa(e.target.value)} 
+              style={{ flex: 1, minWidth: '220px', padding: '12px 16px', borderRadius: '8px', border: '1px solid rgba(0,0,0,0.12)', fontSize: '0.95rem' }}
+            />
+            <select 
+              value={filtroEstado} 
+              onChange={(e) => setFiltroEstado(e.target.value)}
+              style={{ padding: '12px 16px', borderRadius: '8px', border: '1px solid rgba(0,0,0,0.12)', fontSize: '0.95rem', cursor: 'pointer', backgroundColor: '#fff' }}
+            >
+              <option value="Todos">Todos os Estados</option>
+              <option value="Novo">Novo</option>
+              <option value="Bom">Bom</option>
+              <option value="Usado">Usado</option>
+              <option value="Danificado">Danificado</option>
+            </select>
+            <select 
+              value={ordenacao} 
+              onChange={(e) => setOrdenacao(e.target.value)}
+              style={{ padding: '12px 16px', borderRadius: '8px', border: '1px solid rgba(0,0,0,0.12)', fontSize: '0.95rem', cursor: 'pointer', backgroundColor: '#fff' }}
+            >
+              <option value="recentes">Mais Recentes</option>
+              <option value="preco_asc">Preço: Mais Barato</option>
+              <option value="preco_desc">Preço: Mais Caro</option>
+            </select>
+          </div>
+        )}
+
         {isLoading ? (
           <div className="empty-state">
             A carregar figurinos...
@@ -360,9 +407,13 @@ export default function VendaFigurinos({ irParaLanding, irParaEmprestimos }) {
           <div className="empty-state">
             Ainda não existem figurinos disponíveis para venda de momento.
           </div>
+        ) : figurinosFiltrados.length === 0 ? (
+          <div className="empty-state">
+            Nenhum figurino encontrado com esses filtros. Tenta outra pesquisa!
+          </div>
         ) : (
           <div className="figurinos-grid">
-          {figurinos.map((fig) => {
+          {figurinosFiltrados.map((fig) => {
             const idxImg = indicesImagens[fig.id_venda] || 0;
             const totalFotos = fig.fotos && fig.fotos.length > 0 ? fig.fotos.length : 0;
             const fotoExibida = totalFotos > 0 && fig.fotos[idxImg] ? fig.fotos[idxImg] : null;
@@ -417,7 +468,6 @@ export default function VendaFigurinos({ irParaLanding, irParaEmprestimos }) {
                   {fig.descricao && <p className="descricao-peca">{fig.descricao}</p>}
                   <p className="vendedor">Por: {fig.vendedor}</p>
                   
-                  {/* --- TAGS DE PAGAMENTO AQUI NO CARTÃO --- */}
                   <div className="metodos-pagamento-tags">
                     {fig.metodos_aceites && fig.metodos_aceites.split(',').map(m => (
                       <span key={m} className="tag-pagamento">{m}</span>

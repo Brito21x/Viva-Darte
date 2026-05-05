@@ -2,18 +2,20 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 
-const utilizadorModel = require('../models/utilizadorModel');
+const utilizadorModel = require('../models/authModel');
 
 // ============================================================================
 // US01 / RF01 — LOGIN
 // ============================================================================
 async function login(req, res, next) {
     try {
-        const { email, password, tipo } = req.body;
+        const { email, password, tipo, perfil } = req.body;
 
-        if (!email || !password || !tipo) {
-            return res.status(400).json({ mensagem: 'Email, password e perfil são obrigatórios.' });
+        if (!email || !password) {
+            return res.status(400).json({ mensagem: 'Email e palavra-passe são obrigatórios.' });
         }
+
+        const tipoFornecido = tipo || perfil || 'PROF';
 
         const utilizador = await utilizadorModel.getUtilizadorByEmail(email);
 
@@ -22,7 +24,7 @@ async function login(req, res, next) {
         }
 
         if (!utilizador.ativo) {
-            return res.status(403).json({ mensagem: 'Conta desativada. Contacte o administrador.' });
+            return res.status(403).json({ mensagem: 'Conta desativada. Aguarde a aprovação da administração.' });
         }
 
         const passwordCorreta = await bcrypt.compare(password, utilizador.password);
@@ -32,19 +34,23 @@ async function login(req, res, next) {
 
         const perfis = await utilizadorModel.getPerfisDoUtilizador(utilizador.id_utilizador);
 
-        // VALIDAÇÃO RIGOROSA DE PERFIL PARA EVITAR CROSS-LOGIN
         let temPerfil = false;
-        if (tipo === 'PROF') {
+        
+        if (tipoFornecido === 'ADMIN' || tipoFornecido === 'Admin') {
+            temPerfil = perfis.some(p => p.toLowerCase().includes('admin') || p.toLowerCase().includes('coord'));
+        } else if (tipoFornecido === 'PROF') {
             temPerfil = perfis.some(p => p.toLowerCase().includes('prof'));
         } else {
             temPerfil = perfis.some(p => p.toLowerCase().includes('encarregado') || p.toLowerCase().includes('educação') || p.toLowerCase() === 'ee');
         }
 
         if (!temPerfil) {
-            return res.status(403).json({ mensagem: `Acesso negado: O seu email não está registado como ${tipo === 'PROF' ? 'Professor' : 'Enc. de Educação'}.` });
+            return res.status(403).json({ mensagem: `Acesso negado: O seu email não tem permissões para este painel.` });
         }
 
-        const perfilFinal = tipo === 'PROF' ? 'Professor' : 'Encarregado de Educação';
+        let perfilFinal = 'Encarregado de Educação';
+        if (tipoFornecido === 'PROF') perfilFinal = 'Professor';
+        if (tipoFornecido === 'ADMIN' || tipoFornecido === 'Admin') perfilFinal = 'Admin';
 
         const token = jwt.sign(
             {
@@ -52,9 +58,10 @@ async function login(req, res, next) {
                 nome: utilizador.nome,
                 email: utilizador.email,
                 perfis,
-                perfil: perfilFinal
+                perfil: perfilFinal,
+                id_perfil: tipoFornecido === 'ADMIN' ? 1 : null
             },
-            process.env.JWT_SECRET,
+            process.env.JWT_SECRET || 'segredo_super_seguro_123',
             { expiresIn: process.env.JWT_EXPIRES_IN || '8h' }
         );
 
@@ -66,10 +73,12 @@ async function login(req, res, next) {
                 nome: utilizador.nome,
                 email: utilizador.email,
                 perfis,
-                perfil: perfilFinal 
+                perfil: perfilFinal,
+                id_perfil: tipoFornecido === 'ADMIN' ? 1 : null
             }
         });
     } catch (error) {
+        console.error("Erro no login:", error);
         next(error);
     }
 }
@@ -82,7 +91,7 @@ async function logout(req, res) {
 }
 
 // ============================================================================
-// US02 / RF02 — SOLICITAR RECUPERAÇÃO DE PALAVRA-PASSE (SIMULAÇÃO DE EMAIL)
+// US02 / RF02 — SOLICITAR RECUPERAÇÃO DE PALAVRA-PASSE
 // ============================================================================
 async function solicitarRecuperacaoPassword(req, res, next) {
     try {
@@ -94,21 +103,15 @@ async function solicitarRecuperacaoPassword(req, res, next) {
 
         const utilizador = await utilizadorModel.getUtilizadorByEmail(email);
 
-        // AGORA REJEITA SE O EMAIL NÃO EXISTIR NA BD!
         if (!utilizador || !utilizador.ativo) {
             return res.status(404).json({
-                mensagem: 'Este email não está registado na nossa base de dados.'
+                mensagem: 'Este email não está registado na nossa base de dados ou não está ativo.'
             });
         }
 
-        // GERA UM TOKEN DE 8 CARACTERES ALFANUMÉRICOS (MAIÚSCULOS)
         const token = crypto.randomBytes(4).toString('hex').toUpperCase();
-        
         await utilizadorModel.guardarTokenRecuperacao(utilizador.id_utilizador, token);
 
-        console.log(`[DEV] Token de recuperação para ${email}: ${token}`);
-
-        // DEVOLVE O TOKEN AO FRONTEND PARA EFEITOS DE SIMULAÇÃO (ALERTA)
         return res.status(200).json({
             mensagem: 'Token gerado com sucesso.',
             token: token
@@ -165,28 +168,51 @@ async function register(req, res, next) {
         }
 
         const passwordHash = await bcrypt.hash(password, 10);
-        
         const nomePerfil = tipo === 'PROF' ? 'Professor' : 'Encarregado';
 
         await utilizadorModel.criarUtilizador({
-            nome,
-            email,
-            passwordHash,
-            telefone,
-            nomePerfil
+            nome, email, passwordHash, telefone, nomePerfil
         });
 
-        return res.status(201).json({ mensagem: 'Conta criada com sucesso!' });
+        // AQUI ESTÁ A MUDANÇA DA MENSAGEM:
+        return res.status(201).json({ mensagem: 'Registo concluído! A sua conta foi enviada para aprovação da Coordenação.' });
     } catch (error) {
         if (error.message === 'Já existe um utilizador com este email.') {
             return res.status(400).json({ error: error.message });
         }
+        next(error);
+    }
+}
+
+// ============================================================================
+// LISTAR TODOS OS UTILIZADORES (PARA O ADMIN)
+// ============================================================================
+async function listarUtilizadores(req, res, next) {
+    try {
+        const utilizadores = await utilizadorModel.listarTodosUtilizadores();
+        return res.status(200).json(utilizadores);
+    } catch (error) {
+        console.error("Erro a listar utilizadores:", error);
+        next(error);
+    }
+}
+
+// ============================================================================
+// ATIVAR UTILIZADOR (ACEITAR NA COMUNIDADE)
+// ============================================================================
+async function ativarUtilizador(req, res, next) {
+    try {
+        const { id } = req.params;
         
-        if (error.message && error.message.startsWith('PERFIL_NAO_ENCONTRADO')) {
-             const perfisNaBd = error.message.split(':')[1];
-             return res.status(400).json({ error: `Atenção: A tua Base de Dados não tem o perfil configurado. Atualmente só tens: [${perfisNaBd}]. Tens de adicionar 'Professor' e 'Encarregado de Educação' na tabela PERFIL.` });
+        const sucesso = await utilizadorModel.alterarEstadoUtilizador(id, true);
+        
+        if (sucesso) {
+            return res.status(200).json({ mensagem: 'Utilizador aceite com sucesso!' });
+        } else {
+            return res.status(400).json({ mensagem: 'Não foi possível aceitar o utilizador.' });
         }
-        
+    } catch (error) {
+        console.error("Erro a ativar utilizador:", error);
         next(error);
     }
 }
@@ -196,5 +222,7 @@ module.exports = {
     logout,
     solicitarRecuperacaoPassword,
     redefinirPassword,
-    register
+    register,
+    listarUtilizadores,
+    ativarUtilizador
 };

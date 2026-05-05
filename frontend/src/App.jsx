@@ -1,13 +1,27 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Landing from './pages/LandingPage/Landing';
 import Login from './pages/Login-Registo/Login';
 import Registo from './pages/Login-Registo/Registo';
 import RecoverPassword from './pages/Login-Registo/RecoverPassword';
 import VendaFigurinos from './pages/VendaFigurinos/VendaFigurinos';
 import EmprestimosPecas from './pages/EmprestimosPecas/EmprestimosPecas';
+import AdminDashboard from './pages/AdminDashboard/AdminDashboard';
 
 function App() {
-  const [paginaAtual, setPaginaAtual] = useState('landing');
+  const [paginaAtual, setPaginaAtual] = useState(() => {
+    if (window.location.pathname === '/admin') {
+      return 'admin';
+    }
+    return localStorage.getItem('ultimaPagina') || 'landing';
+  });
+
+  useEffect(() => {
+    if (paginaAtual !== 'admin' && window.location.pathname === '/admin') {
+      window.history.pushState({}, '', '/');
+    }
+    
+    localStorage.setItem('ultimaPagina', paginaAtual);
+  }, [paginaAtual]);
 
   return (
     <div className="App">
@@ -51,7 +65,7 @@ function App() {
       {paginaAtual === 'venda_figurinos' && (
         <VendaFigurinos 
           irParaLanding={() => setPaginaAtual('landing')} 
-          irParaEmprestimos={() => setPaginaAtual('emprestimos_pecas')} // <- ADICIONADO AQUI
+          irParaEmprestimos={() => setPaginaAtual('emprestimos_pecas')}
         />
       )}
 
@@ -59,7 +73,14 @@ function App() {
       {paginaAtual === 'emprestimos_pecas' && (
         <EmprestimosPecas 
           irParaLanding={() => setPaginaAtual('landing')} 
-          irParaVendaFigurinos={() => setPaginaAtual('venda_figurinos')} // <- ADICIONADO AQUI
+          irParaVendaFigurinos={() => setPaginaAtual('venda_figurinos')}
+        />
+      )}
+
+      {/* ADMIN DASHBOARD */}
+      {paginaAtual === 'admin' && (
+        <AdminDashboard 
+          irParaLanding={() => setPaginaAtual('landing')}
         />
       )}
 

@@ -19,4 +19,10 @@ router.post('/redefinir-password', authController.redefinirPassword);
 // POST /api/auth/register
 router.post('/register', authController.register);
 
+// GET /api/auth/utilizadores (Traz todos os utilizadores para a tabela de Admin)
+router.get('/utilizadores', autenticar, authController.listarUtilizadores);
+
+// PUT /api/auth/utilizadores/:id/ativar (Aceitar utilizador pendente)
+router.put('/utilizadores/:id/ativar', autenticar, authController.ativarUtilizador);
+
 module.exports = router;

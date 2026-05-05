@@ -86,7 +86,6 @@ async function criarUtilizador({ nome, email, passwordHash, telefone, nomePerfil
     await transaction.begin();
  
     try {
-        // Verificar se o email já existe
         const emailExiste = await transaction.request()
             .input('Email', sql.VarChar(255), email)
             .query('SELECT id_utilizador FROM UTILIZADOR WHERE email = @Email');
@@ -95,7 +94,6 @@ async function criarUtilizador({ nome, email, passwordHash, telefone, nomePerfil
             throw new Error('Já existe um utilizador com este email.');
         }
  
-        // Obter ID do Perfil de forma MUITO flexível
         let idPerfil = null;
         if (nomePerfil === 'Professor') {
             const result = await transaction.request().query("SELECT TOP 1 id_perfil FROM PERFIL WHERE nome LIKE '%Prof%'");
@@ -105,18 +103,17 @@ async function criarUtilizador({ nome, email, passwordHash, telefone, nomePerfil
             idPerfil = result.recordset[0]?.id_perfil;
         }
  
-        // Se mesmo assim não encontrar, rebenta com um erro que lista o que está na BD
         if (!idPerfil) {
             const perfisDisponiveis = await transaction.request().query('SELECT nome FROM PERFIL');
             const lista = perfisDisponiveis.recordset.map(p => p.nome).join(' | ');
             throw new Error(`PERFIL_NAO_ENCONTRADO:${lista}`);
         }
  
-        // Inserir Utilizador
+        // AQUI ESTÁ A MUDANÇA: 'ativo' passa a 0 por defeito em vez de 1
         const insertUserQuery = `
             INSERT INTO UTILIZADOR (nome, email, password, telefone, ativo, data_criacao)
             OUTPUT INSERTED.id_utilizador, INSERTED.nome, INSERTED.email, INSERTED.ativo
-            VALUES (@Nome, @Email, @Password, @Telefone, 1, GETDATE());
+            VALUES (@Nome, @Email, @Password, @Telefone, 0, GETDATE());
         `;
         const novoUserResult = await transaction.request()
             .input('Nome', sql.VarChar(255), nome)
@@ -127,7 +124,6 @@ async function criarUtilizador({ nome, email, passwordHash, telefone, nomePerfil
  
         const novoUtilizador = novoUserResult.recordset[0];
  
-        // Mapear o Utilizador ao Perfil
         await transaction.request()
             .input('IdUser', sql.Int, novoUtilizador.id_utilizador)
             .input('IdPerfil', sql.Int, idPerfil)

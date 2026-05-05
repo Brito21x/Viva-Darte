@@ -3,9 +3,14 @@ import Landing from './pages/LandingPage/Landing';
 import Login from './pages/Login-Registo/Login';
 import Registo from './pages/Login-Registo/Registo';
 import RecoverPassword from './pages/Login-Registo/RecoverPassword';
+<<<<<<< HEAD
 import VendaFigurinos from './pages/VendaFigurinos/VendaFigurinos';
 import EmprestimosPecas from './pages/EmprestimosPecas/EmprestimosPecas';
 import AgendarCoaching from './pages/AgendarCoaching/AgendarCoaching';
+=======
+import VendaFigurinos from './pages/VendaFigurinos/VendaFigurinos'; // Novo Import
+import AdminDashboard from './pages/Admin/AdminDashboard';
+>>>>>>> Lima
 
 function App() {
   const [paginaAtual, setPaginaAtual] = useState('landing');
@@ -30,6 +35,7 @@ function App() {
           irParaRegisto={() => setPaginaAtual('registo')} 
           irParaLanding={() => setPaginaAtual('landing')} 
           irParaRecuperar={() => setPaginaAtual('recuperar')} 
+          irParaAdmin={() => setPaginaAtual('admin')} // <--- ADICIONADO AQUI: Passa a instrução ao Login
         />
       )}
       
@@ -72,6 +78,14 @@ function App() {
           irParaLanding={() => setPaginaAtual('landing')}
           irParaVendaFigurinos={() => setPaginaAtual('venda_figurinos')}
           irParaEmprestimos={() => setPaginaAtual('emprestimos_pecas')}
+        />
+      )}
+
+      {/* ADMIN DASHBOARD */}
+      {/* ADICIONADO AQUI: O bloco que mostra a página de Administração */}
+      {paginaAtual === 'admin' && (
+        <AdminDashboard 
+          irParaLanding={() => setPaginaAtual('landing')} 
         />
       )}
 

@@ -1,15 +1,19 @@
 const express = require('express');
 const router = express.Router();
+
 const authController = require('../controllers/authController');
 const { autenticar } = require('../middlewares/auth');
 
-// Rotas Públicas
-router.post('/register', authController.registar);
+// POST /api/auth/login
 router.post('/login', authController.login);
-router.post('/reset-password', authController.resetPassword);
-router.post('/verificar-telefone', authController.verificarTelefone);
 
-// Rotas Protegidas (precisam de token)
-router.get('/me', autenticar, authController.me);
+// POST /api/auth/logout  (requer token válido)
+router.post('/logout', autenticar, authController.logout);
+
+// POST /api/auth/recuperar-password
+router.post('/recuperar-password', authController.solicitarRecuperacaoPassword);
+
+// POST /api/auth/redefinir-password
+router.post('/redefinir-password', authController.redefinirPassword);
 
 module.exports = router;

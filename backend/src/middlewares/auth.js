@@ -1,31 +1,39 @@
 const jwt = require('jsonwebtoken');
 
-// Verifica se tem token válido
+// ============================================================================
+// MIDDLEWARE DE AUTENTICAÇÃO — Verifica o token JWT em todas as rotas protegidas
+// ============================================================================
 function autenticar(req, res, next) {
     const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1]; // Bearer <token>
 
-    if (!authHeader || !authHeader.startsWith('Bearer '))
-        return res.status(401).json({ error: 'Token em falta' });
-
-    const token = authHeader.split(' ')[1];
+    if (!token) {
+        return res.status(401).json({ mensagem: 'Acesso negado. Token não fornecido.' });
+    }
 
     try {
         const payload = jwt.verify(token, process.env.JWT_SECRET);
-        req.utilizador = payload;
+        req.utilizador = payload; // { id, nome, email, perfis }
         next();
-    } catch (err) {
-        return res.status(401).json({ error: 'Token inválido ou expirado' });
+    } catch (error) {
+        return res.status(401).json({ mensagem: 'Token inválido ou expirado.' });
     }
 }
 
-// Verifica se tem o perfil certo
-function autorizar(...perfis) {
+// ============================================================================
+// MIDDLEWARE DE AUTORIZAÇÃO — Verifica se o utilizador tem o perfil necessário
+// Uso: autorizar('Admin') | autorizar('Professor', 'Admin')
+// ============================================================================
+function autorizar(...perfisPermitidos) {
     return (req, res, next) => {
         const perfisUtilizador = req.utilizador?.perfis || [];
-        const temPermissao = perfis.some(p => perfisUtilizador.includes(p));
+        const temPermissao = perfisPermitidos.some(p => perfisUtilizador.includes(p));
 
-        if (!temPermissao)
-            return res.status(403).json({ error: 'Sem permissão' });
+        if (!temPermissao) {
+            return res.status(403).json({
+                mensagem: `Acesso negado. Perfil necessário: ${perfisPermitidos.join(' ou ')}.`
+            });
+        }
 
         next();
     };

@@ -1,139 +1,53 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const userModel = require('../models/utilizadorModel');
-const { pool, poolConnect } = require('../config/db');
+const crypto = require('crypto');
 
-const PERFIL_MAP = {
-    EE: 'EE',
-    PROF: 'Professor'
-};
+const utilizadorModel = require('../models/utilizadorModel');
 
-function mapTipoParaPerfil(tipo) {
-    return PERFIL_MAP[tipo] || null;
-}
-
-function gerarToken(utilizador) {
-    if (!process.env.JWT_SECRET) {
-        const err = new Error('JWT_SECRET não definido no backend/.env');
-        err.status = 500;
-        throw err;
-    }
-
-    return jwt.sign(
-        {
-            id: utilizador.id_utilizador,
-            email: utilizador.email,
-            perfis: utilizador.perfis
-        },
-        process.env.JWT_SECRET,
-        { expiresIn: process.env.JWT_EXPIRES_IN || '8h' }
-    );
-}
-
-async function registar(req, res, next) {
-    try {
-        const { nome, email, password, telefone, tipo } = req.body;
-
-        if (!nome || !email || !password || !tipo || !telefone) {
-            return res.status(400).json({ error: 'nome, email, password, telefone e tipo são obrigatórios' });
-        }
-
-        const perfilNome = mapTipoParaPerfil(tipo);
-        if (!perfilNome) {
-            return res.status(400).json({ error: 'tipo inválido. Use EE ou PROF' });
-        }
-
-        const existente = await userModel.getUtilizadorByEmail(email);
-        if (existente) {
-            return res.status(409).json({ error: 'Email já registado' });
-        }
-
-        const passwordHash = await bcrypt.hash(password, 10);
-        const novoUtilizador = await userModel.criarUtilizador({
-            nome,
-            email,
-            passwordHash,
-            telefone,
-            nomePerfil: perfilNome,
-            tipo
-        });
-
-        const perfis = await userModel.getPerfisDoUtilizador(novoUtilizador.id_utilizador);
-        const token = gerarToken({ ...novoUtilizador, perfis });
-
-        return res.status(201).json({
-            mensagem: 'Conta criada com sucesso',
-            token,
-            utilizador: {
-                id: novoUtilizador.id_utilizador,
-                nome: novoUtilizador.nome,
-                email: novoUtilizador.email,
-                telefone: novoUtilizador.telefone,
-                perfis
-            }
-        });
-    } catch (error) {
-        return next(error);
-    }
-}
-
+// ============================================================================
+// US01 / RF01 — LOGIN
+// POST /api/auth/login
+// Body: { email, password }
+// ============================================================================
 async function login(req, res, next) {
     try {
-        const { email, password, tipo } = req.body;
+        const { email, password } = req.body;
 
-        if (!email || !password || !tipo) {
-            return res.status(400).json({ error: 'email, password e tipo são obrigatórios' });
+        if (!email || !password) {
+            return res.status(400).json({ mensagem: 'Email e password são obrigatórios.' });
         }
 
-        const perfilId = tipo === 'EE' ? 3 : 2;
-        const request = pool.request();
+        const utilizador = await utilizadorModel.getUtilizadorByEmail(email);
 
-        request.input('email', email);
-        request.input('perfilId', perfilId);
-
-        const result = await request.query(`
-            SELECT U.*, U.[password] AS password_hash, P.nome as perfil_nome
-            FROM [dbo].[UTILIZADOR] U
-            JOIN [dbo].[UTILIZADOR_PERFIL] UP ON U.id_utilizador = UP.UTILIZADORid_utilizador
-            JOIN [dbo].[PERFIL] P ON UP.PERFILid_perfil = P.id_perfil
-            WHERE U.email = @email
-              AND UP.PERFILid_perfil = @perfilId
-              AND U.ativo = 1
-        `);
-
-        if (result.recordset.length === 0) {
-            return res.status(401).json({ error: 'Email ou palavra-passe incorretos.' });
+        if (!utilizador) {
+            return res.status(401).json({ mensagem: 'Credenciais inválidas.' });
         }
 
-        const utilizador = result.recordset[0];
-        const passwordValida = await bcrypt.compare(password, utilizador.password_hash);
-        if (!passwordValida) {
-            return res.status(401).json({ error: 'Email ou palavra-passe incorretos.' });
+        if (!utilizador.ativo) {
+            return res.status(403).json({ mensagem: 'Conta desativada. Contacte o administrador.' });
         }
+
+        const passwordCorreta = await bcrypt.compare(password, utilizador.password);
+        if (!passwordCorreta) {
+            return res.status(401).json({ mensagem: 'Credenciais inválidas.' });
+        }
+
+        const perfis = await utilizadorModel.getPerfisDoUtilizador(utilizador.id_utilizador);
+
+        const token = jwt.sign(
+            {
+                id: utilizador.id_utilizador,
+                nome: utilizador.nome,
+                email: utilizador.email,
+                perfis
+            },
+            process.env.JWT_SECRET,
+            { expiresIn: process.env.JWT_EXPIRES_IN || '8h' }
+        );
 
         return res.status(200).json({
-            message: 'Sucesso',
-            user: {
-                id_utilizador: utilizador.id_utilizador,
-                nome: utilizador.nome,
-                perfil: utilizador.perfil_nome
-            }
-        });
-    } catch (error) {
-        return next(error);
-    }
-}
-
-async function me(req, res, next) {
-    try {
-        const utilizador = await userModel.getUtilizadorByEmail(req.utilizador.email);
-        if (!utilizador) {
-            return res.status(404).json({ error: 'Utilizador não encontrado' });
-        }
-
-        const perfis = await userModel.getPerfisDoUtilizador(utilizador.id_utilizador);
-
-        return res.json({
+            mensagem: 'Login efetuado com sucesso.',
+            token,
             utilizador: {
                 id: utilizador.id_utilizador,
                 nome: utilizador.nome,
@@ -142,62 +56,97 @@ async function me(req, res, next) {
             }
         });
     } catch (error) {
-        return next(error);
+        next(error);
     }
 }
 
-async function verificarTelefone(req, res, next) {
-    const { telefone } = req.body;
-    try {
-        const result = await pool.request()
-            .input('telefone', telefone)
-            .query('SELECT id_utilizador FROM [dbo].[UTILIZADOR] WHERE telefone = @telefone AND ativo = 1');
+// ============================================================================
+// US01 / RF01 — LOGOUT (stateless: invalidação do lado do cliente)
+// POST /api/auth/logout
+// ============================================================================
+async function logout(req, res) {
+    // Com JWT stateless, o logout é gerido pelo cliente (eliminar o token).
+    // Aqui apenas confirmamos a operação.
+    return res.status(200).json({ mensagem: 'Sessão terminada com sucesso.' });
+}
 
-        if (result.recordset.length === 0) {
-            return res.status(404).json({ error: 'Telefone incorreto!' });
+// ============================================================================
+// US02 / RF02 — SOLICITAR RECUPERAÇÃO DE PALAVRA-PASSE
+// POST /api/auth/recuperar-password
+// Body: { email }
+// ============================================================================
+async function solicitarRecuperacaoPassword(req, res, next) {
+    try {
+        const { email } = req.body;
+
+        if (!email) {
+            return res.status(400).json({ mensagem: 'Email é obrigatório.' });
         }
 
-        return res.status(200).json({ message: 'Telefone encontrado!' });
-    } catch (err) {
-        next(err);
+        const utilizador = await utilizadorModel.getUtilizadorByEmail(email);
+
+        // Resposta genérica por segurança (não revelar se o email existe ou não)
+        if (!utilizador || !utilizador.ativo) {
+            return res.status(200).json({
+                mensagem: 'Se o email existir no sistema, receberá instruções para recuperar a palavra-passe.'
+            });
+        }
+
+        const token = crypto.randomBytes(32).toString('hex');
+        await utilizadorModel.guardarTokenRecuperacao(utilizador.id_utilizador, token);
+
+        // TODO: Integrar envio de email (ex: nodemailer) com o link:
+        // `${process.env.FRONTEND_URL}/redefinir-password?token=${token}`
+        console.log(`[DEV] Token de recuperação para ${email}: ${token}`);
+
+        return res.status(200).json({
+            mensagem: 'Se o email existir no sistema, receberá instruções para recuperar a palavra-passe.'
+        });
+    } catch (error) {
+        next(error);
     }
 }
 
-async function resetPassword(req, res, next) {
-    const { telefone, novaPassword } = req.body;
-
-    // Verificação básica de entrada
-    if (!telefone || !novaPassword) {
-        return res.status(400).json({ error: 'Telefone e nova password são obrigatórios.' });
-    }
-
+// ============================================================================
+// US02 / RF02 — REDEFINIR PALAVRA-PASSE COM TOKEN
+// POST /api/auth/redefinir-password
+// Body: { token, novaPassword }
+// ============================================================================
+async function redefinirPassword(req, res, next) {
     try {
-        const salt = await bcrypt.genSalt(10);
-        const hashedPw = await bcrypt.hash(novaPassword, salt);
+        const { token, novaPassword } = req.body;
 
-        const telefoneLimpo = telefone.replace(/\s/g, '');
-
-        const result = await pool.request()
-            .input('telefone', telefoneLimpo)
-            .input('password', hashedPw)
-            .query('UPDATE [dbo].[UTILIZADOR] SET [password] = @password WHERE telefone = @telefone AND ativo = 1');
-
-        if (result.rowsAffected[0] === 0) {
-            return res.status(404).json({ error: 'Utilizador não encontrado com este número de telefone.' });
+        if (!token || !novaPassword) {
+            return res.status(400).json({ mensagem: 'Token e nova password são obrigatórios.' });
         }
 
-        return res.status(200).json({ message: 'Password alterada com sucesso!' });
+        if (novaPassword.length < 8) {
+            return res.status(400).json({ mensagem: 'A password deve ter pelo menos 8 caracteres.' });
+        }
 
-    } catch (err) {
-        console.error("Erro detalhado no ResetPassword:", err);
-        return res.status(500).json({ error: 'Erro interno ao atualizar a password.' });
+        const tokenValido = await utilizadorModel.validarTokenRecuperacao(token);
+
+        if (!tokenValido) {
+            return res.status(400).json({ mensagem: 'Token inválido ou expirado.' });
+        }
+
+        const novaPasswordHash = await bcrypt.hash(novaPassword, 10);
+
+        await utilizadorModel.atualizarPassword(
+            tokenValido.UTILIZADORid_utilizador,
+            novaPasswordHash,
+            tokenValido.id_token_recuperacao
+        );
+
+        return res.status(200).json({ mensagem: 'Palavra-passe atualizada com sucesso.' });
+    } catch (error) {
+        next(error);
     }
 }
 
 module.exports = {
-    registar,
     login,
-    me,
-    verificarTelefone,
-    resetPassword
+    logout,
+    solicitarRecuperacaoPassword,
+    redefinirPassword
 };

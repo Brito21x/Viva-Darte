@@ -104,14 +104,13 @@ async function removerDisponibilidadeProfessor(idDisponibilidade, idProfessor) {
  
 /**
  * Retorna as disponibilidades teóricas dos professores para uma modalidade/dia,
- * cruzando com as ocupações reais (coachings já agendados) nessa data específica.
- * Usado na US04 para mostrar vagas disponíveis ao EE.
+ * cruzando com as ocupações reais (coachings já agendados e aulas regulares) nessa data.
  */
 async function getDisponibilidadeEfetiva(idModalidade, diaSemana, dataEspecifica) {
     try {
         const pool = await poolPromise;
  
-        // Disponibilidades teóricas dos professores para a modalidade naquele dia da semana
+        // 1. Disponibilidades teóricas dos professores
         const resultDisponibilidade = await pool.request()
             .input('IdModalidade', sql.Int, idModalidade)
             .input('DiaSemana', sql.Int, diaSemana)
@@ -132,7 +131,7 @@ async function getDisponibilidadeEfetiva(idModalidade, diaSemana, dataEspecifica
                   AND u.ativo = 1;
             `);
  
-        // Ocupações reais (coachings já agendados ou confirmados) para essa data
+        // 2. Ocupações reais (coachings agendados/confirmados)
         const resultOcupacao = await pool.request()
             .input('DataEspecifica', sql.Date, dataEspecifica)
             .query(`
@@ -145,10 +144,28 @@ async function getDisponibilidadeEfetiva(idModalidade, diaSemana, dataEspecifica
                 WHERE c.data_aula = @DataEspecifica
                   AND c.estado IN ('Agendado', 'Confirmado');
             `);
+
+        // 3. Ocupações regulares (aulas normais do HORARIO) para o dia da semana
+        const queryOcupacaoHorario = `
+            SELECT 
+                h.UTILIZADORid_utilizador AS id_professor,
+                h.hora_inicio,
+                DATEDIFF(MINUTE, h.hora_inicio, h.hora_fim) AS duracao_minutos,
+                h.SALAid_sala
+            FROM HORARIO h
+            WHERE h.dia_semana = @DiaSemana
+              AND h.ativo = 1;
+        `;
+        const resultOcupacaoHorario = await pool.request()
+            .input('DiaSemana', sql.Int, diaSemana)
+            .query(queryOcupacaoHorario);
  
         return {
             disponibilidades: resultDisponibilidade.recordset,
-            ocupacoes: resultOcupacao.recordset
+            ocupacoes: [
+                ...resultOcupacao.recordset,
+                ...resultOcupacaoHorario.recordset // Junta as duas tabelas de ocupação
+            ]
         };
     } catch (error) {
         console.error('Erro no Modelo (getDisponibilidadeEfetiva):', error);
@@ -217,9 +234,7 @@ async function getAgendaProfessor(idProfessor, dataInicio = null, dataFim = null
 // ============================================================================
  
 /**
- * Cria um pedido de coaching e os seus participantes (alunos) numa transação.
- * UTILIZADORid_utilizador  = EE que requisita (obrigatório)
- * UTILIZADORid_utilizador2 = Professor pretendido (pode ser NULL = "qualquer disponível")
+ * Cria um pedido de coaching e os seus participantes numa transação.
  */
 async function criarPedidoCoaching(dadosPedido, alunosIds) {
     const pool = await poolPromise;
@@ -237,7 +252,6 @@ async function criarPedidoCoaching(dadosPedido, alunosIds) {
             .input('IdEncarregado', sql.Int, dadosPedido.idEncarregado)
             .input('IdAnoLetivo', sql.Int, dadosPedido.idAnoLetivo)
             .input('IdModalidade', sql.Int, dadosPedido.idModalidade)
-            // idProfessor pode ser NULL se o EE escolheu "qualquer disponível"
             .input('IdProfessor', sql.Int, dadosPedido.idProfessor || null)
             .query(`
                 INSERT INTO PEDIDO_COACHING (
@@ -278,8 +292,7 @@ async function criarPedidoCoaching(dadosPedido, alunosIds) {
 }
  
 /**
- * Lista todos os pedidos pendentes para a Coordenação tratar. (US06 / RF07)
- * Usa LEFT JOIN no professor pois o campo pode ser NULL ("qualquer disponível").
+ * Lista todos os pedidos pendentes para a Coordenação tratar.
  */
 async function getPedidosPendentes() {
     try {
@@ -296,7 +309,6 @@ async function getPedidosPendentes() {
                 m.nome AS modalidade,
                 ee.nome AS requisitante,
                 ee.email AS email_requisitante,
-                -- LEFT JOIN porque o professor pode ser NULL (qualquer disponível)
                 prof.nome AS professor_desejado,
                 COUNT(pcp.ALUNOid_aluno) AS total_alunos
             FROM PEDIDO_COACHING pc
@@ -329,7 +341,7 @@ async function getPedidosPendentes() {
  
 /**
  * Aprova um pedido, cria o coaching e bloqueia o horário/sala numa transação.
- * Inclui validação de conflitos de horário antes de inserir.
+ * Inclui validação de conflitos (COACHING e HORARIO) antes de inserir.
  */
 async function aprovarEAgendarCoaching(dadosAgendamento) {
     const pool = await poolPromise;
@@ -337,7 +349,7 @@ async function aprovarEAgendarCoaching(dadosAgendamento) {
     await transaction.begin();
  
     try {
-        // RF10: Verificar conflito de horário — professor já ocupado naquele horário
+        // RF10: Verificar conflito de horário no COACHING — professor
         const conflitoProf = await transaction.request()
             .input('IdProfessor', sql.Int, dadosAgendamento.idProfessor)
             .input('DataAula', sql.Date, dadosAgendamento.dataAula)
@@ -356,7 +368,7 @@ async function aprovarEAgendarCoaching(dadosAgendamento) {
             throw new Error('Conflito de horário: o professor já tem um coaching agendado neste horário.');
         }
  
-        // RF10: Verificar conflito de sala naquele horário
+        // RF10: Verificar conflito de sala no COACHING
         const conflitoSala = await transaction.request()
             .input('IdSala', sql.Int, dadosAgendamento.idSala)
             .input('DataAula', sql.Date, dadosAgendamento.dataAula)
@@ -372,7 +384,45 @@ async function aprovarEAgendarCoaching(dadosAgendamento) {
             `);
  
         if (conflitoSala.recordset.length > 0) {
-            throw new Error('Conflito de sala: a sala já está ocupada neste horário.');
+            throw new Error('Conflito de sala: a sala já está ocupada neste horário com outro coaching.');
+        }
+
+        // RF10: Verificar conflito com HORARIO regular — Professor
+        const conflitoHorarioProf = await transaction.request()
+            .input('IdProfessor', sql.Int, dadosAgendamento.idProfessor)
+            .input('DiaSemana', sql.Int, dadosAgendamento.diaSemanaCoaching) // Requer cálculo prévio no Controller
+            .input('HoraInicio', sql.Time, dadosAgendamento.horaInicio)
+            .input('Duracao', sql.Int, dadosAgendamento.duracaoMinutos)
+            .query(`
+                SELECT 1 FROM HORARIO
+                WHERE UTILIZADORid_utilizador = @IdProfessor
+                  AND dia_semana = @DiaSemana
+                  AND ativo = 1
+                  AND hora_inicio < DATEADD(MINUTE, @Duracao, CAST(@HoraInicio AS DATETIME))
+                  AND hora_fim > CAST(@HoraInicio AS DATETIME);
+            `);
+
+        if (conflitoHorarioProf.recordset.length > 0) {
+            throw new Error('Conflito com aula regular: o professor já tem uma aula marcada neste horário.');
+        }
+
+        // RF10: Verificar conflito com HORARIO regular — Sala
+        const conflitoHorarioSala = await transaction.request()
+            .input('IdSala', sql.Int, dadosAgendamento.idSala)
+            .input('DiaSemana', sql.Int, dadosAgendamento.diaSemanaCoaching) // Requer cálculo prévio no Controller
+            .input('HoraInicio', sql.Time, dadosAgendamento.horaInicio)
+            .input('Duracao', sql.Int, dadosAgendamento.duracaoMinutos)
+            .query(`
+                SELECT 1 FROM HORARIO
+                WHERE SALAid_sala = @IdSala
+                  AND dia_semana = @DiaSemana
+                  AND ativo = 1
+                  AND hora_inicio < DATEADD(MINUTE, @Duracao, CAST(@HoraInicio AS DATETIME))
+                  AND hora_fim > CAST(@HoraInicio AS DATETIME);
+            `);
+
+        if (conflitoHorarioSala.recordset.length > 0) {
+            throw new Error('Conflito com aula regular: a sala já está ocupada neste horário.');
         }
  
         // Atualizar o pedido para Aprovado
@@ -380,7 +430,7 @@ async function aprovarEAgendarCoaching(dadosAgendamento) {
             .input('IdPedido', sql.Int, dadosAgendamento.idPedido)
             .query(`UPDATE PEDIDO_COACHING SET estado = 'Aprovado' WHERE id_pedido_coaching = @IdPedido;`);
  
-        // Criar o coaching (US08: bloqueia horário e sala)
+        // Criar o coaching
         const idCoachingFinal = await transaction.request()
             .input('Formato', sql.VarChar(50), dadosAgendamento.formatoAula)
             .input('Duracao', sql.Int, dadosAgendamento.duracaoMinutos)
@@ -408,7 +458,7 @@ async function aprovarEAgendarCoaching(dadosAgendamento) {
             `)
             .then(r => r.recordset[0].id_coaching);
  
-        // Inicia o registo de validação pós-aula (estado inicial: aguarda confirmação do professor)
+        // Inicia o registo de validação pós-aula
         await transaction.request()
             .input('IdValidador', sql.Int, dadosAgendamento.idValidador)
             .input('IdCoaching', sql.Int, idCoachingFinal)
@@ -430,7 +480,7 @@ async function aprovarEAgendarCoaching(dadosAgendamento) {
 }
  
 /**
- * Rejeita um pedido de coaching com justificação. (US07 / RF08)
+ * Rejeita um pedido de coaching com justificação.
  */
 async function rejeitarPedidoCoaching(idPedido, justificacao) {
     try {
@@ -458,7 +508,6 @@ async function rejeitarPedidoCoaching(idPedido, justificacao) {
  
 /**
  * Cancela um coaching e atualiza o pedido associado.
- * RF14: A disponibilidade fica automaticamente libertada (baseada em coachings ativos).
  */
 async function cancelarCoaching(idCoaching) {
     const pool = await poolPromise;
@@ -466,7 +515,6 @@ async function cancelarCoaching(idCoaching) {
     await transaction.begin();
  
     try {
-        // Obter o idPedido associado antes de cancelar
         const pedidoResult = await transaction.request()
             .input('IdCoaching', sql.Int, idCoaching)
             .query(`
@@ -485,12 +533,10 @@ async function cancelarCoaching(idCoaching) {
             throw new Error('Este coaching já está cancelado.');
         }
  
-        // Cancelar o coaching
         await transaction.request()
             .input('IdCoaching', sql.Int, idCoaching)
             .query(`UPDATE COACHING SET estado = 'Cancelado' WHERE id_coaching = @IdCoaching;`);
  
-        // Atualizar também o pedido associado para consistência
         await transaction.request()
             .input('IdPedido', sql.Int, id_pedido)
             .query(`UPDATE PEDIDO_COACHING SET estado = 'Cancelado' WHERE id_pedido_coaching = @IdPedido;`);
@@ -510,8 +556,6 @@ async function cancelarCoaching(idCoaching) {
  
 /**
  * Regista a confirmação de realização pelo Professor ou pelo EE.
- * tipo_validador: 'Professor' | 'EncarregadoEducacao'
- * estado_validacao: 'Confirmado' | 'Nao_Realizado'
  */
 async function registarValidacaoAula(idCoaching, idUtilizador, tipoValidador, estadoValidacao, observacoes = null) {
     try {
@@ -541,8 +585,7 @@ async function registarValidacaoAula(idCoaching, idUtilizador, tipoValidador, es
 }
  
 /**
- * A Coordenação valida a conclusão final do coaching, resolve divergências
- * e atualiza o estado do coaching para 'Realizado' ou 'Nao_Realizado'. (US14 / RF16)
+ * A Coordenação valida a conclusão final do coaching e resolve divergências.
  */
 async function concluirCoachingPelaCoordenacao(idCoaching, idCoordenador, estadoFinal, observacoes) {
     const pool = await poolPromise;
@@ -550,7 +593,6 @@ async function concluirCoachingPelaCoordenacao(idCoaching, idCoordenador, estado
     await transaction.begin();
  
     try {
-        // Registo da validação final pela Coordenação
         await transaction.request()
             .input('Observacoes', sql.VarChar(255), observacoes || 'Validado pela coordenação.')
             .input('IdCoordenador', sql.Int, idCoordenador)
@@ -566,7 +608,6 @@ async function concluirCoachingPelaCoordenacao(idCoaching, idCoordenador, estado
                 );
             `);
  
-        // Atualizar estado do coaching ('Realizado' ou 'Nao_Realizado')
         await transaction.request()
             .input('EstadoFinal', sql.VarChar(50), estadoFinal)
             .input('IdCoaching', sql.Int, idCoaching)

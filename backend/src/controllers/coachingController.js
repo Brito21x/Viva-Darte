@@ -151,10 +151,18 @@ async function removerDisponibilidade(req, res, next) {
 // ============================================================================
 async function getVagasDisponiveis(req, res, next) {
     try {
-        const { idModalidade, diaSemana, data, idProfessor, duracaoMinutos } = req.query;
+        const { idModalidade, diaSemana, data, idProfessor, duracaoMinutos, idAnoLetivo } = req.query;
 
         if (!idModalidade || !diaSemana || !data) {
             return res.status(400).json({ mensagem: 'idModalidade, diaSemana e data são obrigatórios.' });
+        }
+
+        const idAnoParsed =
+            idAnoLetivo !== undefined && idAnoLetivo !== '' && idAnoLetivo != null
+                ? parseInt(idAnoLetivo, 10)
+                : null;
+        if (idAnoLetivo !== undefined && idAnoLetivo !== '' && Number.isNaN(idAnoParsed)) {
+            return res.status(400).json({ mensagem: 'idAnoLetivo inválido.' });
         }
 
         const idProfFiltro =
@@ -169,7 +177,8 @@ async function getVagasDisponiveis(req, res, next) {
             parseInt(idModalidade, 10),
             parseInt(diaSemana, 10),
             data,
-            idProfFiltro
+            idProfFiltro,
+            idAnoParsed
         );
 
         // Calcular slots livres: disponibilidades sem ocupação sobreposta
@@ -496,6 +505,7 @@ async function rejeitarPedido(req, res, next) {
         if (!justificacao) {
             return res.status(400).json({ mensagem: 'Justificação é obrigatória para rejeitar um pedido.' });
         }
+        // A justificação não é persistida na BD neste modelo (sem coluna dedicada).
 
         const sucesso = await coachingModel.rejeitarPedidoCoaching(idPedido);
 
@@ -645,6 +655,9 @@ async function registarValidacao(req, res, next) {
 
         return res.status(201).json({ mensagem: 'Validação registada com sucesso.' });
     } catch (error) {
+        if (error.message && error.message.includes('Já existe validação')) {
+            return res.status(409).json({ mensagem: error.message });
+        }
         next(error);
     }
 }

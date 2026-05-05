@@ -106,9 +106,25 @@ async function removerDisponibilidadeProfessor(idDisponibilidade, idProfessor) {
  * Retorna as disponibilidades teóricas dos professores para uma modalidade/dia,
  * cruzando com as ocupações reais (coachings já agendados e aulas regulares) nessa data.
  */
-async function getDisponibilidadeEfetiva(idModalidade, diaSemana, dataEspecifica, idProfessorFiltro = null) {
+async function getDisponibilidadeEfetiva(
+    idModalidade,
+    diaSemana,
+    dataEspecifica,
+    idProfessorFiltro = null,
+    idAnoLetivo = null
+) {
     try {
         const pool = await poolPromise;
+
+        let idAnoFiltro =
+            idAnoLetivo != null && idAnoLetivo !== '' ? parseInt(idAnoLetivo, 10) : null;
+        if (Number.isNaN(idAnoFiltro)) idAnoFiltro = null;
+        if (idAnoFiltro == null) {
+            const anoR = await pool.request().query(`
+                SELECT TOP 1 id_ano_letivo AS id FROM ANO_LETIVO ORDER BY id_ano_letivo DESC;
+            `);
+            idAnoFiltro = anoR.recordset[0]?.id ?? null;
+        }
 
         // HORARIO.dia_semana usa escala 1=Seg … 7=Dom; DISPONIBILIDADE_PROFESSOR usa 1=Seg–Qui, 2=Sáb–Dom.
         let diaSemanaHorario = diaSemana;
@@ -148,9 +164,9 @@ async function getDisponibilidadeEfetiva(idModalidade, diaSemana, dataEspecifica
             `);
  
         // 2. Ocupações reais (coachings agendados/confirmados)
-        const resultOcupacao = await pool.request()
-            .input('DataEspecifica', sql.Date, dataEspecifica)
-            .query(`
+        const reqOcup = pool.request().input('DataEspecifica', sql.Date, dataEspecifica);
+        if (idAnoFiltro != null) reqOcup.input('IdAnoLetivo', sql.Int, idAnoFiltro);
+        const resultOcupacao = await reqOcup.query(`
                 SELECT 
                     c.UTILIZADORid_utilizador AS id_professor,
                     c.hora_inicio,
@@ -158,7 +174,8 @@ async function getDisponibilidadeEfetiva(idModalidade, diaSemana, dataEspecifica
                     c.SALAid_sala
                 FROM COACHING c
                 WHERE c.data_aula = @DataEspecifica
-                  AND c.estado IN ('Agendado', 'Confirmado');
+                  AND c.estado IN ('Agendado', 'Confirmado')
+                  ${idAnoFiltro != null ? 'AND c.ANO_LETIVOid_ano_letivo = @IdAnoLetivo' : ''};
             `);
 
         // 3. Ocupações regulares (aulas normais do HORARIO) para o dia da semana
@@ -170,11 +187,12 @@ async function getDisponibilidadeEfetiva(idModalidade, diaSemana, dataEspecifica
                 h.SALAid_sala
             FROM HORARIO h
             WHERE h.dia_semana = @DiaSemana
-              AND h.ativo = 1;
+              AND h.ativo = 1
+              ${idAnoFiltro != null ? 'AND h.ANO_LETIVOid_ano_letivo = @IdAnoLetivo' : ''};
         `;
-        const resultOcupacaoHorario = await pool.request()
-            .input('DiaSemana', sql.Int, diaSemanaHorario)
-            .query(queryOcupacaoHorario);
+        const reqHor = pool.request().input('DiaSemana', sql.Int, diaSemanaHorario);
+        if (idAnoFiltro != null) reqHor.input('IdAnoLetivo', sql.Int, idAnoFiltro);
+        const resultOcupacaoHorario = await reqHor.query(queryOcupacaoHorario);
  
         return {
             disponibilidades: resultDisponibilidade.recordset,
@@ -641,7 +659,7 @@ async function aprovarEAgendarCoaching(dadosAgendamento) {
                     tipo_validador, estado_validacao, data_validacao, 
                     UTILIZADORid_utilizador, COACHINGid_coaching
                 )
-                VALUES ('Coordenacao', 'Pendente_Professor', GETDATE(), @IdValidador, @IdCoaching);
+                VALUES ('Coordenacao', 'Aguarda_Confirmacao', GETDATE(), @IdValidador, @IdCoaching);
             `);
  
         await transaction.commit();
@@ -789,6 +807,21 @@ async function cancelarCoaching(idCoaching) {
 async function registarValidacaoAula(idCoaching, idUtilizador, tipoValidador, estadoValidacao, observacoes = null) {
     try {
         const pool = await poolPromise;
+        const dup = await pool
+            .request()
+            .input('IdCoaching', sql.Int, idCoaching)
+            .input('TipoValidador', sql.VarChar(50), tipoValidador)
+            .query(`
+                SELECT 1 AS ok FROM VALIDACAO_COACHING
+                WHERE COACHINGid_coaching = @IdCoaching
+                  AND tipo_validador = @TipoValidador
+                  AND estado_validacao IN ('Confirmado', 'Nao_Realizado');
+            `);
+
+        if (dup.recordset.length > 0) {
+            throw new Error('Já existe validação deste tipo para este coaching.');
+        }
+
         const result = await pool.request()
             .input('TipoValidador', sql.VarChar(50), tipoValidador)
             .input('EstadoValidacao', sql.VarChar(50), estadoValidacao)
@@ -805,7 +838,7 @@ async function registarValidacaoAula(idCoaching, idUtilizador, tipoValidador, es
                     @Observacoes, @IdUtilizador, @IdCoaching
                 );
             `);
- 
+
         return result.rowsAffected[0] > 0;
     } catch (error) {
         console.error('Erro no Modelo (registarValidacaoAula):', error);

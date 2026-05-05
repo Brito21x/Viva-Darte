@@ -5,11 +5,7 @@ const sql = require('mssql');
 // 1. TABELA DE PREÇOS (US15 / RF17)
 // ============================================================================
  
-/**
- * Retorna toda a tabela de preços ativa, incluindo exceções por modalidade/professor.
- * As colunas MODALIDADEid_modalidade e UTILIZADORid_utilizador são nullable
- * (NULL = regra universal; preenchido = exceção específica).
- */
+/** Retorna toda a tabela de preços ativa (sem colunas de exceção por modalidade/professor na BD atual). */
 async function getTabelaPrecos() {
     try {
         const pool = await poolPromise;
@@ -21,15 +17,11 @@ async function getTabelaPrecos() {
                 tp.dia_semana,
                 tp.preco,
                 tp.ativo,
-                tp.MODALIDADEid_modalidade AS id_modalidade,
-                tp.UTILIZADORid_utilizador AS id_professor_excecao,
-                m.nome AS modalidade_excecao,
-                u.nome AS professor_excecao
+                CAST(NULL AS int) AS id_modalidade,
+                CAST(NULL AS int) AS id_professor_excecao,
+                CAST(NULL AS varchar(255)) AS modalidade_excecao,
+                CAST(NULL AS varchar(255)) AS professor_excecao
             FROM TABELA_PRECO tp
-            LEFT JOIN MODALIDADE m 
-                ON tp.MODALIDADEid_modalidade = m.id_modalidade
-            LEFT JOIN UTILIZADOR u 
-                ON tp.UTILIZADORid_utilizador = u.id_utilizador
             WHERE tp.ativo = 1
             ORDER BY tp.dia_semana ASC, tp.duracao_minutos ASC;
         `;
@@ -42,38 +34,25 @@ async function getTabelaPrecos() {
 }
  
 /**
- * Calcula o custo de um coaching com base no formato, duração, dia e possíveis exceções.
- * Prioridade: exceção por professor > exceção por modalidade > preço universal.
- * (US16 / RF17, RF18)
+ * Calcula o custo de um coaching com base no formato, duração e dia.
+ * idModalidade / idProfessor são ignorados na BD atual (TABELA_PRECO sem essas colunas).
  */
 async function calcularCustoAutomatico(formato, duracao, diaSemana, idModalidade, idProfessor) {
     try {
         const pool = await poolPromise;
-        // A ordenação DESC nas colunas nullable coloca os NOT NULL primeiro no SQL Server,
-        // garantindo que exceções específicas têm prioridade sobre regras universais (NULL).
         const query = `
             SELECT TOP 1 preco
             FROM TABELA_PRECO
             WHERE formato_aula = @Formato
               AND duracao_minutos = @Duracao
               AND dia_semana = @DiaSemana
-              AND ativo = 1
-              AND (MODALIDADEid_modalidade = @IdModalidade OR MODALIDADEid_modalidade IS NULL)
-              AND (UTILIZADORid_utilizador = @IdProfessor OR UTILIZADORid_utilizador IS NULL)
-            ORDER BY 
-                UTILIZADORid_utilizador DESC,   -- exceção por professor primeiro
-                MODALIDADEid_modalidade DESC;    -- depois por modalidade
+              AND ativo = 1;
         `;
-        // Garantir null explícito (não undefined): em SQL, "col = NULL" é UNKNOWN; precisamos do ramo "IS NULL".
-        const idModalidadeSql = idModalidade == null ? null : idModalidade;
-        const idProfessorSql = idProfessor == null ? null : idProfessor;
 
         const result = await pool.request()
             .input('Formato', sql.VarChar(50), formato)
             .input('Duracao', sql.Int, duracao)
             .input('DiaSemana', sql.Int, diaSemana)
-            .input('IdModalidade', sql.Int, idModalidadeSql)
-            .input('IdProfessor', sql.Int, idProfessorSql)
             .query(query);
  
         return result.recordset[0]?.preco || null;
@@ -83,10 +62,7 @@ async function calcularCustoAutomatico(formato, duracao, diaSemana, idModalidade
     }
 }
  
-/**
- * Cria linha na tabela de preços (US15 / RF17).
- * idModalidade e idProfessor null = regra universal.
- */
+/** Cria linha na tabela de preços (US15 / RF17). */
 async function criarRegistoPreco(dados) {
     try {
         const pool = await poolPromise;
@@ -97,17 +73,13 @@ async function criarRegistoPreco(dados) {
             .input('DiaSemana', sql.Int, dados.diaSemana)
             .input('Preco', sql.Decimal(10, 2), dados.preco)
             .input('Ativo', sql.Bit, dados.ativo !== false ? 1 : 0)
-            .input('IdModalidade', sql.Int, dados.idModalidade ?? null)
-            .input('IdProfessor', sql.Int, dados.idProfessor ?? null)
             .query(`
                 INSERT INTO TABELA_PRECO (
-                    formato_aula, duracao_minutos, dia_semana, preco, ativo,
-                    MODALIDADEid_modalidade, UTILIZADORid_utilizador
+                    formato_aula, duracao_minutos, dia_semana, preco, ativo
                 )
                 OUTPUT INSERTED.id_preco
                 VALUES (
-                    @Formato, @Duracao, @DiaSemana, @Preco, @Ativo,
-                    @IdModalidade, @IdProfessor
+                    @Formato, @Duracao, @DiaSemana, @Preco, @Ativo
                 );
             `);
 
@@ -132,17 +104,13 @@ async function atualizarRegistoPreco(idPreco, dados) {
             .input('DiaSemana', sql.Int, dados.diaSemana)
             .input('Preco', sql.Decimal(10, 2), dados.preco)
             .input('Ativo', sql.Bit, dados.ativo !== false ? 1 : 0)
-            .input('IdModalidade', sql.Int, dados.idModalidade ?? null)
-            .input('IdProfessor', sql.Int, dados.idProfessor ?? null)
             .query(`
                 UPDATE TABELA_PRECO
                 SET formato_aula = @Formato,
                     duracao_minutos = @Duracao,
                     dia_semana = @DiaSemana,
                     preco = @Preco,
-                    ativo = @Ativo,
-                    MODALIDADEid_modalidade = @IdModalidade,
-                    UTILIZADORid_utilizador = @IdProfessor
+                    ativo = @Ativo
                 WHERE id_preco = @IdPreco;
             `);
 

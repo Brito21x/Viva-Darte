@@ -418,6 +418,24 @@ async function getAlunosPorEncarregado(idEncarregado) {
 }
 
 /**
+ * Lista todos os alunos (Admin — associações EE–aluno).
+ */
+async function listarTodosAlunos() {
+    try {
+        const pool = await poolPromise;
+        const result = await pool.request().query(`
+            SELECT id_aluno, nome, data_nascimento, ativo, data_criacao
+            FROM ALUNO
+            ORDER BY nome ASC;
+        `);
+        return result.recordset;
+    } catch (error) {
+        console.error('Erro no Modelo (listarTodosAlunos):', error);
+        throw error;
+    }
+}
+
+/**
  * Cria um aluno (Admin). Não associa automaticamente a um EE.
  */
 async function criarAluno({ nome, dataNascimento }) {
@@ -494,6 +512,7 @@ async function listarIdsEncarregadosEducacao() {
     }
 }
 
+// getUtilizadorParaLogin / existeUtilizadorTelefoneAtivo / atualizarPasswordPorTelefone: reservados p.ex. recuperação via telefone ou login por perfil.
 module.exports = {
     getUtilizadorByEmail,
     getPerfisDoUtilizador,
@@ -501,6 +520,7 @@ module.exports = {
     existeUtilizadorTelefoneAtivo,
     atualizarPasswordPorTelefone,
     listarTodosUtilizadores,
+    listarTodosAlunos,
     criarUtilizador,
     editarUtilizador,
     alterarEstadoUtilizador,

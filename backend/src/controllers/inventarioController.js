@@ -307,7 +307,8 @@ async function registarPagamentoEmprestimo(req, res, next) {
 // ============================================================================
 async function getPecasAVenda(req, res, next) {
     try {
-        const pecas = await inventarioModel.getPecasAVenda();
+        const incluir = req.query.incluirConcluidas === '1' || req.query.incluirConcluidas === 'true';
+        const pecas = await inventarioModel.getPecasAVenda(incluir);
         return res.status(200).json(pecas);
     } catch (error) {
         next(error);

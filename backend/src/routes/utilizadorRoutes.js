@@ -13,6 +13,9 @@ router.get('/', autorizar('Admin'), utilizadorController.listarUtilizadores);
 // POST /api/utilizadores — criar utilizador (Admin)
 router.post('/', autorizar('Admin'), utilizadorController.criarUtilizador);
 
+// GET /api/utilizadores/alunos — listar alunos (Admin)
+router.get('/alunos', autorizar('Admin'), utilizadorController.listarAlunos);
+
 // POST /api/utilizadores/alunos — criar aluno (Admin)
 router.post('/alunos', autorizar('Admin'), utilizadorController.criarAluno);
 

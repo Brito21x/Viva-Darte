@@ -407,9 +407,12 @@ async function atualizarPagamentoEmprestimo(idEmprestimo, valor, metodoPagamento
 /**
  * Lista as peças disponíveis para venda. (US27)
  */
-async function getPecasAVenda() {
+async function getPecasAVenda(incluirConcluidas = false) {
     try {
         const pool = await poolPromise;
+        const filtroEstado = incluirConcluidas
+            ? `vp.estado IN ('Disponível', 'Concluída')`
+            : `vp.estado = 'Disponível'`;
         const result = await pool.request().query(`
             SELECT 
                 vp.id_venda,
@@ -436,7 +439,7 @@ async function getPecasAVenda() {
                 FROM FOTO_PECA 
                 GROUP BY PECAid_peca
             ) f ON p.id_peca = f.PECAid_peca
-            WHERE vp.estado IN ('Disponível', 'Concluída')
+            WHERE ${filtroEstado}
             ORDER BY vp.data_colocacao DESC;
         `);
         return result.recordset;

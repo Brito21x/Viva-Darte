@@ -64,6 +64,19 @@ async function criarUtilizador(req, res, next) {
 }
 
 // ============================================================================
+// US05 / RF05 — LISTAR TODOS OS ALUNOS (Admin)
+// GET /api/utilizadores/alunos
+// ============================================================================
+async function listarAlunos(req, res, next) {
+    try {
+        const alunos = await utilizadorModel.listarTodosAlunos();
+        return res.status(200).json(alunos);
+    } catch (error) {
+        next(error);
+    }
+}
+
+// ============================================================================
 // US05 / RF05 — CRIAR ALUNO (Admin)
 // POST /api/utilizadores/alunos
 // Body: { nome, dataNascimento }
@@ -216,6 +229,7 @@ async function getAlunosPorEncarregadoId(req, res, next) {
 module.exports = {
     listarUtilizadores,
     criarUtilizador,
+    listarAlunos,
     criarAluno,
     associarEncarregadoAluno,
     editarUtilizador,

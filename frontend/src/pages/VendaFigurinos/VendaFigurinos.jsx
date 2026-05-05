@@ -90,7 +90,7 @@ export default function VendaFigurinos({ irParaLanding, irParaEmprestimos }) {
 
   const carregarFigurinos = async () => {
     try {
-      const response = await fetch(`${API_BASE}/api/inventario/vendas`, {
+      const response = await fetch(`${API_BASE}/api/inventario/vendas?incluirConcluidas=1`, {
         headers: authHeaders()
       });
       if (response.ok) {

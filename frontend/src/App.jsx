@@ -4,6 +4,7 @@ import Login from './pages/Login-Registo/Login';
 import Registo from './pages/Login-Registo/Registo';
 import RecoverPassword from './pages/Login-Registo/RecoverPassword';
 import VendaFigurinos from './pages/VendaFigurinos/VendaFigurinos'; // Novo Import
+import AdminDashboard from './pages/Admin/AdminDashboard';
 
 function App() {
   const [paginaAtual, setPaginaAtual] = useState('landing');
@@ -26,6 +27,7 @@ function App() {
           irParaRegisto={() => setPaginaAtual('registo')} 
           irParaLanding={() => setPaginaAtual('landing')} 
           irParaRecuperar={() => setPaginaAtual('recuperar')} 
+          irParaAdmin={() => setPaginaAtual('admin')} // <--- ADICIONADO AQUI: Passa a instrução ao Login
         />
       )}
       
@@ -48,6 +50,14 @@ function App() {
       {/* VENDA DE FIGURINOS */}
       {paginaAtual === 'venda_figurinos' && (
         <VendaFigurinos 
+          irParaLanding={() => setPaginaAtual('landing')} 
+        />
+      )}
+
+      {/* ADMIN DASHBOARD */}
+      {/* ADICIONADO AQUI: O bloco que mostra a página de Administração */}
+      {paginaAtual === 'admin' && (
+        <AdminDashboard 
           irParaLanding={() => setPaginaAtual('landing')} 
         />
       )}

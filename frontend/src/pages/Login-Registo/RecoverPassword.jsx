@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import './LoginRegisto.css';
-import { API_URL } from '../../services/api'; 
+import './LoginRegisto.css'; 
 
 export default function RecoverPassword({ irParaLogin, irParaLanding }) {
   const [etapa, setEtapa] = useState(1); 
@@ -35,7 +34,7 @@ export default function RecoverPassword({ irParaLogin, irParaLanding }) {
   const lidarComEmail = async (e) => {
     e.preventDefault();
     try {
-      const response = await fetch(`${API_URL}/api/auth/recuperar-password`, {
+      const response = await fetch(`http://localhost:3000/api/auth/recuperar-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email })
@@ -81,7 +80,7 @@ export default function RecoverPassword({ irParaLogin, irParaLanding }) {
     }
 
     try {
-        const response = await fetch(`${API_URL}/api/auth/redefinir-password`, {
+        const response = await fetch('http://localhost:3000/api/auth/redefinir-password', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 

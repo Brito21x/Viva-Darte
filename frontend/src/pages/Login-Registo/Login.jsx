@@ -1,13 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import './LoginRegisto.css';
-import { API_URL } from '../../services/api'; 
+import './LoginRegisto.css'; 
 
-export default function Login({
-  irParaRegisto,
-  irParaLanding,
-  irParaRecuperar,
-  irParaProfessorAgendamento
-}) {
+export default function Login({ irParaRegisto, irParaLanding, irParaRecuperar }) {
   const [tipo, setTipo] = useState('EE'); 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -30,7 +24,7 @@ export default function Login({
     e.preventDefault();
 
     try {
-      const response = await fetch(`${API_URL}/api/auth/login`, {
+      const response = await fetch('http://localhost:3000/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         // AGORA ENVIAMOS O "tipo" PARA O BACKEND VALIDAR
@@ -40,15 +34,10 @@ export default function Login({
       const resultado = await response.json();
 
       if (response.ok) {
-        if (resultado.token) {
-          localStorage.setItem('viva_token', resultado.token);
-        }
+        // Grava o objeto que o backend envia (inclui o perfil ativo validado)
         localStorage.setItem('viva_user', JSON.stringify(resultado.utilizador));
-        if (tipo === 'PROF' && typeof irParaProfessorAgendamento === 'function') {
-          irParaProfessorAgendamento();
-        } else {
-          irParaLanding();
-        }
+        localStorage.setItem('token', resultado.token);
+        irParaLanding(); 
       } else {
         mostrarAlerta(resultado.mensagem || "Dados de acesso incorretos.");
       }

@@ -109,6 +109,14 @@ async function desativarUtilizador(req, res, next) {
         return res.status(400).json({ mensagem: 'Erro ao revogar.' });
     } catch (error) { next(error); }
 }
+// NOVA FUNÇÃO: ELIMINAR UTILIZADOR PENDENTE/SUSPENSO
+async function eliminarUtilizador(req, res, next) {
+    try {
+        const sucesso = await utilizadorModel.apagarUtilizador(req.params.id);
+        if (sucesso) return res.status(200).json({ mensagem: 'Pedido eliminado com sucesso!' });
+        return res.status(400).json({ mensagem: 'Erro ao eliminar utilizador.' });
+    } catch (error) { next(error); }
+}
 
 // NOVA FUNÇÃO: Criar Utilizador diretamente pelo Admin (Fica Ativo logo)
 async function adminCriarUtilizador(req, res, next) {
@@ -162,5 +170,6 @@ module.exports = {
     ativarUtilizador, 
     desativarUtilizador, 
     adminCriarUtilizador, 
-    editarUtilizadorCompleto
+    editarUtilizadorCompleto,
+    eliminarUtilizador
 };

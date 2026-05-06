@@ -108,6 +108,8 @@ async function requisitarEmprestimo(req, res, next) {
     }
 }
 
+
+
 // ============================================================================
 // US24 / RF24 — REGISTAR DEVOLUÇÃO DE EMPRÉSTIMO
 // PUT /api/inventario/emprestimos/:id/devolucao

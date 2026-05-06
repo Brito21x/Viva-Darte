@@ -155,6 +155,35 @@ async function alterarEstadoUtilizador(idUtilizador, estadoAtivo) {
         return result.rowsAffected[0] > 0;
     } catch (error) { throw error; }
 }
+
+// NOVA FUNÇÃO: ELIMINAR UTILIZADOR
+async function apagarUtilizador(idUtilizador) {
+    const pool = await poolPromise;
+    const transaction = pool.transaction();
+    await transaction.begin();
+    try {
+        // Limpar ligações de perfil primeiro (senão o SQL bloqueia)
+        await transaction.request()
+            .input('Id', sql.Int, idUtilizador)
+            .query('DELETE FROM UTILIZADOR_PERFIL WHERE UTILIZADORid_utilizador = @Id');
+            
+        // Limpar possíveis tokens
+        await transaction.request()
+            .input('Id', sql.Int, idUtilizador)
+            .query('DELETE FROM TOKEN_RECUPERACAO WHERE UTILIZADORid_utilizador = @Id');
+
+        // Finalmente, apagar o utilizador
+        const result = await transaction.request()
+            .input('Id', sql.Int, idUtilizador)
+            .query('DELETE FROM UTILIZADOR WHERE id_utilizador = @Id');
+
+        await transaction.commit();
+        return result.rowsAffected[0] > 0;
+    } catch (error) {
+        await transaction.rollback();
+        throw error;
+    }
+}
  
 // ============================================================================
 // 3. RECUPERAÇÃO DE PALAVRA-PASSE
@@ -209,5 +238,6 @@ module.exports = {
     alterarEstadoUtilizador,
     guardarTokenRecuperacao, 
     validarTokenRecuperacao, 
-    atualizarPassword
+    atualizarPassword,
+    apagarUtilizador
 };

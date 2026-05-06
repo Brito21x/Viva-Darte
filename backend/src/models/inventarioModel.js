@@ -11,7 +11,10 @@ async function getCatalogoPecas() {
         const query = `
             SELECT p.id_peca, p.nome AS nome_peca, p.descricao, p.tamanho, p.estado AS condicao_peca,
                    p.origem, p.localizacao, p.disponivel_para_emprestimo, p.disponivel_para_venda,
-                   p.data_registo, cp.nome AS categoria, u.nome AS registado_por, f.foto AS foto_principal
+                   p.data_registo, cp.nome AS categoria, u.nome AS registado_por, f.foto AS foto_principal,
+                   p.UTILIZADORid_utilizador,
+                   active_emp.data_inicio AS emprestimo_inicio,
+                   active_emp.data_fim AS emprestimo_fim
             FROM PECA p
             JOIN CATEGORIA_PECA cp ON p.CATEGORIA_PECAid_categoria_peca = cp.id_categoria_peca
             JOIN UTILIZADOR u ON p.UTILIZADORid_utilizador = u.id_utilizador
@@ -19,6 +22,15 @@ async function getCatalogoPecas() {
                 SELECT PECAid_peca, MIN(CAST(foto AS NVARCHAR(MAX))) AS foto 
                 FROM FOTO_PECA GROUP BY PECAid_peca
             ) f ON p.id_peca = f.PECAid_peca
+            OUTER APPLY (
+                -- Procura o empréstimo mais recente desta peça que ainda não foi devolvido
+                SELECT TOP 1 e.data_inicio, e.data_fim
+                FROM EMPRESTIMO_ITEM ei
+                JOIN EMPRESTIMO e ON ei.[EMPRESIMO id_emprestimo] = e.id_emprestimo
+                WHERE ei.PECAid_peca = p.id_peca 
+                  AND e.data_devolucao IS NULL
+                ORDER BY e.id_emprestimo DESC
+            ) active_emp
             ORDER BY p.nome ASC;
         `;
         const result = await pool.request().query(query);

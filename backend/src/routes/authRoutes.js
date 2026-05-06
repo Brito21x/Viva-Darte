@@ -4,6 +4,8 @@ const router = express.Router();
 const authController = require('../controllers/authController');
 const { autenticar } = require('../middlewares/auth');
 
+
+//Rotas de autenticação
 router.post('/login', authController.login);
 router.post('/logout', autenticar, authController.logout);
 router.post('/recuperar-password', authController.solicitarRecuperacaoPassword);
@@ -14,8 +16,7 @@ router.post('/register', authController.register);
 router.get('/utilizadores', autenticar, authController.listarUtilizadores);
 router.put('/utilizadores/:id/ativar', autenticar, authController.ativarUtilizador);
 router.put('/utilizadores/:id/desativar', autenticar, authController.desativarUtilizador);
-
-// NOVAS ROTAS (Criar e Editar)
+router.delete('/utilizadores/:id', autenticar, authController.eliminarUtilizador);
 router.post('/utilizadores', autenticar, authController.adminCriarUtilizador);
 router.put('/utilizadores/:id', autenticar, authController.editarUtilizadorCompleto);
 

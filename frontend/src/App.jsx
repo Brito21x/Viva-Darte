@@ -14,7 +14,7 @@ function App() {
     if (window.location.pathname === '/admin') {
       return 'admin';
     }
-    return localStorage.getItem('ultimaPagina') || 'landing';
+    return 'landing';
   });
 
   useEffect(() => {

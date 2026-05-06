@@ -1,364 +1,457 @@
 import React, { useState, useEffect } from 'react';
 import './EmprestimosPecas.css';
 import logoImg from '../../assets/logo.png';
-import { isProfessorUtilizador } from '../../utils/perfilUtilizador';
 
-export default function EmprestimosPecas({
-  irParaLanding,
-  irParaVendaFigurinos,
-  irParaAgendarCoaching,
-  irParaProfessorAgendamento
-}) {
-  const [utilizador, setUtilizador] = useState(null);
-  const [pecas, setPecas] = useState([]);
-  const [carregando, setCarregando] = useState(true);
+export default function EmprestimosPecas({ irParaLanding, irParaVendaFigurinos }) {
+  const [utilizador, setUtilizador]   = useState(null);
+  const [pecas, setPecas]             = useState([]);
+  const [isLoading, setIsLoading]     = useState(true);
 
-  // --- ESTADO PARA NAVEGAÇÃO DAS FOTOS ---
+  const [pesquisa, setPesquisa]       = useState('');
+  const [filtroEstado, setFiltroEstado] = useState('Todos');
+  const [ordenacao, setOrdenacao]     = useState('recentes');
+
   const [indicesImagens, setIndicesImagens] = useState({});
 
-  // --- ESTADOS PARA OS MODAIS ---
-  const [mostrarModalAdicionar, setMostrarModalAdicionar] = useState(false);
-  const [mostrarModalEdicao, setMostrarModalEdicao] = useState(false);
-  const [pecaEmEdicaoId, setPecaEmEdicaoId] = useState(null);
+  const [isAdicionarModalOpen, setIsAdicionarModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen]           = useState(false);
+  const [isSolicitarModalOpen, setIsSolicitarModalOpen] = useState(false);
+  const [isAcoesModalOpen, setIsAcoesModalOpen]         = useState(false);
+  const [isSubmitting, setIsSubmitting]                 = useState(false);
 
   const [novaPeca, setNovaPeca] = useState({
-    nome: '',
-    tamanho: '',
-    condicao: 'Novo',
-    valor_dia: '',
-    descricao: '',
-    metodos_pagamento: ['MBWay'], 
-    fotos: []
+    nome: '', tamanho: '', condicao: 'Novo', valor_dia: '',
+    descricao: '', metodos_pagamento: ['MBWay'], fotos: []
   });
 
-  // --- ESTADOS PARA O MODAL DE SOLICITAR ---
-  const [isSolicitarModalOpen, setIsSolicitarModalOpen] = useState(false);
-  const [pecaSelecionada, setPecaSelecionada] = useState(null);
-  const [metodoPagamentoSolicitacao, setMetodoPagamentoSolicitacao] = useState('MBWay');
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [pecaEmEdicao, setPecaEmEdicao] = useState(null);
 
-  // --- ESTADO PARA O ALERTA CUSTOMIZADO ---
+  const [pecaSelecionada, setPecaSelecionada]                       = useState(null);
+  const [metodoPagamentoSolicitacao, setMetodoPagamentoSolicitacao] = useState('MBWay');
+  const [dataInicio, setDataInicio]                                 = useState('');
+  const [dataFim, setDataFim]                                       = useState('');
+  const [observacoesSolicitacao, setObservacoesSolicitacao]         = useState('');
+
+  const [acaoPeca, setAcaoPeca] = useState(null);
+  const [acaoForm, setAcaoForm] = useState({
+    idEmprestimo: '', tipoAcao: 'Pagamento',
+    valorPagamento: '', metodoPagamento: 'MBWay', estadoPagamento: 'Pago',
+    estadoFinalDevolucao: 'Concluído', observacoesDevolucao: '', estadoPecaDevolucao: 'Bom',
+    tipoPenalizacao: 'Atraso', valorPenalizacao: '', descricaoPenalizacao: ''
+  });
+
   const [customAlert, setCustomAlert] = useState({ show: false, message: '', type: 'alert', onConfirm: null });
 
-  // Pede os dados ao Backend
-  const carregarEmprestimos = async () => {
+  const API_URL = 'http://localhost:3000/api/inventario';
+
+  const getToken  = () => localStorage.getItem('token') || '';
+  const mostrarAlerta = (msg) => setCustomAlert({ show: true, message: msg, type: 'alert', onConfirm: null });
+  const fecharAlerta  = ()    => setCustomAlert({ show: false, message: '', type: 'alert', onConfirm: null });
+
+  const parsearLocalizacao = (localizacao) => {
+    if (!localizacao || !localizacao.includes('valor_dia:')) return {};
     try {
-      const response = await fetch('http://localhost:3000/api/emprestimos'); 
+      const partes = localizacao.split(';');
+      const valor_dia = partes.find(p => p.startsWith('valor_dia:'))?.split(':')[1] || '0';
+      const metodosStr = partes.find(p => p.startsWith('metodos:'))?.split(':')[1] || 'MBWay';
+      return { valor_dia, metodos: metodosStr.split(',') };
+    } catch { return {}; }
+  };
+
+  const carregarPecas = async (mostrarLoading = false) => {
+    if (mostrarLoading) setIsLoading(true);
+    try {
+      const response = await fetch(API_URL, {
+        method: 'GET',
+        headers: { 'Authorization': `Bearer ${getToken()}` },
+        cache: 'no-store'
+      });
+
       if (response.ok) {
         const dados = await response.json();
         
-        const pecasTratadas = dados.map(peca => {
-            let fotosArray = [];
-            if (peca.fotos && Array.isArray(peca.fotos)) {
-                fotosArray = peca.fotos;
-            } else if (peca.foto_url) {
-                fotosArray = [peca.foto_url]; 
+        const tratadas = dados.filter(p => 
+          p.disponivel_para_emprestimo === true || 
+          p.disponivel_para_emprestimo === 1 || 
+          (p.localizacao && p.localizacao.includes('valor_dia:'))
+        );
+
+        setPecas(prev => {
+          const newPecas = [...tratadas];
+          newPecas.forEach(np => {
+            const existing = prev.find(p => p.id_peca === np.id_peca);
+            
+            if (existing && existing.fotosCompletas) {
+              np.fotos = existing.fotos;
+              np.fotosCompletas = true;
+            } else {
+              np.fotos = np.foto_principal ? [np.foto_principal] : [];
+              np.fotosCompletas = false;
+
+              fetch(`${API_URL}/${np.id_peca}`, { headers: { 'Authorization': `Bearer ${getToken()}` } })
+                .then(r => r.json())
+                .then(det => {
+                  setPecas(curr => curr.map(cp =>
+                    cp.id_peca === np.id_peca
+                      ? { ...cp, fotos: det.fotos && det.fotos.length > 0 ? det.fotos.map(f => f.foto) : cp.fotos, fotosCompletas: true }
+                      : cp
+                  ));
+                })
+                .catch(() => {});
             }
-
-            return {
-                ...peca,
-                fotos: fotosArray
-            };
+          });
+          return newPecas;
         });
-
-        setPecas(pecasTratadas);
       }
     } catch (error) {
-      console.error("Erro de ligação à BD:", error);
+      console.error("Erro a carregar peças para empréstimo:", error);
     } finally {
-      setCarregando(false);
+      if (mostrarLoading) setIsLoading(false);
     }
   };
 
   useEffect(() => {
     document.title = "Empréstimos de Peças | Viva D'arte";
     const userGuardado = localStorage.getItem('viva_user');
-    if (userGuardado) {
-      setUtilizador(JSON.parse(userGuardado));
-    }
-    carregarEmprestimos();
+    if (userGuardado) setUtilizador(JSON.parse(userGuardado));
+
+    carregarPecas(true);
+
+    const interval = setInterval(() => carregarPecas(false), 1000);
+    return () => clearInterval(interval);
   }, []);
 
-  // --- NAVEGAÇÃO DE IMAGENS ---
+  const handleLogout = () => {
+    localStorage.removeItem('viva_user');
+    localStorage.removeItem('token');
+    setUtilizador(null);
+    if (irParaLanding) irParaLanding();
+    window.location.reload();
+  };
+
   const proximaImagem = (e, id_peca, totalFotos) => {
     e.stopPropagation();
-    setIndicesImagens(prev => ({
-      ...prev, [id_peca]: ((prev[id_peca] || 0) + 1) % totalFotos
-    }));
+    setIndicesImagens(prev => ({ ...prev, [id_peca]: ((prev[id_peca] || 0) + 1) % totalFotos }));
   };
-
   const imagemAnterior = (e, id_peca, totalFotos) => {
     e.stopPropagation();
-    setIndicesImagens(prev => ({
-      ...prev, [id_peca]: ((prev[id_peca] || 0) - 1 + totalFotos) % totalFotos
-    }));
+    setIndicesImagens(prev => ({ ...prev, [id_peca]: ((prev[id_peca] || 0) - 1 + totalFotos) % totalFotos }));
   };
 
-  // --- FUNÇÕES DE ALERTA ---
-  const mostrarAlerta = (msg) => {
-    setCustomAlert({ show: true, message: msg, type: 'alert', onConfirm: null });
-  };
-
-  const fecharAlerta = () => {
-    setCustomAlert({ show: false, message: '', type: 'alert', onConfirm: null });
-    if (customAlert.message.includes("sucesso")) {
-      carregarEmprestimos();
-    }
-  };
-
-  // --- GESTÃO DE INPUTS ---
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setNovaPeca(prev => ({ ...prev, [name]: value }));
-  };
-
-  const handleCheckboxChange = (metodo) => {
-    setNovaPeca(prev => {
-      const novosMetodos = prev.metodos_pagamento.includes(metodo)
-        ? prev.metodos_pagamento.filter(m => m !== metodo)
-        : [...prev.metodos_pagamento, metodo];
-      return { ...prev, metodos_pagamento: novosMetodos };
-    });
-  };
+  const comprimirImagem = (file) => new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      const img = new Image(); img.src = event.target.result;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width, height = img.height;
+        if (width > height) { if (width > 800) { height *= 800 / width; width = 800; } }
+        else { if (height > 800) { width *= 800 / height; height = 800; } }
+        canvas.width = width; canvas.height = height;
+        canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', 0.7));
+      };
+    };
+  });
 
   const handleFotosUpload = async (e) => {
     const files = Array.from(e.target.files);
-    
-    const comprimirImagem = (file) => {
-      return new Promise((resolve) => {
-        const reader = new FileReader();
-        reader.readAsDataURL(file);
-        reader.onload = (event) => {
-          const img = new Image();
-          img.src = event.target.result;
-          img.onload = () => {
-            const canvas = document.createElement('canvas');
-            const MAX_WIDTH = 800; 
-            const MAX_HEIGHT = 800;
-            let width = img.width;
-            let height = img.height;
-
-            if (width > height) {
-              if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; }
-            } else {
-              if (height > MAX_HEIGHT) { width *= MAX_HEIGHT / height; height = MAX_HEIGHT; }
-            }
-
-            canvas.width = width;
-            canvas.height = height;
-            const ctx = canvas.getContext('2d');
-            ctx.drawImage(img, 0, 0, width, height);
-            resolve(canvas.toDataURL('image/jpeg', 0.7));
-          };
-        };
-      });
-    };
-
+    if (!files.length) return;
     try {
-        const Fotos = await Promise.all(files.map(file => comprimirImagem(file)));
-        setNovaPeca(prev => ({ ...prev, fotos: [...prev.fotos, ...Fotos] }));
-    } catch (error) {
-        console.error("Erro ao converter fotos:", error);
-        mostrarAlerta("Erro ao processar as imagens.");
-    }
+      const novasFotos = await Promise.all(files.map(comprimirImagem));
+      setNovaPeca(prev => ({ ...prev, fotos: [...prev.fotos, ...novasFotos] }));
+    } catch { mostrarAlerta("Erro ao processar as imagens."); }
   };
 
-  const removerFoto = (indexParaRemover) => {
-    setNovaPeca(prev => ({ ...prev, fotos: prev.fotos.filter((_, index) => index !== indexParaRemover) }));
-  };
+  const removerFoto = (idx) =>
+    setNovaPeca(prev => ({ ...prev, fotos: prev.fotos.filter((_, i) => i !== idx) }));
 
-  // --- FUNÇÕES DE ADICIONAR ---
-  const abrirModalParaAdicionar = () => {
-    setNovaPeca({ nome: '', tamanho: '', condicao: 'Novo', valor_dia: '', descricao: '', metodos_pagamento: ['MBWay'], fotos: [] });
-    setMostrarModalAdicionar(true);
-  };
+  const handleCheckboxPagamento = (metodo) =>
+    setNovaPeca(prev => ({
+      ...prev,
+      metodos_pagamento: prev.metodos_pagamento.includes(metodo)
+        ? prev.metodos_pagamento.filter(m => m !== metodo)
+        : [...prev.metodos_pagamento, metodo]
+    }));
 
   const handleSubmeterNovo = async (e) => {
     e.preventDefault();
-    if (!utilizador || !utilizador.id_utilizador) return mostrarAlerta("Erro: Utilizador não identificado.");
+    if (!utilizador) return mostrarAlerta("Erro: Sessão inválida.");
+    if (!novaPeca.fotos.length) return mostrarAlerta("Adiciona pelo menos uma foto da peça.");
+    if (!novaPeca.metodos_pagamento.length) return mostrarAlerta("Seleciona pelo menos um método de pagamento.");
 
-    if (novaPeca.fotos.length === 0) {
-      return mostrarAlerta("Por favor, adiciona pelo menos uma foto da peça.");
-    }
-
-    const dadosParaEnviar = {
-      ...novaPeca,
-      userId: utilizador.id_utilizador
-    };
-
+    setIsSubmitting(true);
     try {
-      const response = await fetch('http://localhost:3000/api/emprestimos/adicionar', {
+      const resPeca = await fetch(API_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(dadosParaEnviar)
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` },
+        body: JSON.stringify({
+          nome:        novaPeca.nome,
+          descricao:   novaPeca.descricao,
+          tamanho:     novaPeca.tamanho,
+          estado:      novaPeca.condicao,
+          idCategoria: 1,
+          fotos:       novaPeca.fotos
+        })
       });
 
-      if (response.ok) {
-        setMostrarModalAdicionar(false);
-        mostrarAlerta('Peça disponibilizada para empréstimo com sucesso!'); 
-      } else {
-        const erroDados = await response.json();
-        mostrarAlerta("Erro ao publicar a peça: " + (erroDados.details || "Erro interno"));
+      if (!resPeca.ok) {
+        const erro = await resPeca.json();
+        throw new Error(erro.mensagem || "Erro ao registar a peça.");
       }
+
+      const { idPeca } = await resPeca.json();
+
+      const resDisp = await fetch(`${API_URL}/${idPeca}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` },
+        body: JSON.stringify({
+          estado:               novaPeca.condicao,
+          disponivelEmprestimo: true,
+          disponivelVenda:      false,
+          localizacao:          `valor_dia:${novaPeca.valor_dia};metodos:${novaPeca.metodos_pagamento.join(',')}`
+        })
+      });
+
+      if (!resDisp.ok) throw new Error("Erro ao marcar disponibilidade.");
+
+      mostrarAlerta('Peça disponibilizada para empréstimo com sucesso!');
+      setNovaPeca({ nome: '', tamanho: '', condicao: 'Novo', valor_dia: '', descricao: '', metodos_pagamento: ['MBWay'], fotos: [] });
+      setIsAdicionarModalOpen(false);
+      carregarPecas(false);
     } catch (error) {
-      mostrarAlerta("Não foi possível conectar ao servidor.");
+      mostrarAlerta(error.message);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  // --- FUNÇÕES DE EDITAR ---
-  const handleEditarPeca = (peca) => {
-    setPecaEmEdicaoId(peca.id_peca);
-    setNovaPeca({
-      nome: peca.nome || '',
-      tamanho: peca.tamanho || '',
-      condicao: peca.condicao === 'Emprestado' ? 'Emprestado' : 'Disponível',
-      valor_dia: peca.valor_dia ? peca.valor_dia.toString() : '',
-      descricao: peca.descricao || '',
-      metodos_pagamento: peca.metodos_pagamento || ['MBWay'],
-      fotos: peca.fotos || []
+  const abrirEdicao = (peca) => {
+    const metaParsed = parsearLocalizacao(peca.localizacao || '');
+    setPecaEmEdicao({
+      ...peca,
+      valor_dia:         metaParsed.valor_dia || '',
+      metodos_pagamento: metaParsed.metodos   || ['MBWay'],
+      fotos:             peca.fotos || []
     });
-    setMostrarModalEdicao(true);
+    setIsEditModalOpen(true);
   };
 
   const handleGuardarEdicao = async (e) => {
     e.preventDefault();
+    if (!pecaEmEdicao.metodos_pagamento.length) return mostrarAlerta("Seleciona pelo menos um método de pagamento.");
+
     try {
-      const response = await fetch(`http://localhost:3000/api/emprestimos/${pecaEmEdicaoId}`, {
+      const response = await fetch(`${API_URL}/${pecaEmEdicao.id_peca}/editar`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(novaPeca)
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` },
+        body: JSON.stringify({
+          nome:             pecaEmEdicao.nome_peca || pecaEmEdicao.nome,
+          descricao:        pecaEmEdicao.descricao,
+          tamanho:          pecaEmEdicao.tamanho,
+          estado:           pecaEmEdicao.condicao_peca || pecaEmEdicao.estado
+        })
       });
 
       if (response.ok) {
-        setMostrarModalEdicao(false);
+        await fetch(`${API_URL}/${pecaEmEdicao.id_peca}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` },
+          body: JSON.stringify({
+            estado:               pecaEmEdicao.condicao_peca || pecaEmEdicao.estado,
+            disponivelEmprestimo: true,
+            disponivelVenda:      false,
+            localizacao:          `valor_dia:${pecaEmEdicao.valor_dia};metodos:${pecaEmEdicao.metodos_pagamento.join(',')}`
+          })
+        });
+
         mostrarAlerta('Peça atualizada com sucesso!');
+        setIsEditModalOpen(false);
+        carregarPecas(false);
       } else {
-        mostrarAlerta("Erro ao editar a peça.");
+        const data = await response.json();
+        mostrarAlerta(data.mensagem || 'Erro ao guardar as alterações.');
       }
-    } catch (error) {
-      mostrarAlerta("Erro na ligação ao servidor.");
-    }
+    } catch { mostrarAlerta("Erro de rede."); }
   };
 
-  // --- FUNÇÃO DE REMOVER ---
-  const handleRemoverPeca = (id_peca) => {
+  const confirmarEliminacao = (idPeca) => {
     setCustomAlert({
       show: true,
-      message: 'Tens a certeza que pretendes apagar esta peça? Esta ação é irreversível.',
+      message: 'Tens a certeza que queres apagar esta peça? Esta ação é irreversível.',
       type: 'confirm',
-      onConfirm: async () => {
-        try {
-          const response = await fetch(`http://localhost:3000/api/emprestimos/${id_peca}`, {
-            method: 'DELETE'
-          });
-
-          if (response.ok) {
-            setCustomAlert({ show: true, message: 'Peça removida com sucesso!', type: 'alert', onConfirm: null });
-          } else {
-            setCustomAlert({ show: true, message: 'Erro ao remover a peça.', type: 'alert', onConfirm: null });
-          }
-        } catch (error) {
-          setCustomAlert({ show: true, message: 'Erro na ligação ao servidor.', type: 'alert', onConfirm: null });
-        }
-      }
+      onConfirm: () => executarApagar(idPeca)
     });
   };
 
-  // --- FUNÇÕES DO MODAL DE SOLICITAR ---
-  const handleAbrirSolicitar = (peca) => {
-    setPecaSelecionada(peca);
-    let metodos = Array.isArray(peca.metodos_pagamento) ? peca.metodos_pagamento : [peca.metodos_pagamento];
-    setMetodoPagamentoSolicitacao(metodos.length > 0 ? metodos[0] : 'MBWay');
+  const executarApagar = async (idPeca) => {
+    fecharAlerta();
+    try {
+      const response = await fetch(`${API_URL}/${idPeca}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${getToken()}` }
+      });
+      if (response.ok) {
+        mostrarAlerta('Peça removida com sucesso!');
+        carregarPecas(false);
+      } else {
+        const data = await response.json();
+        mostrarAlerta(data.mensagem || 'Erro ao apagar a peça.');
+      }
+    } catch { mostrarAlerta("Erro de rede: Não foi possível contactar o servidor."); }
+  };
+
+  const handleAbrirSolicitar = async (peca) => {
+    const metaParsed = parsearLocalizacao(peca.localizacao || '');
+    setPecaSelecionada({
+      ...peca,
+      valor_dia:         metaParsed.valor_dia || '0',
+      metodos_pagamento: metaParsed.metodos   || ['MBWay']
+    });
+    setMetodoPagamentoSolicitacao(metaParsed.metodos?.[0] || 'MBWay');
+    setDataInicio('');
+    setDataFim('');
+    setObservacoesSolicitacao('');
     setIsSolicitarModalOpen(true);
   };
 
   const confirmarSolicitacao = async (e) => {
     e.preventDefault();
-    setIsSubmitting(true);
-    const idSolicitante = utilizador?.id_utilizador || utilizador?.id;
+    if (!utilizador) return mostrarAlerta("Sessão inválida. Faz login novamente.");
+    if (!dataInicio || !dataFim) return mostrarAlerta("Indica as datas de início e fim do empréstimo.");
+    if (new Date(dataFim) <= new Date(dataInicio)) return mostrarAlerta("A data de fim deve ser posterior à data de início.");
 
-    if (!idSolicitante) {
-        mostrarAlerta("Erro: Sessão inválida. Por favor, faz login novamente para solicitar.");
-        setIsSubmitting(false);
-        return;
-    }
+    setIsSubmitting(true);
+    const dias = Math.ceil((new Date(dataFim) - new Date(dataInicio)) / (1000 * 60 * 60 * 24));
+    const totalEstimado = (parseFloat(pecaSelecionada.valor_dia || 0) * dias).toFixed(2);
 
     try {
-        const response = await fetch(`http://localhost:3000/api/emprestimos/${pecaSelecionada.id_peca}/solicitar`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id_solicitante: idSolicitante, metodo_pagamento: metodoPagamentoSolicitacao })
+      const response = await fetch(`${API_URL}/emprestimos`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` },
+        body: JSON.stringify({
+          dataInicio:  dataInicio,
+          dataFim:     dataFim,
+          observacoes: observacoesSolicitacao
+            ? `Método: ${metodoPagamentoSolicitacao} | ${observacoesSolicitacao}`
+            : `Método: ${metodoPagamentoSolicitacao}`,
+          itens: [{
+            idPeca:        pecaSelecionada.id_peca,
+            estadoEntrega: pecaSelecionada.condicao_peca || pecaSelecionada.estado || 'Bom'
+          }]
+        })
+      });
+
+      if (response.ok) {
+        mostrarAlerta(
+          `Empréstimo de "${pecaSelecionada.nome_peca || pecaSelecionada.nome}" solicitado com sucesso!\n` +
+          `Duração: ${dias} dia(s) — Total estimado: ${totalEstimado} €`
+        );
+        setIsSolicitarModalOpen(false);
+        carregarPecas(false);
+      } else {
+        const err = await response.json();
+        mostrarAlerta(err.mensagem || 'Ocorreu um erro ao requisitar o empréstimo.');
+      }
+    } catch { mostrarAlerta("Erro de rede."); }
+    finally { setIsSubmitting(false); }
+  };
+
+  const handleAbrirAcoesEmprestimo = (peca) => {
+    setAcaoPeca(peca);
+    setAcaoForm({ ...acaoForm, idEmprestimo: '' });
+    setIsAcoesModalOpen(true);
+  };
+
+  const handleSubmeterAcaoEmprestimo = async (e) => {
+    e.preventDefault();
+    if (!acaoForm.idEmprestimo) return mostrarAlerta('Indica o ID do Empréstimo.');
+    
+    setIsSubmitting(true);
+    const idEmp = parseInt(acaoForm.idEmprestimo);
+
+    try {
+      if (acaoForm.tipoAcao === 'Pagamento') {
+        const res = await fetch(`${API_URL}/emprestimos/${idEmp}/pagamento`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` },
+          body: JSON.stringify({
+            valor: parseFloat(acaoForm.valorPagamento),
+            metodoPagamento: acaoForm.metodoPagamento,
+            estadoPagamento: acaoForm.estadoPagamento
+          })
         });
-
-        if (response.ok) {
-            mostrarAlerta(`Solicitação de ${pecaSelecionada.nome} enviada com sucesso!`);
-            setIsSolicitarModalOpen(false);
-            // Atualizar o estado local imediatamente para refletir a peça como emprestada (visual escuro)
-            setPecas(prev => prev.map(p => p.id_peca === pecaSelecionada.id_peca ? { ...p, condicao: 'Emprestado' } : p));
-            carregarEmprestimos(); 
-        } else {
-            mostrarAlerta(`A tua solicitação para ${pecaSelecionada.nome} foi registada! (Simulado)`);
-            setIsSolicitarModalOpen(false);
-            // Simulação de alteração local também no fallback
-            setPecas(prev => prev.map(p => p.id_peca === pecaSelecionada.id_peca ? { ...p, condicao: 'Emprestado' } : p));
+        if (res.ok) mostrarAlerta('Pagamento registado com sucesso na base de dados!');
+        else { const err = await res.json(); mostrarAlerta(err.mensagem || 'Erro ao registar pagamento.'); }
+      } 
+      else if (acaoForm.tipoAcao === 'Devolucao') {
+        const res = await fetch(`${API_URL}/emprestimos/${idEmp}/devolucao`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` },
+          body: JSON.stringify({
+            estadoFinal: acaoForm.estadoFinalDevolucao,
+            observacoes: acaoForm.observacoesDevolucao || null,
+            itens: [{ idPeca: acaoPeca.id_peca, estadoDevolucao: acaoForm.estadoPecaDevolucao }]
+          })
+        });
+        if (res.ok) {
+          mostrarAlerta('Devolução efetuada e EMPRESTIMO_ITEM atualizado com sucesso!');
+          setIsAcoesModalOpen(false);
+          carregarPecas(false);
         }
-    } catch (error) {
-        mostrarAlerta('Erro de ligação ao servidor.');
-    } finally {
-        setIsSubmitting(false);
-    }
+        else { const err = await res.json(); mostrarAlerta(err.mensagem || 'Erro ao registar devolução.'); }
+      } 
+      else if (acaoForm.tipoAcao === 'Penalizacao') {
+        const res = await fetch(`${API_URL}/emprestimos/${idEmp}/penalizacoes`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` },
+          body: JSON.stringify({
+            idPeca: acaoPeca.id_peca,
+            tipo: acaoForm.tipoPenalizacao,
+            valor: parseFloat(acaoForm.valorPenalizacao),
+            descricao: acaoForm.descricaoPenalizacao || null
+          })
+        });
+        if (res.ok) mostrarAlerta('Tabela PENALIZACAO_PECA populada com sucesso!');
+        else { const err = await res.json(); mostrarAlerta(err.mensagem || 'Erro ao registar penalização.'); }
+      }
+    } catch { mostrarAlerta("Erro de rede."); }
+    finally { setIsSubmitting(false); }
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem('viva_user');
-    localStorage.removeItem('viva_token');
-    window.location.reload();
-  };
+  const pecasFiltradas = pecas
+    .filter(p => (p.nome_peca || p.nome)?.toLowerCase().includes(pesquisa.toLowerCase()))
+    .filter(p => filtroEstado === 'Todos' ? true : (p.condicao_peca || p.estado) === filtroEstado)
+    .sort((a, b) => {
+      const vaA = parseFloat(parsearLocalizacao(a.localizacao || '').valor_dia || 0);
+      const vaB = parseFloat(parsearLocalizacao(b.localizacao || '').valor_dia || 0);
+      if (ordenacao === 'preco_asc')  return vaA - vaB;
+      if (ordenacao === 'preco_desc') return vaB - vaA;
+      return b.id_peca - a.id_peca;
+    });
 
   return (
     <div className="emprestimos-page">
-      {/* --- NAVBAR --- */}
       <nav className="navbar interna">
         <div className="nav-brand" onClick={irParaLanding} style={{ cursor: 'pointer' }}>
           <img src={logoImg} alt="Logo" className="nav-logo-img" />
           <span>VIVA D'ARTE</span>
         </div>
-        
+
         <ul className="nav-menu">
           <li><a href="#" onClick={(e) => { e.preventDefault(); irParaLanding(); }}>Início</a></li>
-          {isProfessorUtilizador(utilizador) ? (
+          {utilizador?.perfil === 'Professor' ? (
             <>
               <li><span className="nav-separator">|</span></li>
-              <li>
-                <a
-                  href="#"
-                  className="special-link"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    irParaProfessorAgendamento?.();
-                  }}
-                >
-                  Disponibilidade e agenda
-                </a>
-              </li>
+              <li><a href="#" className="special-link">Coaching Agendados</a></li>
               <li><a href="#" className="special-link active">Empréstimos de peças</a></li>
               <li><a href="#" className="special-link" onClick={(e) => { e.preventDefault(); irParaVendaFigurinos(); }}>Venda de figurinos</a></li>
             </>
           ) : utilizador ? (
             <>
               <li><span className="nav-separator">|</span></li>
-              <li>
-                <a
-                  href="#"
-                  className="special-link"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    irParaAgendarCoaching?.();
-                  }}
-                >
-                  Agendar Coaching
-                </a>
-              </li>
+              <li><a href="#" className="special-link">Agendar Coaching</a></li>
               <li><a href="#" className="special-link active">Empréstimos de peças</a></li>
               <li><a href="#" className="special-link" onClick={(e) => { e.preventDefault(); irParaVendaFigurinos(); }}>Venda de figurinos</a></li>
             </>
@@ -368,7 +461,7 @@ export default function EmprestimosPecas({
         <div className="nav-actions">
           {utilizador ? (
             <div className="user-profile">
-              <span className="welcome-text">Olá, <strong>{utilizador.nome.split(' ')[0]}</strong></span>
+              <span className="welcome-text">Olá, <strong>{utilizador.nome?.split(' ')[0]}</strong></span>
               <button className="btn-logout" onClick={handleLogout}>Sair</button>
             </div>
           ) : (
@@ -377,7 +470,6 @@ export default function EmprestimosPecas({
         </div>
       </nav>
 
-      {/* --- CONTEÚDO PRINCIPAL --- */}
       <div className="emprestimos-content-wrapper">
         <div className="emprestimos-header-section">
           <div>
@@ -387,39 +479,83 @@ export default function EmprestimosPecas({
             </p>
           </div>
           {utilizador && (
-            <button className="btn-add-peca" onClick={abrirModalParaAdicionar}>
+            <button className="btn-add-peca" onClick={() => {
+              setNovaPeca({ nome: '', tamanho: '', condicao: 'Novo', valor_dia: '', descricao: '', metodos_pagamento: ['MBWay'], fotos: [] });
+              setIsAdicionarModalOpen(true);
+            }}>
               + Disponibilizar Peça
             </button>
           )}
         </div>
 
+        {!isLoading && pecas.length > 0 && (
+          <div style={{ display: 'flex', gap: '15px', marginBottom: '25px', flexWrap: 'wrap' }}>
+            <input
+              type="text"
+              placeholder="Pesquisar por nome..."
+              value={pesquisa}
+              onChange={(e) => setPesquisa(e.target.value)}
+              style={{ flex: 1, minWidth: '220px', padding: '12px 16px', borderRadius: '8px', border: '1px solid rgba(0,0,0,0.12)', fontSize: '0.95rem' }}
+            />
+            <select
+              value={filtroEstado}
+              onChange={(e) => setFiltroEstado(e.target.value)}
+              style={{ padding: '12px 16px', borderRadius: '8px', border: '1px solid rgba(0,0,0,0.12)', fontSize: '0.95rem', cursor: 'pointer', backgroundColor: '#fff' }}
+            >
+              <option value="Todos">Todos os Estados</option>
+              <option value="Novo">Novo</option>
+              <option value="Bom">Bom</option>
+              <option value="Usado">Usado</option>
+              <option value="Danificado">Danificado</option>
+            </select>
+            <select
+              value={ordenacao}
+              onChange={(e) => setOrdenacao(e.target.value)}
+              style={{ padding: '12px 16px', borderRadius: '8px', border: '1px solid rgba(0,0,0,0.12)', fontSize: '0.95rem', cursor: 'pointer', backgroundColor: '#fff' }}
+            >
+              <option value="recentes">Mais Recentes</option>
+              <option value="preco_asc">Preço: Mais Barato</option>
+              <option value="preco_desc">Preço: Mais Caro</option>
+            </select>
+          </div>
+        )}
+
         <div className="pecas-grid">
-          {carregando ? (
+          {isLoading ? (
             <div className="empty-state-container">A carregar peças...</div>
-          ) : pecas.length === 0 ? (
+          ) : pecasFiltradas.length === 0 ? (
             <div className="empty-state-container">
-              <p>Ainda não existem peças disponíveis para empréstimo de momento.</p>
+              <p>Nenhuma peça encontrada para os filtros selecionados.</p>
             </div>
           ) : (
-            pecas.map((peca) => {
-              const idxImg = indicesImagens[peca.id_peca] || 0;
-              const totalFotos = peca.fotos && peca.fotos.length > 0 ? peca.fotos.length : 0;
-              const estaEmprestado = peca.condicao === 'Emprestado' || peca.estado === 'Emprestado';
+            pecasFiltradas.map((peca) => {
+              const idxImg        = indicesImagens[peca.id_peca] || 0;
+              const totalFotos    = peca.fotos?.length || 0;
+              const estaEmprestado = peca.disponivel_para_emprestimo === false || peca.disponivel_para_emprestimo === 0 || peca.estado === 'Emprestado';
+              const metaParsed    = parsearLocalizacao(peca.localizacao || '');
+              const valorDia      = parseFloat(metaParsed.valor_dia || 0);
+              const metodos       = metaParsed.metodos || [];
+              const nomePeca      = peca.nome_peca || peca.nome || 'Sem nome';
+              const condicaoPeca  = peca.condicao_peca || peca.estado || 'Bom';
+              
+              const userId = utilizador?.id_utilizador || utilizador?.id; 
+              const eMinhaPeca = Boolean(userId && peca.UTILIZADORid_utilizador && userId === peca.UTILIZADORid_utilizador);
 
               return (
-                // Se a peça estiver emprestada, ganha a classe CSS 'emprestado' para ficar escurecida
-                <div key={peca.id_peca || peca.id} className={`peca-card ${estaEmprestado ? 'emprestado' : ''}`}>
-                  
-                  {/* --- ÁREA DA IMAGEM --- */}
-                  <div className="peca-image-container" style={totalFotos > 0 ? { backgroundImage: `url(${peca.fotos[idxImg]})` } : { backgroundColor: '#dcd7ce' }}>
-                    
+                <div 
+                  key={peca.id_peca} 
+                  className={`peca-card ${estaEmprestado ? 'emprestado' : ''}`}
+                >
+                  <div
+                    className="peca-image-container"
+                    style={totalFotos > 0 ? { backgroundImage: `url(${peca.fotos[idxImg]})` } : { backgroundColor: '#dcd7ce' }}
+                  >
                     {totalFotos === 0 && (
                       <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6b665e', fontWeight: '500', fontSize: '0.9rem' }}>
                         Sem Imagem
                       </div>
                     )}
 
-                    {/* BADGE DINÂMICA: "DISPONÍVEL" ou "EMPRESTADO" */}
                     <span className={`status-badge ${estaEmprestado ? 'emprestado' : 'disponivel'}`}>
                       {estaEmprestado ? 'EMPRESTADO' : 'DISPONÍVEL'}
                     </span>
@@ -436,48 +572,52 @@ export default function EmprestimosPecas({
                       </>
                     )}
 
-                    {utilizador && (utilizador.id_utilizador === peca.userId || utilizador.id_utilizador === peca.dono_id) && (
+                    {eMinhaPeca && (
                       <div className="owner-actions">
-                        <button className="action-btn edit-btn" title="Editar" onClick={(e) => { e.stopPropagation(); handleEditarPeca(peca); }}>✎</button>
-                        <button className="action-btn delete-btn" title="Apagar" onClick={(e) => { e.stopPropagation(); handleRemoverPeca(peca.id_peca); }}>🗑️</button>
+                        <button className="action-btn edit-btn" title="Editar" onClick={(e) => { e.stopPropagation(); abrirEdicao(peca); }}>✎</button>
+                        <button className="action-btn delete-btn" title="Apagar" onClick={(e) => { e.stopPropagation(); confirmarEliminacao(peca.id_peca); }}>🗑️</button>
                       </div>
                     )}
                   </div>
 
-                  {/* --- CONTEÚDO DO CARTÃO --- */}
                   <div className="peca-content">
-                    <h3 className="peca-nome">{peca.nome}</h3>
-                    
+                    <h3 className="peca-nome">{nomePeca}</h3>
+
                     <div className="peca-tags">
-                      <span>{peca.condicao !== 'Emprestado' ? (peca.condicao || peca.estado || 'Usado') : 'Usado'}</span>
+                      <span>{condicaoPeca}</span>
                       <span>Tam: {peca.tamanho || 'N/A'}</span>
                     </div>
 
                     <p className="peca-descricao">{peca.descricao}</p>
-                    <p className="peca-owner">Por: <strong>{peca.nome_dono || 'Comunidade'}</strong></p>
+                    <p className="peca-owner">Por: <strong>{peca.registado_por || 'Comunidade'}</strong></p>
 
                     <div className="peca-pagamentos">
-                      {peca.metodos_pagamento ? (
-                        Array.isArray(peca.metodos_pagamento) 
-                          ? peca.metodos_pagamento.map(m => <span key={m} className="tag-pagamento">{m}</span>)
-                          : <span className="tag-pagamento">{peca.metodos_pagamento}</span>
-                      ) : (
-                        <span className="tag-pagamento">MBWay</span> 
-                      )}
+                      {metodos.length > 0
+                        ? metodos.map(m => <span key={m} className="tag-pagamento">{m}</span>)
+                        : <span className="tag-pagamento">MBWay</span>
+                      }
                     </div>
 
                     <div className="peca-footer">
                       <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
-                        <span className="preco">{Number(peca.valor_dia || 0).toFixed(2)} €</span>
+                        <span className="preco">{valorDia.toFixed(2)} €</span>
                         <span className="texto-dia">/dia</span>
                       </div>
-                      
-                      {utilizador && (utilizador.id_utilizador === peca.userId || utilizador.id_utilizador === peca.dono_id) ? (
+
+                      {estaEmprestado ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', lineHeight: '1.2' }}>
+                          {eMinhaPeca ? (
+                            <button className="btn-dark btn-sm" onClick={() => handleAbrirAcoesEmprestimo(peca)} title="Atualizar BD">
+                              Gerir Empréstimo
+                            </button>
+                          ) : (
+                            <span className="texto-emprestado-rodape">Emprestado</span>
+                          )}
+                        </div>
+                      ) : eMinhaPeca ? (
                         <span className="texto-teu-item">O teu item</span>
-                      ) : estaEmprestado ? (
-                        <span className="texto-teu-item" style={{ color: '#b38b59', fontWeight: 'bold' }}>Indisponível</span>
                       ) : (
-                        <button className="btn-outline btn-sm" onClick={() => handleAbrirSolicitar(peca)} disabled={!utilizador}>
+                        <button className="btn-outline btn-sm" onClick={() => handleAbrirSolicitar(peca)} disabled={!utilizador} title={!utilizador ? 'Faz login para solicitar' : ''}>
                           Solicitar
                         </button>
                       )}
@@ -491,185 +631,368 @@ export default function EmprestimosPecas({
         </div>
       </div>
 
-      {/* --- MODAL DE ADICIONAR --- */}
-      {mostrarModalAdicionar && (
+      {isAdicionarModalOpen && (
         <div className="modal-overlay">
           <div className="modal-content form-venda">
             <h2>Disponibilizar para Empréstimo</h2>
-            
+
             <form onSubmit={handleSubmeterNovo}>
               <div className="form-group">
                 <label>Nome da Peça</label>
-                <input type="text" name="nome" placeholder="Ex: Sapatilhas de Ponta" value={novaPeca.nome} onChange={handleInputChange} required />
+                <input
+                  type="text" name="nome" placeholder="Ex: Sapatilhas de Ponta"
+                  value={novaPeca.nome}
+                  onChange={(e) => setNovaPeca({ ...novaPeca, nome: e.target.value })}
+                  required
+                />
               </div>
 
               <div className="form-row">
                 <div className="form-group">
                   <label>Preço por Dia (€)</label>
-                  <input type="number" step="0.01" name="valor_dia" placeholder="Ex: 5.00" value={novaPeca.valor_dia} onChange={handleInputChange} required />
+                  <input
+                    type="number" step="0.01" min="0" placeholder="Ex: 5.00"
+                    value={novaPeca.valor_dia}
+                    onChange={(e) => setNovaPeca({ ...novaPeca, valor_dia: e.target.value })}
+                    required
+                  />
                 </div>
                 <div className="form-group">
                   <label>Tamanho</label>
-                  <input type="text" name="tamanho" placeholder="Ex: S, 38, Úni" value={novaPeca.tamanho} onChange={handleInputChange} required />
+                  <input
+                    type="text" placeholder="Ex: S, 38, Único"
+                    value={novaPeca.tamanho}
+                    onChange={(e) => setNovaPeca({ ...novaPeca, tamanho: e.target.value })}
+                    required
+                  />
                 </div>
                 <div className="form-group">
                   <label>Condição</label>
-                  <select name="condicao" value={novaPeca.condicao} onChange={handleInputChange} required>
+                  <select value={novaPeca.condicao} onChange={(e) => setNovaPeca({ ...novaPeca, condicao: e.target.value })} required>
                     <option value="Novo">Novo</option>
-                    <option value="Usado - Como Novo">Usado - Como Novo</option>
-                    <option value="Usado - Bom estado">Usado - Bom estado</option>
-                    <option value="Usado - Marcas de uso">Usado - Marcas de uso</option>
+                    <option value="Bom">Bom</option>
+                    <option value="Usado">Usado</option>
+                    <option value="Danificado">Danificado</option>
                   </select>
                 </div>
               </div>
 
               <div className="form-group">
                 <label>Descrição e Detalhes</label>
-                <textarea name="descricao" placeholder="Descreve o material, detalhes ou marcas de uso..." value={novaPeca.descricao} onChange={handleInputChange} required></textarea>
+                <textarea
+                  rows="3" maxLength="120"
+                  placeholder="Descreve o material, detalhes ou marcas de uso... (Máx: 120 caracteres)"
+                  value={novaPeca.descricao}
+                  onChange={(e) => setNovaPeca({ ...novaPeca, descricao: e.target.value })}
+                  required
+                />
               </div>
 
               <div className="form-group">
-                <label>Métodos de Pagamento</label>
+                <label>Métodos de Pagamento Aceites</label>
                 <div className="checkbox-group">
-                  <label className="checkbox-label">
-                    <input type="checkbox" checked={novaPeca.metodos_pagamento.includes('MBWay')} onChange={() => handleCheckboxChange('MBWay')} /> MBWay
-                  </label>
-                  <label className="checkbox-label">
-                    <input type="checkbox" checked={novaPeca.metodos_pagamento.includes('Transferência')} onChange={() => handleCheckboxChange('Transferência')} /> Transferência
-                  </label>
-                  <label className="checkbox-label">
-                    <input type="checkbox" checked={novaPeca.metodos_pagamento.includes('Numerário')} onChange={() => handleCheckboxChange('Numerário')} /> Numerário
-                  </label>
+                  {['MBWay', 'Transferência', 'Numerário'].map(metodo => (
+                    <label className="checkbox-label" key={metodo}>
+                      <input
+                        type="checkbox"
+                        checked={novaPeca.metodos_pagamento.includes(metodo)}
+                        onChange={() => handleCheckboxPagamento(metodo)}
+                      />
+                      {metodo}
+                    </label>
+                  ))}
                 </div>
               </div>
 
               <div className="form-group">
                 <label>Fotos (Máx 4)</label>
                 <div className="fotos-preview-container">
-                  {novaPeca.fotos.map((fotoUrl, index) => (
-                    <div className="foto-preview-box" key={index}>
+                  {novaPeca.fotos.map((fotoUrl, idx) => (
+                    <div className="foto-preview-box" key={idx}>
                       <img src={fotoUrl} alt="Preview" />
-                      <button type="button" className="btn-remover-foto" onClick={() => removerFoto(index)}>X</button>
+                      <button type="button" className="btn-remover-foto" onClick={() => removerFoto(idx)}>X</button>
                     </div>
                   ))}
                 </div>
                 {novaPeca.fotos.length < 4 && (
                   <label className="btn-upload-foto">
                     <span>+ Adicionar Foto</span>
-                    <input type="file" accept="image/*" multiple onChange={handleFotosUpload} style={{ display: 'none' }} />
+                    <input
+                      type="file" accept="image/*" multiple
+                      onChange={handleFotosUpload}
+                      onClick={(e) => e.target.value = null}
+                      style={{ display: 'none' }}
+                    />
                   </label>
                 )}
               </div>
 
               <div className="modal-actions">
-                <button type="button" className="btn-text" onClick={() => setMostrarModalAdicionar(false)}>Cancelar</button>
-                <button type="submit" className="btn-dark">Publicar</button>
+                <button type="button" className="btn-text" onClick={() => setIsAdicionarModalOpen(false)}>Cancelar</button>
+                <button type="submit" className="btn-dark" disabled={isSubmitting}>
+                  {isSubmitting ? 'A Publicar...' : 'Publicar'}
+                </button>
               </div>
             </form>
           </div>
         </div>
       )}
 
-      {/* --- MODAL DE EDITAR --- */}
-      {mostrarModalEdicao && (
+      {isEditModalOpen && pecaEmEdicao && (
         <div className="modal-overlay">
-          <div className="modal-content" style={{ maxWidth: '600px' }}>
-            <h2 style={{ marginBottom: '25px', color: '#2a2724' }}>Editar Figurino</h2>
-            
+          <div className="modal-content form-venda">
+            <h2>Editar Peça</h2>
+
             <form onSubmit={handleGuardarEdicao}>
               <div className="form-group">
                 <label>Nome da Peça</label>
-                <input 
-                  type="text" 
-                  name="nome" 
-                  value={novaPeca.nome} 
-                  onChange={handleInputChange} 
-                  required 
+                <input
+                  type="text"
+                  value={pecaEmEdicao.nome_peca || pecaEmEdicao.nome || ''}
+                  onChange={(e) => setPecaEmEdicao({ ...pecaEmEdicao, nome_peca: e.target.value })}
+                  required
                 />
               </div>
 
-              <div className="form-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '15px', marginBottom: '22px' }}>
-                <div className="form-group" style={{ marginBottom: 0 }}>
-                  <label>Preço (€)</label>
-                  <input 
-                    type="number" 
-                    step="0.01"
-                    name="valor_dia" 
-                    value={novaPeca.valor_dia} 
-                    onChange={handleInputChange} 
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Preço por Dia (€)</label>
+                  <input
+                    type="number" step="0.01" min="0"
+                    value={pecaEmEdicao.valor_dia || ''}
+                    onChange={(e) => setPecaEmEdicao({ ...pecaEmEdicao, valor_dia: e.target.value })}
                     required
                   />
                 </div>
-                <div className="form-group" style={{ marginBottom: 0 }}>
+                <div className="form-group">
                   <label>Tamanho</label>
-                  <input 
-                    type="text" 
-                    name="tamanho" 
-                    value={novaPeca.tamanho} 
-                    onChange={handleInputChange} 
+                  <input
+                    type="text"
+                    value={pecaEmEdicao.tamanho || ''}
+                    onChange={(e) => setPecaEmEdicao({ ...pecaEmEdicao, tamanho: e.target.value })}
                     required
                   />
                 </div>
-                <div className="form-group" style={{ marginBottom: 0 }}>
-                  <label>Estado</label>
-                  <select name="condicao" value={novaPeca.condicao} onChange={handleInputChange} required>
-                    <option value="Disponível">Disponível</option>
-                    <option value="Emprestado">Emprestado</option>
+                <div className="form-group">
+                  <label>Condição</label>
+                  <select
+                    value={pecaEmEdicao.condicao_peca || pecaEmEdicao.estado || 'Bom'}
+                    onChange={(e) => setPecaEmEdicao({ ...pecaEmEdicao, condicao_peca: e.target.value })}
+                    required
+                  >
+                    <option value="Novo">Novo</option>
+                    <option value="Bom">Bom</option>
+                    <option value="Usado">Usado</option>
+                    <option value="Danificado">Danificado</option>
                   </select>
                 </div>
               </div>
 
-              <div className="form-group" style={{ marginBottom: '30px' }}>
-                <label>Descrição</label>
-                <textarea 
-                  name="descricao" 
-                  value={novaPeca.descricao} 
-                  onChange={handleInputChange} 
-                  rows="4"
-                  style={{ minHeight: '100px' }}
-                  required
-                ></textarea>
-              </div>
-
-              <div className="modal-actions" style={{ borderTop: '1px solid rgba(0,0,0,0.08)', paddingTop: '20px', marginTop: '10px' }}>
-                <button type="button" className="btn-text" style={{ fontWeight: '600' }} onClick={() => setMostrarModalEdicao(false)}>Cancelar</button>
-                <button type="submit" className="btn-dark" style={{ backgroundColor: '#2a2724' }}>Guardar Alterações</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* --- MODAL SOLICITAR --- */}
-      {isSolicitarModalOpen && pecaSelecionada && (
-        <div className="modal-overlay">
-          <div className="modal-content">
-            <h2>Confirmar Solicitação</h2>
-            <div className="resumo-compra">
-              <p><strong>Item:</strong> {pecaSelecionada.nome}</p>
-              {pecaSelecionada.tamanho && <p><strong>Tamanho:</strong> {pecaSelecionada.tamanho}</p>}
-              <p><strong>Preço:</strong> {Number(pecaSelecionada.valor_dia || 0).toFixed(2)} € /dia</p>
-            </div>
-            <form onSubmit={confirmarSolicitacao}>
               <div className="form-group">
-                <label>Método de Pagamento</label>
-                <select value={metodoPagamentoSolicitacao} onChange={(e) => setMetodoPagamentoSolicitacao(e.target.value)}>
-                  {(Array.isArray(pecaSelecionada.metodos_pagamento) 
-                      ? pecaSelecionada.metodos_pagamento 
-                      : [pecaSelecionada.metodos_pagamento]
-                  ).map(m => <option key={m} value={m}>{m}</option>)}
-                </select>
+                <label>Descrição e Detalhes</label>
+                <textarea
+                  rows="3" maxLength="120"
+                  value={pecaEmEdicao.descricao || ''}
+                  onChange={(e) => setPecaEmEdicao({ ...pecaEmEdicao, descricao: e.target.value })}
+                  required
+                />
               </div>
+
+              <div className="form-group">
+                <label>Métodos de Pagamento Aceites</label>
+                <div className="checkbox-group">
+                  {['MBWay', 'Transferência', 'Numerário'].map(metodo => (
+                    <label className="checkbox-label" key={metodo}>
+                      <input
+                        type="checkbox"
+                        checked={pecaEmEdicao.metodos_pagamento?.includes(metodo)}
+                        onChange={() => setPecaEmEdicao(prev => ({
+                          ...prev,
+                          metodos_pagamento: prev.metodos_pagamento.includes(metodo)
+                            ? prev.metodos_pagamento.filter(m => m !== metodo)
+                            : [...(prev.metodos_pagamento || []), metodo]
+                        }))}
+                      />
+                      {metodo}
+                    </label>
+                  ))}
+                </div>
+              </div>
+
               <div className="modal-actions">
-                <button type="button" className="btn-text" onClick={() => setIsSolicitarModalOpen(false)}>Cancelar</button>
-                <button type="submit" className="btn-dark" disabled={isSubmitting}>{isSubmitting ? 'A Processar...' : 'Confirmar'}</button>
+                <button type="button" className="btn-text" onClick={() => setIsEditModalOpen(false)}>Cancelar</button>
+                <button type="submit" className="btn-dark">Guardar Alterações</button>
               </div>
             </form>
           </div>
         </div>
       )}
 
-      {/* --- FOOTER --- */}
+      {isSolicitarModalOpen && pecaSelecionada && (() => {
+        const dias = (dataInicio && dataFim && new Date(dataFim) > new Date(dataInicio))
+          ? Math.ceil((new Date(dataFim) - new Date(dataInicio)) / (1000 * 60 * 60 * 24)) : null;
+        const totalEstimado = dias ? (parseFloat(pecaSelecionada.valor_dia || 0) * dias).toFixed(2) : null;
+
+        return (
+          <div className="modal-overlay">
+            <div className="modal-content">
+              <h2>Solicitar Empréstimo</h2>
+
+              <div className="resumo-compra">
+                <p><strong>Item:</strong> {pecaSelecionada.nome_peca || pecaSelecionada.nome}</p>
+                {pecaSelecionada.tamanho && <p><strong>Tamanho:</strong> {pecaSelecionada.tamanho}</p>}
+                <p><strong>Preço:</strong> {Number(pecaSelecionada.valor_dia || 0).toFixed(2)} € / dia</p>
+                {totalEstimado && <p><strong>Total estimado ({dias} dia{dias > 1 ? 's' : ''}):</strong> {totalEstimado} €</p>}
+              </div>
+
+              <form onSubmit={confirmarSolicitacao}>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Data de Início</label>
+                    <input type="date" value={dataInicio} min={new Date().toISOString().split('T')[0]} onChange={(e) => setDataInicio(e.target.value)} required />
+                  </div>
+                  <div className="form-group">
+                    <label>Data de Fim</label>
+                    <input type="date" value={dataFim} min={dataInicio || new Date().toISOString().split('T')[0]} onChange={(e) => setDataFim(e.target.value)} required />
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label>Método de Pagamento</label>
+                  <select value={metodoPagamentoSolicitacao} onChange={(e) => setMetodoPagamentoSolicitacao(e.target.value)} required>
+                    {(pecaSelecionada.metodos_pagamento || ['MBWay']).map(m => <option key={m} value={m}>{m}</option>)}
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label>Observações (opcional)</label>
+                  <textarea rows="2" placeholder="Ex: Preciso para um espetáculo no dia X..." value={observacoesSolicitacao} onChange={(e) => setObservacoesSolicitacao(e.target.value)} />
+                </div>
+
+                <div className="modal-actions">
+                  <button type="button" className="btn-text" onClick={() => setIsSolicitarModalOpen(false)}>Cancelar</button>
+                  <button type="submit" className="btn-dark" disabled={isSubmitting}>{isSubmitting ? 'A Processar...' : 'Confirmar Pedido'}</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        );
+      })()}
+
+      {isAcoesModalOpen && acaoPeca && (
+        <div className="modal-overlay">
+          <div className="modal-content form-venda">
+            <h2>Gerir Empréstimo / BD</h2>
+            <p className="resumo-compra" style={{fontSize: '0.85rem', marginBottom: '15px'}}>
+              Através desta aba podes preencher manualmente informações nas tabelas <strong>EMPRESTIMO</strong>, <strong>EMPRESTIMO_ITEM</strong> e <strong>PENALIZACAO_PECA</strong>. Insere o ID do Empréstimo ativo para esta peça.
+            </p>
+
+            <form onSubmit={handleSubmeterAcaoEmprestimo}>
+              <div className="form-row">
+                <div className="form-group">
+                  <label>ID do Empréstimo (Ver BD)</label>
+                  <input
+                    type="number" required placeholder="Ex: 12"
+                    value={acaoForm.idEmprestimo}
+                    onChange={(e) => setAcaoForm({ ...acaoForm, idEmprestimo: e.target.value })}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Ação a Realizar</label>
+                  <select
+                    value={acaoForm.tipoAcao}
+                    onChange={(e) => setAcaoForm({ ...acaoForm, tipoAcao: e.target.value })}
+                  >
+                    <option value="Pagamento">1. Registar Pagamento (EMPRESTIMO)</option>
+                    <option value="Devolucao">2. Registar Devolução (EMPRESTIMO_ITEM)</option>
+                    <option value="Penalizacao">3. Registar Penalização (PENALIZACAO_PECA)</option>
+                  </select>
+                </div>
+              </div>
+
+              {acaoForm.tipoAcao === 'Pagamento' && (
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Valor Pago (€)</label>
+                    <input type="number" step="0.01" min="0" required value={acaoForm.valorPagamento} onChange={(e) => setAcaoForm({...acaoForm, valorPagamento: e.target.value})} />
+                  </div>
+                  <div className="form-group">
+                    <label>Método de Pagamento</label>
+                    <select value={acaoForm.metodoPagamento} onChange={(e) => setAcaoForm({...acaoForm, metodoPagamento: e.target.value})}>
+                      <option value="MBWay">MBWay</option>
+                      <option value="Transferência">Transferência</option>
+                      <option value="Numerário">Numerário</option>
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label>Estado Pagamento</label>
+                    <select value={acaoForm.estadoPagamento} onChange={(e) => setAcaoForm({...acaoForm, estadoPagamento: e.target.value})}>
+                      <option value="Pago">Pago</option>
+                      <option value="Pendente">Pendente</option>
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              {acaoForm.tipoAcao === 'Devolucao' && (
+                <>
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label>Estado Final do Empréstimo</label>
+                      <select value={acaoForm.estadoFinalDevolucao} onChange={(e) => setAcaoForm({...acaoForm, estadoFinalDevolucao: e.target.value})}>
+                        <option value="Concluído">Concluído</option>
+                        <option value="Cancelado">Cancelado</option>
+                      </select>
+                    </div>
+                    <div className="form-group">
+                      <label>Condição em que foi devolvida</label>
+                      <select value={acaoForm.estadoPecaDevolucao} onChange={(e) => setAcaoForm({...acaoForm, estadoPecaDevolucao: e.target.value})}>
+                        <option value="Bom">Bom</option>
+                        <option value="Usado">Usado</option>
+                        <option value="Danificado">Danificado</option>
+                        <option value="Perdido">Perdido</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="form-group">
+                    <label>Observações</label>
+                    <textarea rows="2" value={acaoForm.observacoesDevolucao} onChange={(e) => setAcaoForm({...acaoForm, observacoesDevolucao: e.target.value})} />
+                  </div>
+                </>
+              )}
+
+              {acaoForm.tipoAcao === 'Penalizacao' && (
+                <>
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label>Tipo de Penalização</label>
+                      <select value={acaoForm.tipoPenalizacao} onChange={(e) => setAcaoForm({...acaoForm, tipoPenalizacao: e.target.value})}>
+                        <option value="Atraso">Atraso</option>
+                        <option value="Dano">Dano</option>
+                        <option value="Perda">Perda</option>
+                      </select>
+                    </div>
+                    <div className="form-group">
+                      <label>Valor da Multa (€)</label>
+                      <input type="number" step="0.01" min="0.01" required value={acaoForm.valorPenalizacao} onChange={(e) => setAcaoForm({...acaoForm, valorPenalizacao: e.target.value})} />
+                    </div>
+                  </div>
+                  <div className="form-group">
+                    <label>Descrição da Penalização</label>
+                    <textarea rows="2" required value={acaoForm.descricaoPenalizacao} onChange={(e) => setAcaoForm({...acaoForm, descricaoPenalizacao: e.target.value})} />
+                  </div>
+                </>
+              )}
+
+              <div className="modal-actions">
+                <button type="button" className="btn-text" onClick={() => setIsAcoesModalOpen(false)}>Cancelar</button>
+                <button type="submit" className="btn-dark" disabled={isSubmitting}>{isSubmitting ? 'A Processar...' : 'Atualizar Base de Dados'}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       <footer className="main-footer">
         <div className="footer-container">
           <div className="footer-column">
@@ -690,10 +1013,16 @@ export default function EmprestimosPecas({
             <h3>Redes Sociais</h3>
             <div className="social-icons-only">
               <a href="https://www.instagram.com" target="_blank" rel="noopener noreferrer">
-                <svg viewBox="0 0 24 24" className="social-svg" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line></svg>
+                <svg viewBox="0 0 24 24" className="social-svg" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect>
+                  <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path>
+                  <line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line>
+                </svg>
               </a>
               <a href="https://www.facebook.com" target="_blank" rel="noopener noreferrer">
-                <svg viewBox="0 0 24 24" className="social-svg" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"></path></svg>
+                <svg viewBox="0 0 24 24" className="social-svg" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"></path>
+                </svg>
               </a>
             </div>
           </div>
@@ -704,7 +1033,6 @@ export default function EmprestimosPecas({
         </div>
       </footer>
 
-      {/* ALERTA CUSTOMIZADO */}
       {customAlert.show && (
         <div className="modal-overlay" style={{ zIndex: 9999 }}>
           <div className="modal-content alert-box">

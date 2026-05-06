@@ -4,19 +4,20 @@ const router = express.Router();
 const authController = require('../controllers/authController');
 const { autenticar } = require('../middlewares/auth');
 
-// POST /api/auth/login
+
+//Rotas de autenticação
 router.post('/login', authController.login);
-
-// POST /api/auth/logout  (requer token válido)
 router.post('/logout', autenticar, authController.logout);
-
-// POST /api/auth/recuperar-password
 router.post('/recuperar-password', authController.solicitarRecuperacaoPassword);
-
-// POST /api/auth/redefinir-password
 router.post('/redefinir-password', authController.redefinirPassword);
-
-// POST /api/auth/register
 router.post('/register', authController.register);
+
+// Rotas de Gestão do Painel Admin
+router.get('/utilizadores', autenticar, authController.listarUtilizadores);
+router.put('/utilizadores/:id/ativar', autenticar, authController.ativarUtilizador);
+router.put('/utilizadores/:id/desativar', autenticar, authController.desativarUtilizador);
+router.delete('/utilizadores/:id', autenticar, authController.eliminarUtilizador);
+router.post('/utilizadores', autenticar, authController.adminCriarUtilizador);
+router.put('/utilizadores/:id', autenticar, authController.editarUtilizadorCompleto);
 
 module.exports = router;

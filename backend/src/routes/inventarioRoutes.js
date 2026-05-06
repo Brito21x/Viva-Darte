@@ -21,10 +21,7 @@ router.put('/emprestimos/:id/pagamento', autorizar('Admin'), inventarioControlle
 
 // ── VENDAS ────────────────────────────────────────────────────────────────────
 router.post('/vendas', inventarioController.colocarPecaAVenda);
-
-// CORREÇÃO: Removido o autorizar('Admin') para qualquer um poder comprar
 router.put('/vendas/:id/concluir', inventarioController.registarConclusaoVenda);
-
 router.put('/:id/editar', inventarioController.editarPeca);
 router.delete('/:id', inventarioController.apagarPeca);
 

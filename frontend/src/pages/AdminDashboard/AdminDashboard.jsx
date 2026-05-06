@@ -28,7 +28,6 @@ function StatCard({ icon, label, value, accent }) {
   );
 }
 
-// ADICIONADA A PROP actionButton
 function Section({ title, icon, children, defaultOpen = false, actionButton = null }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
@@ -36,7 +35,7 @@ function Section({ title, icon, children, defaultOpen = false, actionButton = nu
       <div className="section-toggle" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div style={{ display: 'flex', alignItems: 'center', flex: 1, cursor: 'pointer' }} onClick={() => setOpen(o => !o)}>
               <span>{icon} {title}</span>
-              <span className={`chevron ${open ? 'chevron--open' : ''}`}>›</span>
+              <span className={`chevron ${open ? 'chevron--open' : ''}`} style={{ marginLeft: '12px' }}>›</span>
           </div>
           {actionButton && <div style={{ marginLeft: '15px' }}>{actionButton}</div>}
       </div>
@@ -59,7 +58,6 @@ export default function AdminDashboard({ irParaLanding }) {
   const [usuarios, setUsuarios] = useState([]); 
   const [msg, setMsg] = useState('');
 
-  // ESTADO DO NOSSO NOVO MODAL
   const [modalUser, setModalUser] = useState({ isOpen: false, mode: 'create', data: {} });
 
   useEffect(() => {
@@ -136,7 +134,21 @@ export default function AdminDashboard({ irParaLanding }) {
       } catch (err) { mostrarMsg("Erro de rede.", 'erro'); }
   }
 
-  // --- FUNÇÕES DO NOVO MODAL ---
+  // NOVA FUNÇÃO: ELIMINAR
+  async function handleEliminarUsuario(id) {
+      if(!window.confirm("Tens a certeza ABSOLUTA que queres ELIMINAR PERMANENTEMENTE este pedido?")) return;
+      try {
+          const res = await fetch(`${API_URL}/api/auth/utilizadores/${id}`, {
+              method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (res.ok) { mostrarMsg("Registo apagado para sempre!", 'ok'); carregarDados(); } 
+          else {
+              const data = await res.json();
+              mostrarMsg(data.mensagem || "Erro ao eliminar.", 'erro'); 
+          }
+      } catch (err) { mostrarMsg("Erro de rede.", 'erro'); }
+  }
+
   function abrirModalCriar(tipoRecomendado) {
       setModalUser({ 
           isOpen: true, 
@@ -161,6 +173,25 @@ export default function AdminDashboard({ irParaLanding }) {
 
   async function submeterModal(e) {
       e.preventDefault();
+      const { email, telefone, password } = modalUser.data;
+
+      if (!email.includes('@')) { return mostrarMsg("O email tem de conter um '@'.", 'erro'); }
+
+      let telLimpo = '';
+      if (telefone) {
+          telLimpo = telefone.replace(/\D/g, ''); 
+          if (telLimpo.length !== 9) { return mostrarMsg("O número de telefone tem de ter exatamente 9 dígitos.", 'erro'); }
+      }
+
+      if (password && password.trim() !== '') {
+          const regexEspecial = /[!@#$%^&*(),.?":{}|<>]/;
+          if (password.length < 8) { return mostrarMsg("A password tem de ter no mínimo 8 caracteres.", 'erro'); }
+          if (!regexEspecial.test(password)) { return mostrarMsg("A password tem de conter pelo menos 1 carácter especial (ex: ! @ # $).", 'erro'); }
+      } else if (modalUser.mode === 'create') {
+          return mostrarMsg("A password é obrigatória na criação de conta.", 'erro');
+      }
+
+      const payloadEnvio = { ...modalUser.data, telefone: telLimpo };
       const isEdit = modalUser.mode === 'edit';
       const endpoint = isEdit ? `/api/auth/utilizadores/${modalUser.data.id}` : `/api/auth/utilizadores`;
       const method = isEdit ? 'PUT' : 'POST';
@@ -169,7 +200,7 @@ export default function AdminDashboard({ irParaLanding }) {
           const res = await fetch(`${API_URL}${endpoint}`, {
               method,
               headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-              body: JSON.stringify(modalUser.data)
+              body: JSON.stringify(payloadEnvio)
           });
           const result = await res.json();
           if (res.ok) {
@@ -226,13 +257,16 @@ export default function AdminDashboard({ irParaLanding }) {
           return (
               <tr key={u.id_utilizador} style={{ backgroundColor: !isAtivo ? '#fffbf0' : 'transparent' }}>
                 <td>{u.id_utilizador}</td>
-                <td><strong>{u.nome}</strong><br /><span style={{fontSize: '0.75rem', color: '#8a8480'}}>{u.perfis}</span></td>
+                <td><strong>{u.nome}</strong></td>
                 <td>{u.email}</td><td>{u.telefone || '—'}</td>
                 <td><span className={`badge badge--${isAtivo ? 'green' : 'orange'}`}>{isAtivo ? 'Ativo' : 'Pendente'}</span></td>
                 <td>{new Date(u.data_criacao).toLocaleDateString('pt-PT')}</td>
                 <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
                     {!isAtivo ? (
-                        <button className="btn-sm btn-sm--green" style={{ backgroundColor: 'var(--green)', color: 'white', marginRight: '8px' }} onClick={() => handleAceitarUsuario(u.id_utilizador)}>Aceitar</button>
+                        <>
+                            <button className="btn-sm btn-sm--green" style={{ backgroundColor: 'var(--green)', color: 'white', marginRight: '8px' }} onClick={() => handleAceitarUsuario(u.id_utilizador)}>Aceitar</button>
+                            <button className="btn-sm btn-sm--danger" style={{ backgroundColor: '#e74c3c', color: 'white', marginRight: '8px' }} onClick={() => handleEliminarUsuario(u.id_utilizador)}>Eliminar</button>
+                        </>
                     ) : (
                         <button className="btn-sm btn-sm--danger" style={{ marginRight: '8px' }} onClick={() => handleRevogarUsuario(u.id_utilizador)}>Suspender</button>
                     )}
@@ -247,6 +281,8 @@ export default function AdminDashboard({ irParaLanding }) {
   );
 
   const tabs = [ { id: 'overview', label: '🏠 Visão Geral' }, { id: 'usuarios', label: '👥 Usuários' } ];
+  const labelStyle = { display: 'block', fontSize: '0.75rem', fontWeight: '700', color: '#555', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.5px', fontFamily: "'Poppins', sans-serif" };
+  const inputStyle = { width: '100%', padding: '12px 14px', border: '1px solid #e0e0e0', borderRadius: '8px', fontSize: '0.95rem', fontFamily: "'Poppins', sans-serif", backgroundColor: '#faf9f7', outline: 'none', transition: 'border 0.3s' };
 
   return (
     <div className="admin-root">
@@ -270,8 +306,6 @@ export default function AdminDashboard({ irParaLanding }) {
       </aside>
 
       <main className="admin-main">
-        {msg && (<div className={`toast toast--${msg.tipo}`}>{msg.texto}</div>)}
-
         {activeTab === 'overview' && (
           <div className="tab-content">
             <h1 className="page-title">Olá, {utilizador?.nome?.split(' ')[0]} 👋</h1>
@@ -319,33 +353,33 @@ export default function AdminDashboard({ irParaLanding }) {
         )}
       </main>
 
-      {/* --- O NOSSO MODAL DE EDIÇÃO E CRIAÇÃO --- */}
       {modalUser.isOpen && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)', zIndex: 9999, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-            <div style={{ backgroundColor: 'white', padding: '30px', borderRadius: '12px', width: '90%', maxWidth: '500px', boxShadow: '0 10px 30px rgba(0,0,0,0.2)' }}>
-                <h2 style={{ marginBottom: '20px', fontFamily: 'Cormorant Garamond', fontSize: '1.8rem', color: 'var(--text-dark)' }}>
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(3px)', zIndex: 9999, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+            <div style={{ backgroundColor: '#ffffff', padding: '40px', borderRadius: '16px', width: '90%', maxWidth: '540px', boxShadow: '0 20px 40px rgba(0,0,0,0.15)', fontFamily: "'Poppins', sans-serif" }}>
+                
+                <h2 style={{ marginBottom: '25px', fontFamily: "'Cormorant Garamond', serif", fontSize: '2.2rem', color: '#333', borderBottom: '2px solid #f0f0f0', paddingBottom: '15px' }}>
                     {modalUser.mode === 'create' ? '✨ Criar Novo Utilizador' : '✏️ Editar Utilizador'}
                 </h2>
                 
-                <form className="admin-form" onSubmit={submeterModal}>
-                    <div className="field">
-                        <label>Nome Completo *</label>
-                        <input type="text" value={modalUser.data.nome} onChange={e => setModalUser({ ...modalUser, data: { ...modalUser.data, nome: e.target.value } })} required />
+                <form onSubmit={submeterModal}>
+                    <div style={{ marginBottom: '20px' }}>
+                        <label style={labelStyle}>Nome Completo *</label>
+                        <input style={inputStyle} type="text" value={modalUser.data.nome} onChange={e => setModalUser({ ...modalUser, data: { ...modalUser.data, nome: e.target.value } })} required />
                     </div>
                     
-                    <div className="field">
-                        <label>Email *</label>
-                        <input type="text" value={modalUser.data.email} onChange={e => setModalUser({ ...modalUser, data: { ...modalUser.data, email: e.target.value } })} required />
+                    <div style={{ marginBottom: '20px' }}>
+                        <label style={labelStyle}>Email *</label>
+                        <input style={inputStyle} type="text" placeholder="exemplo@viva.pt" value={modalUser.data.email} onChange={e => setModalUser({ ...modalUser, data: { ...modalUser.data, email: e.target.value } })} required />
                     </div>
 
-                    <div className="form-grid">
-                        <div className="field">
-                            <label>Telefone</label>
-                            <input type="text" value={modalUser.data.telefone} onChange={e => setModalUser({ ...modalUser, data: { ...modalUser.data, telefone: e.target.value } })} />
+                    <div style={{ display: 'flex', gap: '20px', marginBottom: '20px' }}>
+                        <div style={{ flex: 1 }}>
+                            <label style={labelStyle}>Telefone</label>
+                            <input style={inputStyle} type="text" placeholder="912345678" value={modalUser.data.telefone} onChange={e => setModalUser({ ...modalUser, data: { ...modalUser.data, telefone: e.target.value } })} />
                         </div>
-                        <div className="field">
-                            <label>Perfil de Acesso *</label>
-                            <select value={modalUser.data.tipo} onChange={e => setModalUser({ ...modalUser, data: { ...modalUser.data, tipo: e.target.value } })}>
+                        <div style={{ flex: 1 }}>
+                            <label style={labelStyle}>Perfil de Acesso *</label>
+                            <select style={{...inputStyle, cursor: 'pointer'}} value={modalUser.data.tipo} onChange={e => setModalUser({ ...modalUser, data: { ...modalUser.data, tipo: e.target.value } })}>
                                 <option value="EE">Encarregado de Educação</option>
                                 <option value="PROF">Professor</option>
                                 <option value="ADMIN">Administrador</option>
@@ -353,19 +387,29 @@ export default function AdminDashboard({ irParaLanding }) {
                         </div>
                     </div>
 
-                    <div className="field" style={{ marginBottom: '30px' }}>
-                        <label>Palavra-passe {modalUser.mode === 'edit' && <span style={{fontSize: '0.8rem', color: '#888'}}>(Deixe em branco para manter)</span>}</label>
-                        <input type="password" value={modalUser.data.password} onChange={e => setModalUser({ ...modalUser, data: { ...modalUser.data, password: e.target.value } })} required={modalUser.mode === 'create'} />
+                    <div style={{ marginBottom: '35px' }}>
+                        <label style={labelStyle}>
+                            Palavra-passe 
+                            {modalUser.mode === 'edit' && <span style={{fontSize: '0.7rem', color: '#999', marginLeft: '6px', textTransform: 'none'}}>(Deixe em branco para manter)</span>}
+                        </label>
+                        <input style={inputStyle} type="password" placeholder={modalUser.mode === 'create' ? "Mín. 8 caracteres e 1 especial" : "••••••••"} value={modalUser.data.password} onChange={e => setModalUser({ ...modalUser, data: { ...modalUser.data, password: e.target.value } })} />
                     </div>
 
-                    <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
-                        <button type="button" className="btn-sm" style={{ padding: '10px 20px', backgroundColor: '#e0e0e0', color: '#333' }} onClick={fecharModal}>Cancelar</button>
-                        <button type="submit" className="btn-primary" style={{ padding: '10px 20px', width: 'auto' }}>Guardar Alterações</button>
+                    <div style={{ display: 'flex', gap: '15px', justifyContent: 'flex-end' }}>
+                        <button type="button" style={{ padding: '12px 24px', backgroundColor: '#f1f1f1', color: '#555', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '600', fontFamily: "'Poppins', sans-serif" }} onClick={fecharModal}>
+                            Cancelar
+                        </button>
+                        <button type="submit" style={{ padding: '12px 24px', backgroundColor: '#3d342b', color: '#ffffff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '600', fontFamily: "'Poppins', sans-serif" }}>
+                            Guardar Alterações
+                        </button>
                     </div>
                 </form>
             </div>
         </div>
       )}
+
+      {msg && (<div className={`toast toast--${msg.tipo}`} style={{ zIndex: 99999 }}>{msg.texto}</div>)}
+
     </div>
   );
 }

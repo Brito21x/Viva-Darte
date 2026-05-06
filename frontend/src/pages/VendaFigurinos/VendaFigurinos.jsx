@@ -5,9 +5,7 @@ import { API_URL, getAuthToken } from '../../services/api';
 
 export default function VendaFigurinos({
   irParaLanding,
-  irParaEmprestimos,
-  irParaAgendarCoaching,
-  irParaProfessorAgendamento
+  irParaEmprestimos
 }) {
   const [utilizador, setUtilizador] = useState(null);
   const [figurinos, setFigurinos] = useState([]);
@@ -337,14 +335,12 @@ export default function VendaFigurinos({
           {utilizador?.perfil === 'Professor' ? (
             <>
               <li><span className="nav-separator">|</span></li>
-              <li><a href="#" className="special-link" onClick={(e) => { e.preventDefault(); irParaProfessorAgendamento?.(); }}>Coaching Agendados</a></li>
               <li><a href="#" className="special-link" onClick={(e) => { e.preventDefault(); irParaEmprestimos(); }}>Empréstimos de peças</a></li>
               <li><a href="#" className="special-link active">Venda de figurinos</a></li>
             </>
           ) : utilizador ? (
             <>
               <li><span className="nav-separator">|</span></li>
-              <li><a href="#" className="special-link" onClick={(e) => { e.preventDefault(); irParaAgendarCoaching?.(); }}>Agendar Coaching</a></li>
               <li><a href="#" className="special-link" onClick={(e) => { e.preventDefault(); irParaEmprestimos(); }}>Empréstimos de peças</a></li>
               <li><a href="#" className="special-link active">Venda de figurinos</a></li>
             </>

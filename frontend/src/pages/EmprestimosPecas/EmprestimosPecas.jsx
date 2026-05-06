@@ -444,14 +444,12 @@ export default function EmprestimosPecas({ irParaLanding, irParaVendaFigurinos }
           {utilizador?.perfil === 'Professor' ? (
             <>
               <li><span className="nav-separator">|</span></li>
-              <li><a href="#" className="special-link">Coaching Agendados</a></li>
               <li><a href="#" className="special-link active">Empréstimos de peças</a></li>
               <li><a href="#" className="special-link" onClick={(e) => { e.preventDefault(); irParaVendaFigurinos(); }}>Venda de figurinos</a></li>
             </>
           ) : utilizador ? (
             <>
               <li><span className="nav-separator">|</span></li>
-              <li><a href="#" className="special-link">Agendar Coaching</a></li>
               <li><a href="#" className="special-link active">Empréstimos de peças</a></li>
               <li><a href="#" className="special-link" onClick={(e) => { e.preventDefault(); irParaVendaFigurinos(); }}>Venda de figurinos</a></li>
             </>

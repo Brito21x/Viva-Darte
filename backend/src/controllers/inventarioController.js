@@ -1,133 +1,153 @@
+/**
+ * Controlador de Inventário (Peças, Empréstimos e Vendas)
+ * Este ficheiro gere o catálogo de peças, requisições de empréstimo, devoluções,
+ * penalizações e o mercado de vendas.
+ */
+
 const inventarioModel = require('../models/inventarioModel');
 
 // ============================================================================
-// US20, US21 / RF21 — LISTAR CATÁLOGO DE PEÇAS
-// GET /api/inventario
+// CATÁLOGO E DETALHES DE PEÇAS 
 // ============================================================================
+
 async function getCatalogo(req, res, next) {
-    try { return res.status(200).json(await inventarioModel.getCatalogoPecas()); } catch (error) { next(error); }
+    try { 
+        return res.status(200).json(await inventarioModel.getCatalogoPecas()); 
+    } catch (error) { next(error); }
 }
 
-// ============================================================================
-// US21 / RF21 — DETALHE DE UMA PEÇA (inclui todas as fotos)
-// GET /api/inventario/:id
-// ============================================================================
+/**
+ * Obtém os detalhes completos de uma peça específica, incluindo as suas fotos.
+ */
 async function getPecaDetalhes(req, res, next) {
     try {
         const idPeca = parseInt(req.params.id);
+        
+        // Validação básica do parâmetro da rota
         if (isNaN(idPeca)) return res.status(400).json({ mensagem: 'ID de peça inválido.' });
+        
         const peca = await inventarioModel.getPecaDetalhes(idPeca);
         if (!peca) return res.status(404).json({ mensagem: 'Peça não encontrada.' });
+        
         return res.status(200).json(peca);
     } catch (error) { next(error); }
 }
 
 // ============================================================================
-// US22 / RF22 — REGISTAR NOVA PEÇA
-// POST /api/inventario
-// Body: { nome, descricao, tamanho, estado, origem, localizacao,
-//         disponivelEmprestimo, disponivelVenda, idCategoria }
+// GESTÃO DO INVENTÁRIO 
 // ============================================================================
-// inventarioController.js
+
+/**
+ * Regista uma nova peça no inventário do sistema.
+ * Suporta configuração automática para empréstimo e/ou venda.
+ */
 async function registarPeca(req, res, next) {
     try {
-        const { nome, descricao, tamanho, estado, idCategoria, fotos } = req.body;
+        const { nome, descricao, tamanho, estado, idCategoria, fotos, valor_dia, metodos_pagamento, disponivelVenda } = req.body;
+        
+        // Identifica o utilizador que está a registar a peça 
         const idUtilizador = req.utilizador.id || req.utilizador.id_utilizador;
+
+        // Lógica de negócio: Deteção inteligente do tipo de transação (Empréstimo ou Venda)
+        const isEmprestimo = valor_dia !== undefined && valor_dia !== '';
+        const isVenda = disponivelVenda === true || disponivelVenda === 'true' || !isEmprestimo;
+
+        // Processamento dos métodos de pagamento
+        const metodosStr = (metodos_pagamento && Array.isArray(metodos_pagamento) && metodos_pagamento.length > 0)
+            ? metodos_pagamento.join(',')
+            : 'MBWay';
+
+        // Guarda a peça principal na base de dados
         const idPeca = await inventarioModel.registarNovaPeca({
-            nome, descricao, tamanho, estado, idUtilizador, 
-            idCategoria: parseInt(idCategoria), disponivelVenda: true 
+            nome, descricao, tamanho, estado, idUtilizador,
+            idCategoria: parseInt(idCategoria) || 1,
+            isEmprestimo, isVenda,
+            valor_dia: parseFloat(valor_dia || 0),
+            metodosStr
         });
+
+        // Se existirem fotos submetidas, faz o registo em lote
         if (fotos && Array.isArray(fotos) && fotos.length > 0) {
-            try { await inventarioModel.registarFotosPeca(idPeca, fotos); } catch (e) { console.error("Aviso fotos:", e); }
+            try { 
+                await inventarioModel.registarFotosPeca(idPeca, fotos); 
+            } catch (e) { 
+                console.error("Aviso: Falha ao guardar fotos", e); 
+            }
         }
+
         return res.status(201).json({ mensagem: 'Guardado com sucesso!', idPeca });
     } catch (error) { next(error); }
 }
 
-// ============================================================================
-// US22 / RF22 — ATUALIZAR ESTADO E DISPONIBILIDADE DE UMA PEÇA
-// PUT /api/inventario/:id
-// Body: { estado, disponivelEmprestimo, disponivelVenda, localizacao }
-// ============================================================================
+/**
+ * Atualiza o estado físico, disponibilidade e localização de uma peça existente.
+ */
 async function atualizarEstadoPeca(req, res, next) {
     try {
         const idPeca = parseInt(req.params.id);
         const { estado, disponivelEmprestimo, disponivelVenda, localizacao } = req.body;
+        
         if (isNaN(idPeca)) return res.status(400).json({ mensagem: 'ID inválido.' });
+        
         const sucesso = await inventarioModel.atualizarEstadoPeca(idPeca, {
-            estado, disponivelEmprestimo: disponivelEmprestimo ?? false,
-            disponivelVenda: disponivelVenda ?? false, localizacao: localizacao || null
+            estado, 
+            disponivelEmprestimo: disponivelEmprestimo ?? false,
+            disponivelVenda: disponivelVenda ?? false, 
+            localizacao: localizacao || null
         });
+        
         if (!sucesso) return res.status(404).json({ mensagem: 'Peça não encontrada.' });
         return res.status(200).json({ mensagem: 'Atualizada com sucesso.' });
     } catch (error) { next(error); }
 }
 
 // ============================================================================
-// US23 / RF23 — REQUISITAR EMPRÉSTIMO
-// POST /api/inventario/emprestimos
-// Body: { dataInicio, dataFim, observacoes, itens: [{ idPeca, estadoEntrega }] }
+// EMPRÉSTIMOS E DEVOLUÇÕES 
 // ============================================================================
+
+/**
+ * Regista uma nova requisição de empréstimo de peças.
+ */
 async function requisitarEmprestimo(req, res, next) {
     try {
         const idUtilizador = req.utilizador.id || req.utilizador.id_utilizador;
-        const { dataInicio, dataFim, observacoes, itens } = req.body;
+        const { dataInicio, dataFim, observacoes, metodoPagamento, itens } = req.body;
 
-        if (!dataInicio || !dataFim) {
-            return res.status(400).json({ mensagem: 'dataInicio e dataFim são obrigatórios.' });
+        // Validação: Um empréstimo precisa obrigatoriamente de itens
+        if (!itens || itens.length === 0) {
+            return res.status(400).json({ mensagem: 'É necessário indicar a peça.' });
         }
 
-        if (!Array.isArray(itens) || itens.length === 0) {
-            return res.status(400).json({ mensagem: 'É necessário indicar pelo menos uma peça.' });
-        }
+        // Para simplificação, assume a primeira peça do array (pode ser expandido para múltiplos itens)
+        const idPeca = parseInt(itens[0].idPeca);
+        const estadoEntrega = itens[0].estadoEntrega;
 
-        if (new Date(dataFim) <= new Date(dataInicio)) {
-            return res.status(400).json({ mensagem: 'A data de fim deve ser posterior à data de início.' });
-        }
-
-        for (const item of itens) {
-            if (!item.idPeca || !item.estadoEntrega) {
-                return res.status(400).json({ mensagem: 'Cada item deve ter idPeca e estadoEntrega.' });
-            }
-        }
-
-        const idEmprestimo = await inventarioModel.requisitarEmprestimo(
-            { dataInicio, dataFim, observacoes: observacoes || null, idUtilizador },
-            itens.map(i => ({ idPeca: parseInt(i.idPeca), estadoEntrega: i.estadoEntrega }))
-        );
-
-        return res.status(201).json({
-            mensagem: 'Empréstimo requisitado com sucesso.',
-            idEmprestimo
+        // Agrupa todos os dados e envia para o Model processar
+        await inventarioModel.requisitarEmprestimo({
+            idPeca, dataInicio, dataFim, observacoes, metodoPagamento, estadoEntrega, idUtilizador
         });
-    } catch (error) {
-        if (error.message.includes('não está disponível')) {
-            return res.status(409).json({ mensagem: error.message });
+
+        return res.status(200).json({ mensagem: 'Solicitação enviada com sucesso!' });
+    } catch (error) { 
+        if (error.message.includes('não encontrada')) {
+            return res.status(404).json({ mensagem: error.message });
         }
-        next(error);
+        next(error); 
     }
 }
 
-
-
-// ============================================================================
-// US24 / RF24 — REGISTAR DEVOLUÇÃO DE EMPRÉSTIMO
-// PUT /api/inventario/emprestimos/:id/devolucao
-// Body: { estadoFinal, observacoes, itens: [{ idPeca, estadoDevolucao }] }
-// ============================================================================
+/**
+ * Regista a devolução de um empréstimo em curso, avaliando o estado final das peças.
+ */
 async function registarDevolucao(req, res, next) {
     try {
         const idEmprestimo = parseInt(req.params.id);
         const { estadoFinal, observacoes, itens } = req.body;
 
-        if (isNaN(idEmprestimo)) {
-            return res.status(400).json({ mensagem: 'ID de empréstimo inválido.' });
-        }
+        if (isNaN(idEmprestimo)) return res.status(400).json({ mensagem: 'ID de empréstimo inválido.' });
+        if (!estadoFinal) return res.status(400).json({ mensagem: 'estadoFinal é obrigatório.' });
 
-        if (!estadoFinal) {
-            return res.status(400).json({ mensagem: 'estadoFinal é obrigatório.' });
-        }
-
+        // Garante que o estado de devolução de todos os itens envolvidos foi reportado
         if (!Array.isArray(itens) || itens.length === 0) {
             return res.status(400).json({ mensagem: 'É necessário indicar o estado de devolução de cada peça.' });
         }
@@ -146,37 +166,28 @@ async function registarDevolucao(req, res, next) {
         );
 
         return res.status(200).json({ mensagem: 'Devolução registada com sucesso.' });
-    } catch (error) {
-        next(error);
-    }
+    } catch (error) { next(error); }
 }
 
-// ============================================================================
-// US25 / RF24 — REGISTAR PENALIZAÇÃO (Coordenação ou Responsável)
-// POST /api/inventario/emprestimos/:id/penalizacoes
-// Body: { idPeca, tipo, valor, descricao }
-// tipo: 'Atraso' | 'Dano' | 'Perda'
-// ============================================================================
+/**
+ * Aplica uma penalização (multa) associada a um empréstimo (Atraso, Dano ou Perda).
+ * Exclusivo para perfis de Coordenação/Responsáveis.
+ */
 async function registarPenalizacao(req, res, next) {
     try {
         const idEmprestimo = parseInt(req.params.id);
         const { idPeca, tipo, valor, descricao } = req.body;
 
-        if (isNaN(idEmprestimo)) {
-            return res.status(400).json({ mensagem: 'ID de empréstimo inválido.' });
-        }
+        if (isNaN(idEmprestimo)) return res.status(400).json({ mensagem: 'ID de empréstimo inválido.' });
+        if (!idPeca || !tipo || valor === undefined) return res.status(400).json({ mensagem: 'idPeca, tipo e valor são obrigatórios.' });
 
-        if (!idPeca || !tipo || valor === undefined) {
-            return res.status(400).json({ mensagem: 'idPeca, tipo e valor são obrigatórios.' });
-        }
-
+        // Validação estrita dos tipos de penalização previstos no sistema
         const tiposValidos = ['Atraso', 'Dano', 'Perda'];
         if (!tiposValidos.includes(tipo)) {
-            return res.status(400).json({
-                mensagem: `Tipo inválido. Valores aceites: ${tiposValidos.join(', ')}.`
-            });
+            return res.status(400).json({ mensagem: `Tipo inválido. Valores aceites: ${tiposValidos.join(', ')}.` });
         }
 
+        // Validação da regra de negócio: Multas não podem ser negativas nem nulas
         if (Number(valor) <= 0) {
             return res.status(400).json({ mensagem: 'O valor da penalização deve ser positivo.' });
         }
@@ -189,63 +200,49 @@ async function registarPenalizacao(req, res, next) {
             idEmprestimo
         });
 
-        return res.status(201).json({
-            mensagem: 'Penalização registada com sucesso.',
-            idPenalizacao
-        });
-    } catch (error) {
-        next(error);
-    }
+        return res.status(201).json({ mensagem: 'Penalização registada com sucesso.', idPenalizacao });
+    } catch (error) { next(error); }
 }
 
-// ============================================================================
-// US26 / RF25 — REGISTAR PAGAMENTO DE EMPRÉSTIMO (Coordenação ou Responsável)
-// PUT /api/inventario/emprestimos/:id/pagamento
-// Body: { valor, metodoPagamento, estadoPagamento }
-// ============================================================================
+/**
+ * Atualiza o estado de pagamento de um empréstimo.
+ */
 async function registarPagamentoEmprestimo(req, res, next) {
     try {
         const idEmprestimo = parseInt(req.params.id);
         const { valor, metodoPagamento, estadoPagamento } = req.body;
 
-        if (isNaN(idEmprestimo)) {
-            return res.status(400).json({ mensagem: 'ID de empréstimo inválido.' });
-        }
-
+        if (isNaN(idEmprestimo)) return res.status(400).json({ mensagem: 'ID de empréstimo inválido.' });
         if (valor === undefined || !metodoPagamento || !estadoPagamento) {
             return res.status(400).json({ mensagem: 'valor, metodoPagamento e estadoPagamento são obrigatórios.' });
         }
 
         const sucesso = await inventarioModel.atualizarPagamentoEmprestimo(
-            idEmprestimo,
-            parseFloat(valor),
-            metodoPagamento,
-            estadoPagamento
+            idEmprestimo, parseFloat(valor), metodoPagamento, estadoPagamento
         );
 
-        if (!sucesso) {
-            return res.status(404).json({ mensagem: 'Empréstimo não encontrado.' });
-        }
-
+        if (!sucesso) return res.status(404).json({ mensagem: 'Empréstimo não encontrado.' });
+        
         return res.status(200).json({ mensagem: 'Pagamento do empréstimo registado com sucesso.' });
-    } catch (error) {
-        next(error);
-    }
+    } catch (error) { next(error); }
 }
 
 // ============================================================================
-// US27 / RF26 — LISTAR PEÇAS À VENDA
-// GET /api/inventario/vendas
+// MERCADO DE VENDAS 
 // ============================================================================
+
+/**
+ * Lista todas as peças atualmente com status de disponíveis para venda.
+ */
 async function getPecasAVenda(req, res, next) {
-    try { return res.status(200).json(await inventarioModel.getPecasAVenda()); } catch (error) { next(error); }
+    try { 
+        return res.status(200).json(await inventarioModel.getPecasAVenda()); 
+    } catch (error) { next(error); }
 }
 
-// ============================================================================
-// US27 / RF26 — COLOCAR PEÇA À VENDA
-// POST /api/inventario/vendas
-// Body: { idPeca, preco }
-// ============================================================================
+/**
+ * Coloca uma peça do catálogo à venda
+ */
 async function colocarPecaAVenda(req, res, next) {
     try {
         const idVendedor = req.utilizador.id || req.utilizador.id_utilizador;
@@ -263,6 +260,9 @@ async function colocarPecaAVenda(req, res, next) {
     } catch (error) { next(error); }
 }
 
+/**
+ * Edita todos os detalhes de uma peça, incluindo o seu status de venda e fotos.
+ */
 async function editarPeca(req, res, next) {
     try {
         const idPeca = parseInt(req.params.id);
@@ -275,6 +275,7 @@ async function editarPeca(req, res, next) {
             ? metodosPagamento.join(',') 
             : 'MBWay,Transferência,Numerário';
 
+        // Atualização faseada: Dados base, dados de venda e galeria de fotos
         await inventarioModel.atualizarDadosCompletosPeca(idPeca, { nome, descricao, tamanho, estado });
         if (preco !== undefined) await inventarioModel.atualizarDadosVenda(idPeca, parseFloat(preco), nome, estado, metodosStr);
         if (fotos && Array.isArray(fotos)) await inventarioModel.atualizarFotosPeca(idPeca, fotos);
@@ -283,26 +284,29 @@ async function editarPeca(req, res, next) {
     } catch (error) { next(error); }
 }
 
-// APAGAR PRODUTO
+/**
+ * Apaga uma peça do catálogo de forma definitiva.
+ */
 async function apagarPeca(req, res, next) {
     try {
         const idPeca = parseInt(req.params.id);
         if (isNaN(idPeca)) return res.status(400).json({ mensagem: 'ID inválido.' });
+        
         const sucesso = await inventarioModel.eliminarPecaCompleta(idPeca);
         if (!sucesso) return res.status(404).json({ mensagem: 'Não encontrada.' });
+        
         return res.status(200).json({ mensagem: 'Removido com sucesso.' });
     } catch (error) { next(error); }
 }
 
-// ============================================================================
-// US28 / RF26 — REGISTAR CONCLUSÃO DE VENDA (Responsável)
-// PUT /api/inventario/vendas/:id/concluir
-// Body: { idComprador, metodoPagamento }
-// ============================================================================
+/**
+ * Regista o fecho de uma venda, marcando a transação como concluída.
+ */
 async function registarConclusaoVenda(req, res, next) {
     try {
         const idVenda = parseInt(req.params.id);
         const { idComprador, metodoPagamento } = req.body;
+        
         if (isNaN(idVenda) || !idComprador) return res.status(400).json({ mensagem: 'Dados inválidos.' });
 
         await inventarioModel.registarConclusaoVenda(idVenda, parseInt(idComprador), metodoPagamento);
@@ -310,6 +314,7 @@ async function registarConclusaoVenda(req, res, next) {
     } catch (error) { next(error); }
 }
 
+// Exportação dos métodos para utilização nas rotas
 module.exports = {
     getCatalogo, 
     getPecaDetalhes, 

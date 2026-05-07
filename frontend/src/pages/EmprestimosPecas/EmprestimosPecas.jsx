@@ -48,14 +48,27 @@ export default function EmprestimosPecas({ irParaLanding, irParaVendaFigurinos }
   const mostrarAlerta = (msg) => setCustomAlert({ show: true, message: msg, type: 'alert', onConfirm: null });
   const fecharAlerta  = ()    => setCustomAlert({ show: false, message: '', type: 'alert', onConfirm: null });
 
-  const parsearLocalizacao = (localizacao) => {
-    if (!localizacao || !localizacao.includes('valor_dia:')) return {};
-    try {
-      const partes = localizacao.split(';');
-      const valor_dia = partes.find(p => p.startsWith('valor_dia:'))?.split(':')[1] || '0';
-      const metodosStr = partes.find(p => p.startsWith('metodos:'))?.split(':')[1] || 'MBWay';
-      return { valor_dia, metodos: metodosStr.split(',') };
-    } catch { return {}; }
+  const parsearLocalizacao = (peca) => {
+    // 1. Prevenção de erro crítico: Se a peça for null, undefined ou não for um objeto
+    if (!peca || typeof peca !== 'object') {
+      return { valor_dia: '0', metodos: ['MBWay'] };
+    }
+
+    // 2. Compatibilidade com registos antigos que tenham ficado na BD
+    if (typeof peca.localizacao === 'string' && peca.localizacao.includes('valor_dia:')) {
+      try {
+        const partes = peca.localizacao.split(';');
+        const valor_dia = partes.find(p => p.startsWith('valor_dia:'))?.split(':')[1] || '0';
+        const metodosStr = partes.find(p => p.startsWith('metodos:'))?.split(':')[1] || 'MBWay';
+        return { valor_dia, metodos: metodosStr.split(',') };
+      } catch { return { valor_dia: '0', metodos: ['MBWay'] }; }
+    }
+    
+    // 3. Nova estrutura lida diretamente das colunas adicionadas no SQL OUTER APPLY
+    return { 
+        valor_dia: peca.valor_dia || '0', 
+        metodos: (typeof peca.metodos_pagamento === 'string') ? peca.metodos_pagamento.split(',') : ['MBWay'] 
+    };
   };
 
   const carregarPecas = async (mostrarLoading = false) => {
@@ -187,12 +200,14 @@ export default function EmprestimosPecas({ irParaLanding, irParaVendaFigurinos }
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` },
         body: JSON.stringify({
-          nome:        novaPeca.nome,
-          descricao:   novaPeca.descricao,
-          tamanho:     novaPeca.tamanho,
-          estado:      novaPeca.condicao,
-          idCategoria: 1,
-          fotos:       novaPeca.fotos
+          nome:              novaPeca.nome,
+          descricao:         novaPeca.descricao,
+          tamanho:           novaPeca.tamanho,
+          estado:            novaPeca.condicao,
+          idCategoria:       1,
+          fotos:             novaPeca.fotos,
+          valor_dia:         novaPeca.valor_dia, // Agora enviado diretamente na criação
+          metodos_pagamento: novaPeca.metodos_pagamento
         })
       });
 
@@ -200,21 +215,6 @@ export default function EmprestimosPecas({ irParaLanding, irParaVendaFigurinos }
         const erro = await resPeca.json();
         throw new Error(erro.mensagem || "Erro ao registar a peça.");
       }
-
-      const { idPeca } = await resPeca.json();
-
-      const resDisp = await fetch(`${API_URL}/${idPeca}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` },
-        body: JSON.stringify({
-          estado:               novaPeca.condicao,
-          disponivelEmprestimo: true,
-          disponivelVenda:      false,
-          localizacao:          `valor_dia:${novaPeca.valor_dia};metodos:${novaPeca.metodos_pagamento.join(',')}`
-        })
-      });
-
-      if (!resDisp.ok) throw new Error("Erro ao marcar disponibilidade.");
 
       mostrarAlerta('Peça disponibilizada para empréstimo com sucesso!');
       setNovaPeca({ nome: '', tamanho: '', condicao: 'Novo', valor_dia: '', descricao: '', metodos_pagamento: ['MBWay'], fotos: [] });
@@ -228,7 +228,7 @@ export default function EmprestimosPecas({ irParaLanding, irParaVendaFigurinos }
   };
 
   const abrirEdicao = (peca) => {
-    const metaParsed = parsearLocalizacao(peca.localizacao || '');
+    const metaParsed = parsearLocalizacao(peca);
     setPecaEmEdicao({
       ...peca,
       valor_dia:         metaParsed.valor_dia || '',
@@ -303,7 +303,7 @@ export default function EmprestimosPecas({ irParaLanding, irParaVendaFigurinos }
   };
 
   const handleAbrirSolicitar = async (peca) => {
-    const metaParsed = parsearLocalizacao(peca.localizacao || '');
+    const metaParsed = parsearLocalizacao(peca);
     setPecaSelecionada({
       ...peca,
       valor_dia:         metaParsed.valor_dia || '0',
@@ -331,14 +331,13 @@ export default function EmprestimosPecas({ irParaLanding, irParaVendaFigurinos }
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` },
         body: JSON.stringify({
-          dataInicio:  dataInicio,
-          dataFim:     dataFim,
-          observacoes: observacoesSolicitacao
-            ? `Método: ${metodoPagamentoSolicitacao} | ${observacoesSolicitacao}`
-            : `Método: ${metodoPagamentoSolicitacao}`,
+          dataInicio:      dataInicio,
+          dataFim:         dataFim,
+          metodoPagamento: metodoPagamentoSolicitacao, // Enviado para a coluna método_pagamento
+          observacoes:     observacoesSolicitacao,     // Enviado sem misturar com o método
           itens: [{
             idPeca:        pecaSelecionada.id_peca,
-            estadoEntrega: pecaSelecionada.condicao_peca || pecaSelecionada.estado || 'Bom'
+            estadoEntrega: pecaSelecionada.condicao_peca || pecaSelecionada.estado || 'Bom' // Estado lido para a bd
           }]
         })
       });
@@ -366,10 +365,12 @@ export default function EmprestimosPecas({ irParaLanding, irParaVendaFigurinos }
 
   const handleSubmeterAcaoEmprestimo = async (e) => {
     e.preventDefault();
-    if (!acaoForm.idEmprestimo) return mostrarAlerta('Indica o ID do Empréstimo.');
+    
+    // O sistema agora vai buscar o ID do empréstimo automaticamente!
+    const idEmp = acaoPeca?.active_id_emprestimo;
+    if (!idEmp) return mostrarAlerta('Erro: Não foi possível identificar o empréstimo ativo. Atualiza a página.');
     
     setIsSubmitting(true);
-    const idEmp = parseInt(acaoForm.idEmprestimo);
 
     try {
       if (acaoForm.tipoAcao === 'Pagamento') {
@@ -382,7 +383,7 @@ export default function EmprestimosPecas({ irParaLanding, irParaVendaFigurinos }
             estadoPagamento: acaoForm.estadoPagamento
           })
         });
-        if (res.ok) mostrarAlerta('Pagamento registado com sucesso na base de dados!');
+        if (res.ok) mostrarAlerta('Pagamento registado com sucesso!');
         else { const err = await res.json(); mostrarAlerta(err.mensagem || 'Erro ao registar pagamento.'); }
       } 
       else if (acaoForm.tipoAcao === 'Devolucao') {
@@ -396,7 +397,7 @@ export default function EmprestimosPecas({ irParaLanding, irParaVendaFigurinos }
           })
         });
         if (res.ok) {
-          mostrarAlerta('Devolução efetuada e EMPRESTIMO_ITEM atualizado com sucesso!');
+          mostrarAlerta('Devolução concluída com sucesso!');
           setIsAcoesModalOpen(false);
           carregarPecas(false);
         }
@@ -413,22 +414,32 @@ export default function EmprestimosPecas({ irParaLanding, irParaVendaFigurinos }
             descricao: acaoForm.descricaoPenalizacao || null
           })
         });
-        if (res.ok) mostrarAlerta('Tabela PENALIZACAO_PECA populada com sucesso!');
+        if (res.ok) mostrarAlerta('Multa/Penalização aplicada com sucesso!');
         else { const err = await res.json(); mostrarAlerta(err.mensagem || 'Erro ao registar penalização.'); }
       }
     } catch { mostrarAlerta("Erro de rede."); }
     finally { setIsSubmitting(false); }
   };
 
+  const userId = utilizador?.id_utilizador || utilizador?.id;
+
   const pecasFiltradas = pecas
-    .filter(p => (p.nome_peca || p.nome)?.toLowerCase().includes(pesquisa.toLowerCase()))
-    .filter(p => filtroEstado === 'Todos' ? true : (p.condicao_peca || p.estado) === filtroEstado)
+    .filter(p => (p?.nome_peca || p?.nome || '').toLowerCase().includes((pesquisa || '').toLowerCase()))
+    .filter(p => filtroEstado === 'Todos' ? true : (p?.condicao_peca || p?.estado) === filtroEstado)
     .sort((a, b) => {
-      const vaA = parseFloat(parsearLocalizacao(a.localizacao || '').valor_dia || 0);
-      const vaB = parseFloat(parsearLocalizacao(b.localizacao || '').valor_dia || 0);
+      const eMeuA = Boolean(userId && a?.UTILIZADORid_utilizador && userId === a.UTILIZADORid_utilizador);
+      const eMeuB = Boolean(userId && b?.UTILIZADORid_utilizador && userId === b.UTILIZADORid_utilizador);
+
+      if (eMeuA && !eMeuB) return -1;
+      if (!eMeuA && eMeuB) return 1;
+
+      const vaA = parseFloat(parsearLocalizacao(a).valor_dia || 0);
+      const vaB = parseFloat(parsearLocalizacao(b).valor_dia || 0);
+      
       if (ordenacao === 'preco_asc')  return vaA - vaB;
       if (ordenacao === 'preco_desc') return vaB - vaA;
-      return b.id_peca - a.id_peca;
+      
+      return (b?.id_peca || 0) - (a?.id_peca || 0);
     });
 
   return (
@@ -528,15 +539,15 @@ export default function EmprestimosPecas({ irParaLanding, irParaVendaFigurinos }
           ) : (
             pecasFiltradas.map((peca) => {
               const idxImg        = indicesImagens[peca.id_peca] || 0;
-              const totalFotos    = peca.fotos?.length || 0;
-              const estaEmprestado = peca.disponivel_para_emprestimo === false || peca.disponivel_para_emprestimo === 0 || peca.estado === 'Emprestado';
-              const metaParsed    = parsearLocalizacao(peca.localizacao || '');
+              const totalFotos = peca.fotos?.length || 0;
+              const estaEmprestado = !!peca.emprestimo_inicio;
+              const metaParsed = parsearLocalizacao(peca);
               const valorDia      = parseFloat(metaParsed.valor_dia || 0);
               const metodos       = metaParsed.metodos || [];
               const nomePeca      = peca.nome_peca || peca.nome || 'Sem nome';
               const condicaoPeca  = peca.condicao_peca || peca.estado || 'Bom';
               
-              const userId = utilizador?.id_utilizador || utilizador?.id; 
+              const userId = utilizador?.id_utilizador || utilizador?.id;
               const eMinhaPeca = Boolean(userId && peca.UTILIZADORid_utilizador && userId === peca.UTILIZADORid_utilizador);
 
               return (
@@ -597,29 +608,31 @@ export default function EmprestimosPecas({ irParaLanding, irParaVendaFigurinos }
                     </div>
 
                     <div className="peca-footer">
-                      <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
-                        <span className="preco">{valorDia.toFixed(2)} €</span>
-                        <span className="texto-dia">/dia</span>
-                      </div>
-
-                      {estaEmprestado ? (
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', lineHeight: '1.2' }}>
-                          {eMinhaPeca ? (
-                            <button className="btn-dark btn-sm" onClick={() => handleAbrirAcoesEmprestimo(peca)} title="Atualizar BD">
-                              Gerir Empréstimo
-                            </button>
-                          ) : (
-                            <span className="texto-emprestado-rodape">Emprestado</span>
-                          )}
-                        </div>
-                      ) : eMinhaPeca ? (
-                        <span className="texto-teu-item">O teu item</span>
-                      ) : (
-                        <button className="btn-outline btn-sm" onClick={() => handleAbrirSolicitar(peca)} disabled={!utilizador} title={!utilizador ? 'Faz login para solicitar' : ''}>
-                          Solicitar
-                        </button>
-                      )}
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
+                      <span className="preco">{valorDia.toFixed(2)} €</span>
+                      <span className="texto-dia">/dia</span>
                     </div>
+
+                    {estaEmprestado ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', lineHeight: '1.2' }}>
+                        {eMinhaPeca ? (
+                          // O dono vê sempre este botão se a peça estiver emprestada
+                          <button className="btn-dark btn-sm" onClick={() => handleAbrirAcoesEmprestimo(peca)}>
+                            Gerir Empréstimo
+                          </button>
+                        ) : (
+                          // Outros utilizadores apenas vêem o texto informativo
+                          <span className="texto-emprestado-rodape">Emprestado</span>
+                        )}
+                      </div>
+                    ) : eMinhaPeca ? (
+                      <span className="texto-teu-item">O teu item</span>
+                    ) : (
+                      <button className="btn-outline btn-sm" onClick={() => handleAbrirSolicitar(peca)} disabled={!utilizador}>
+                        Solicitar
+                      </button>
+                    )}
+                  </div>
                   </div>
 
                 </div>
@@ -880,39 +893,29 @@ export default function EmprestimosPecas({ irParaLanding, irParaVendaFigurinos }
       {isAcoesModalOpen && acaoPeca && (
         <div className="modal-overlay">
           <div className="modal-content form-venda">
-            <h2>Gerir Empréstimo / BD</h2>
-            <p className="resumo-compra" style={{fontSize: '0.85rem', marginBottom: '15px'}}>
-              Através desta aba podes preencher manualmente informações nas tabelas <strong>EMPRESTIMO</strong>, <strong>EMPRESTIMO_ITEM</strong> e <strong>PENALIZACAO_PECA</strong>. Insere o ID do Empréstimo ativo para esta peça.
+            <h2>Gerir Empréstimo</h2>
+            <p className="resumo-compra" style={{fontSize: '0.9rem', marginBottom: '20px'}}>
+              Estás a gerir o empréstimo ativo da peça: <strong>{acaoPeca.nome_peca || acaoPeca.nome}</strong>. Seleciona a ação que pretendes realizar.
             </p>
 
             <form onSubmit={handleSubmeterAcaoEmprestimo}>
-              <div className="form-row">
-                <div className="form-group">
-                  <label>ID do Empréstimo (Ver BD)</label>
-                  <input
-                    type="number" required placeholder="Ex: 12"
-                    value={acaoForm.idEmprestimo}
-                    onChange={(e) => setAcaoForm({ ...acaoForm, idEmprestimo: e.target.value })}
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Ação a Realizar</label>
-                  <select
-                    value={acaoForm.tipoAcao}
-                    onChange={(e) => setAcaoForm({ ...acaoForm, tipoAcao: e.target.value })}
-                  >
-                    <option value="Pagamento">1. Registar Pagamento (EMPRESTIMO)</option>
-                    <option value="Devolucao">2. Registar Devolução (EMPRESTIMO_ITEM)</option>
-                    <option value="Penalizacao">3. Registar Penalização (PENALIZACAO_PECA)</option>
-                  </select>
-                </div>
+              <div className="form-group">
+                <label>Ação a Realizar</label>
+                <select
+                  value={acaoForm.tipoAcao}
+                  onChange={(e) => setAcaoForm({ ...acaoForm, tipoAcao: e.target.value })}
+                >
+                  <option value="Pagamento">Registar Pagamento Recebido</option>
+                  <option value="Devolucao">Registar Devolução da Peça</option>
+                  <option value="Penalizacao">Aplicar Penalização (Multa)</option>
+                </select>
               </div>
 
               {acaoForm.tipoAcao === 'Pagamento' && (
                 <div className="form-row">
                   <div className="form-group">
                     <label>Valor Pago (€)</label>
-                    <input type="number" step="0.01" min="0" required value={acaoForm.valorPagamento} onChange={(e) => setAcaoForm({...acaoForm, valorPagamento: e.target.value})} />
+                    <input type="number" step="0.01" min="0" required placeholder="Ex: 15.00" value={acaoForm.valorPagamento} onChange={(e) => setAcaoForm({...acaoForm, valorPagamento: e.target.value})} />
                   </div>
                   <div className="form-group">
                     <label>Método de Pagamento</label>
@@ -936,25 +939,25 @@ export default function EmprestimosPecas({ irParaLanding, irParaVendaFigurinos }
                 <>
                   <div className="form-row">
                     <div className="form-group">
-                      <label>Estado Final do Empréstimo</label>
+                      <label>Estado do Empréstimo</label>
                       <select value={acaoForm.estadoFinalDevolucao} onChange={(e) => setAcaoForm({...acaoForm, estadoFinalDevolucao: e.target.value})}>
-                        <option value="Concluído">Concluído</option>
+                        <option value="Concluído">Concluído com sucesso</option>
                         <option value="Cancelado">Cancelado</option>
                       </select>
                     </div>
                     <div className="form-group">
                       <label>Condição em que foi devolvida</label>
                       <select value={acaoForm.estadoPecaDevolucao} onChange={(e) => setAcaoForm({...acaoForm, estadoPecaDevolucao: e.target.value})}>
-                        <option value="Bom">Bom</option>
-                        <option value="Usado">Usado</option>
+                        <option value="Bom">Bom estado</option>
+                        <option value="Usado">Marcas de Uso</option>
                         <option value="Danificado">Danificado</option>
                         <option value="Perdido">Perdido</option>
                       </select>
                     </div>
                   </div>
                   <div className="form-group">
-                    <label>Observações</label>
-                    <textarea rows="2" value={acaoForm.observacoesDevolucao} onChange={(e) => setAcaoForm({...acaoForm, observacoesDevolucao: e.target.value})} />
+                    <label>Observações sobre a devolução</label>
+                    <textarea rows="2" placeholder="Ex: Devolvido a tempo e horas..." value={acaoForm.observacoesDevolucao} onChange={(e) => setAcaoForm({...acaoForm, observacoesDevolucao: e.target.value})} />
                   </div>
                 </>
               )}
@@ -963,28 +966,28 @@ export default function EmprestimosPecas({ irParaLanding, irParaVendaFigurinos }
                 <>
                   <div className="form-row">
                     <div className="form-group">
-                      <label>Tipo de Penalização</label>
+                      <label>Motivo da Penalização</label>
                       <select value={acaoForm.tipoPenalizacao} onChange={(e) => setAcaoForm({...acaoForm, tipoPenalizacao: e.target.value})}>
-                        <option value="Atraso">Atraso</option>
-                        <option value="Dano">Dano</option>
-                        <option value="Perda">Perda</option>
+                        <option value="Atraso">Atraso na entrega</option>
+                        <option value="Dano">Danos à peça</option>
+                        <option value="Perda">Perda da peça</option>
                       </select>
                     </div>
                     <div className="form-group">
                       <label>Valor da Multa (€)</label>
-                      <input type="number" step="0.01" min="0.01" required value={acaoForm.valorPenalizacao} onChange={(e) => setAcaoForm({...acaoForm, valorPenalizacao: e.target.value})} />
+                      <input type="number" step="0.01" min="0.01" required placeholder="Ex: 5.00" value={acaoForm.valorPenalizacao} onChange={(e) => setAcaoForm({...acaoForm, valorPenalizacao: e.target.value})} />
                     </div>
                   </div>
                   <div className="form-group">
                     <label>Descrição da Penalização</label>
-                    <textarea rows="2" required value={acaoForm.descricaoPenalizacao} onChange={(e) => setAcaoForm({...acaoForm, descricaoPenalizacao: e.target.value})} />
+                    <textarea rows="2" required placeholder="Ex: A peça foi entregue com 3 dias de atraso..." value={acaoForm.descricaoPenalizacao} onChange={(e) => setAcaoForm({...acaoForm, descricaoPenalizacao: e.target.value})} />
                   </div>
                 </>
               )}
 
               <div className="modal-actions">
                 <button type="button" className="btn-text" onClick={() => setIsAcoesModalOpen(false)}>Cancelar</button>
-                <button type="submit" className="btn-dark" disabled={isSubmitting}>{isSubmitting ? 'A Processar...' : 'Atualizar Base de Dados'}</button>
+                <button type="submit" className="btn-dark" disabled={isSubmitting}>{isSubmitting ? 'A Processar...' : 'Confirmar Ação'}</button>
               </div>
             </form>
           </div>

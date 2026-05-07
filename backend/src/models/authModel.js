@@ -1,18 +1,37 @@
-const { poolPromise } = require('../config/db');
-const sql = require('mssql');
+/**
+ * Modelo de Autenticação e Gestão de Utilizadores
+ * Este ficheiro centraliza todas as interações com a base de dados SQL Server
+ * referentes a utilizadores, perfis e tokens de segurança.
+ */
+
+const { poolPromise } = require('../config/db'); // Ligação à base de dados (Connection Pool)
+const sql = require('mssql'); // Biblioteca de driver do SQL Server
  
 // ============================================================================
 // 1. AUTENTICAÇÃO E PERFIS
 // ============================================================================
+
+/**
+ * Procura e devolve as credenciais de um utilizador através do seu email.
+ * @param {string} email - O email do utilizador a pesquisar.
+ * @returns {Object|null} Os dados do utilizador ou null se não for encontrado.
+ */
 async function getUtilizadorByEmail(email) {
     try {
         const pool = await poolPromise;
         const query = `SELECT id_utilizador, nome, email, password, telefone, ativo FROM UTILIZADOR WHERE email = @Email;`;
+        
+        // Uso de parâmetros (Input) previne ataques de SQL Injection
         const result = await pool.request().input('Email', sql.VarChar(255), email).query(query);
         return result.recordset[0] || null;
     } catch (error) { throw error; }
 }
  
+/**
+ * Obtém a lista de nomes dos perfis associados a um determinado utilizador.
+ * @param {number} idUtilizador - O ID do utilizador na base de dados.
+ * @returns {Array<string>} Um array com os nomes dos perfis
+ */
 async function getPerfisDoUtilizador(idUtilizador) {
     try {
         const pool = await poolPromise;
@@ -22,13 +41,18 @@ async function getPerfisDoUtilizador(idUtilizador) {
             WHERE up.UTILIZADORid_utilizador = @IdUtilizador;
         `;
         const result = await pool.request().input('IdUtilizador', sql.Int, idUtilizador).query(query);
-        return result.recordset.map(row => row.perfil);
+        return result.recordset.map(row => row.perfil); // Mapeia os objetos da BD para um array simples de strings
     } catch (error) { throw error; }
 }
  
 // ============================================================================
-// 2. GESTÃO DE CONTAS
+// 2. GESTÃO DE CONTAS (Administração e Registo)
 // ============================================================================
+
+/**
+ * Lista todos os utilizadores do sistema, agregando os seus perfis numa única string.
+ * Útil para popular tabelas no painel de administração (Cordenação).
+ */
 async function listarTodosUtilizadores() {
     try {
         const pool = await poolPromise;
@@ -45,18 +69,25 @@ async function listarTodosUtilizadores() {
     } catch (error) { throw error; }
 }
  
+/**
+ * Regista um novo utilizador e atribui-lhe o respetivo perfil.
+ * Utiliza uma transação SQL para garantir que ambos os registos (utilizador e perfil)
+ * só são guardados se não ocorrerem erros.
+ */
 async function criarUtilizador({ nome, email, passwordHash, telefone, nomePerfil, ativo = 0 }) {
     const pool = await poolPromise;
     const transaction = pool.transaction();
     await transaction.begin();
  
     try {
+        // 1. Verifica se o email já está em uso na plataforma
         const emailExiste = await transaction.request()
             .input('Email', sql.VarChar(255), email)
             .query('SELECT id_utilizador FROM UTILIZADOR WHERE email = @Email');
  
         if (emailExiste.recordset.length > 0) throw new Error('Já existe um utilizador com este email.');
  
+        // 2. Mapeamento do nome do perfil para o seu ID correspondente na BD
         let idPerfil = null;
         if (nomePerfil === 'Professor') {
             const res = await transaction.request().query("SELECT TOP 1 id_perfil FROM PERFIL WHERE nome LIKE '%Prof%'");
@@ -69,8 +100,9 @@ async function criarUtilizador({ nome, email, passwordHash, telefone, nomePerfil
             idPerfil = res.recordset[0]?.id_perfil;
         }
  
-        if (!idPerfil) throw new Error('Perfil não encontrado na BD.');
+        if (!idPerfil) throw new Error('Perfil não encontrado.');
  
+        // 3. Inserção do Utilizador (Usa OUTPUT para devolver imediatamente os dados gerados)
         const insertUserQuery = `
             INSERT INTO UTILIZADOR (nome, email, password, telefone, ativo, data_criacao)
             OUTPUT INSERTED.id_utilizador, INSERTED.nome, INSERTED.email, INSERTED.ativo
@@ -86,25 +118,32 @@ async function criarUtilizador({ nome, email, passwordHash, telefone, nomePerfil
  
         const novoUtilizador = novoUserResult.recordset[0];
  
+        // 4. Criação da ligação entre Utilizador e Perfil
         await transaction.request()
             .input('IdUser', sql.Int, novoUtilizador.id_utilizador)
             .input('IdPerfil', sql.Int, idPerfil)
             .query(`INSERT INTO UTILIZADOR_PERFIL (UTILIZADORid_utilizador, PERFILid_perfil) VALUES (@IdUser, @IdPerfil);`);
  
+        // Valida e guarda todas as alterações permanentemente
         await transaction.commit();
         return novoUtilizador;
     } catch (error) {
+        // Se houver um erro a meio do processo, reverte todas as inserções
         await transaction.rollback();
         throw error;
     }
 }
  
+/**
+ * Atualiza todos os dados submetidos pelo Administrador para um utilizador específico.
+ */
 async function atualizarUtilizadorCompleto(id, { nome, email, telefone, passwordHash, nomePerfil }) {
     const pool = await poolPromise;
     const transaction = pool.transaction();
     await transaction.begin();
  
     try {
+        // Construção dinâmica da query: A password só é atualizada se for fornecido um novo hash
         let queryUpdate = `UPDATE UTILIZADOR SET nome = @Nome, email = @Email, telefone = @Telefone`;
         if (passwordHash) queryUpdate += `, password = @Password`;
         queryUpdate += ` WHERE id_utilizador = @Id`;
@@ -116,8 +155,11 @@ async function atualizarUtilizadorCompleto(id, { nome, email, telefone, password
             .input('Id', sql.Int, id);
         
         if (passwordHash) req.input('Password', sql.VarChar(255), passwordHash);
+        
+        // Executa atualização principal de dados
         await req.query(queryUpdate);
 
+        // Se houver alteração de perfil, remove a antiga e insere a nova ligação
         if (nomePerfil) {
             let idPerfil = null;
             if (nomePerfil === 'Professor') {
@@ -132,7 +174,9 @@ async function atualizarUtilizadorCompleto(id, { nome, email, telefone, password
             }
 
             if (idPerfil) {
+                // Remove o perfil atual
                 await transaction.request().input('Id', sql.Int, id).query('DELETE FROM UTILIZADOR_PERFIL WHERE UTILIZADORid_utilizador = @Id');
+                // Adiciona o novo perfil
                 await transaction.request().input('Id', sql.Int, id).input('IdPerfil', sql.Int, idPerfil)
                     .query(`INSERT INTO UTILIZADOR_PERFIL (UTILIZADORid_utilizador, PERFILid_perfil) VALUES (@Id, @IdPerfil);`);
             }
@@ -145,34 +189,44 @@ async function atualizarUtilizadorCompleto(id, { nome, email, telefone, password
     }
 }
 
+/**
+ * Altera a flag booleana de estado (ativo/inativo) de um utilizador.
+ * @param {number} idUtilizador - O ID do utilizador.
+ * @param {boolean} estadoAtivo - true para ativar, false para suspender/reprovar.
+ */
 async function alterarEstadoUtilizador(idUtilizador, estadoAtivo) {
     try {
         const pool = await poolPromise;
         const result = await pool.request()
-            .input('EstadoAtivo', sql.Bit, estadoAtivo ? 1 : 0)
+            .input('EstadoAtivo', sql.Bit, estadoAtivo ? 1 : 0) // Conversão de booleano para bit (SQL Server)
             .input('IdUtilizador', sql.Int, idUtilizador)
             .query(`UPDATE UTILIZADOR SET ativo = @EstadoAtivo WHERE id_utilizador = @IdUtilizador;`);
+        
+        // Retorna verdadeiro se a linha foi realmente atualizada
         return result.rowsAffected[0] > 0;
     } catch (error) { throw error; }
 }
 
-// NOVA FUNÇÃO: ELIMINAR UTILIZADOR
+/**
+ * Executa uma eliminação completa e segura de um utilizador da base de dados.
+ * Remove primeiro as restrições de chaves estrangeiras (perfis e tokens).
+ */
 async function apagarUtilizador(idUtilizador) {
     const pool = await poolPromise;
     const transaction = pool.transaction();
     await transaction.begin();
     try {
-        // Limpar ligações de perfil primeiro (senão o SQL bloqueia)
+        // Limpar ligações de perfil primeiro (senão o SQL bloqueia por Foreign Key Violation)
         await transaction.request()
             .input('Id', sql.Int, idUtilizador)
             .query('DELETE FROM UTILIZADOR_PERFIL WHERE UTILIZADORid_utilizador = @Id');
             
-        // Limpar possíveis tokens
+        // Limpar possíveis tokens de recuperação associados a esta conta
         await transaction.request()
             .input('Id', sql.Int, idUtilizador)
             .query('DELETE FROM TOKEN_RECUPERACAO WHERE UTILIZADORid_utilizador = @Id');
 
-        // Finalmente, apagar o utilizador
+        // Finalmente, apagar o registo raiz do utilizador
         const result = await transaction.request()
             .input('Id', sql.Int, idUtilizador)
             .query('DELETE FROM UTILIZADOR WHERE id_utilizador = @Id');
@@ -188,39 +242,67 @@ async function apagarUtilizador(idUtilizador) {
 // ============================================================================
 // 3. RECUPERAÇÃO DE PALAVRA-PASSE
 // ============================================================================
+
+/**
+ * Regista o token seguro (Hexadecimal) necessário para recuperar conta.
+ * A query define matematicamente que a expiração é de 1 hora.
+ */
 async function guardarTokenRecuperacao(idUtilizador, token) {
     try {
         const pool = await poolPromise;
         await pool.request()
             .input('Token', sql.VarChar(255), token)
             .input('IdUtilizador', sql.Int, idUtilizador)
-            .query(`INSERT INTO TOKEN_RECUPERACAO (token, data_expiracao, usado, data_criacao, UTILIZADORid_utilizador)
-                    VALUES (@Token, DATEDIFF(SECOND, '1970-01-01', DATEADD(HOUR, 1, GETUTCDATE())), 0, GETDATE(), @IdUtilizador);`);
+            .query(`
+                INSERT INTO TOKEN_RECUPERACAO (token, data_expiracao, usado, data_criacao, UTILIZADORid_utilizador)
+                VALUES (@Token, DATEDIFF(SECOND, '1970-01-01', DATEADD(HOUR, 1, GETUTCDATE())), 0, GETDATE(), @IdUtilizador);
+            `);
         return true;
     } catch (error) { throw error; }
 }
  
+/**
+ * Verifica se um token de recuperação submetido ainda é válido na BD.
+ * Valida o conteúdo, a expiração de tempo (UNIX timestamp) e se já foi utilizado.
+ */
 async function validarTokenRecuperacao(token) {
     try {
         const pool = await poolPromise;
-        const tempoAtualUnix = Math.floor(Date.now() / 1000);
+        const tempoAtualUnix = Math.floor(Date.now() / 1000); // Tempo atual em segundos Unix
+        
         const result = await pool.request()
             .input('Token', sql.VarChar(255), token)
             .input('TempoAtual', sql.Int, tempoAtualUnix)
-            .query(`SELECT id_token_recuperacao, UTILIZADORid_utilizador FROM TOKEN_RECUPERACAO WHERE token = @Token AND usado = 0 AND data_expiracao > @TempoAtual;`);
+            .query(`
+                SELECT id_token_recuperacao, UTILIZADORid_utilizador 
+                FROM TOKEN_RECUPERACAO 
+                WHERE token = @Token AND usado = 0 AND data_expiracao > @TempoAtual;
+            `);
+        
         return result.recordset[0] || null;
     } catch (error) { throw error; }
 }
  
+/**
+ * Altera definitivamente a password esquecida do utilizador.
+ * Executado em transação para garantir que o token é inutilizado em simultâneo com o update.
+ */
 async function atualizarPassword(idUtilizador, novaPasswordHash, idToken) {
     const pool = await poolPromise;
     const transaction = pool.transaction();
     await transaction.begin();
     try {
-        await transaction.request().input('IdUtilizador', sql.Int, idUtilizador).input('NovaPassword', sql.VarChar(255), novaPasswordHash)
+        // Atualiza a password
+        await transaction.request()
+            .input('IdUtilizador', sql.Int, idUtilizador)
+            .input('NovaPassword', sql.VarChar(255), novaPasswordHash)
             .query('UPDATE UTILIZADOR SET password = @NovaPassword WHERE id_utilizador = @IdUtilizador');
-        await transaction.request().input('IdToken', sql.Int, idToken)
+            
+        // Inutiliza o token usado para prevenir reutilização abusiva
+        await transaction.request()
+            .input('IdToken', sql.Int, idToken)
             .query('UPDATE TOKEN_RECUPERACAO SET usado = 1 WHERE id_token_recuperacao = @IdToken');
+            
         await transaction.commit();
         return true;
     } catch (error) {
@@ -229,6 +311,7 @@ async function atualizarPassword(idUtilizador, novaPasswordHash, idToken) {
     }
 }
  
+// Exportação dos métodos da camada Model
 module.exports = {
     getUtilizadorByEmail, 
     getPerfisDoUtilizador, 

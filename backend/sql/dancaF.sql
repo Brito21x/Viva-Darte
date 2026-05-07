@@ -52,14 +52,10 @@ CREATE TABLE PROFESSOR_MODALIDADE (
 CREATE TABLE TABELA_PRECO (
   id_preco                 int IDENTITY NOT NULL, 
   formato_aula             varchar(50) NOT NULL, 
-  duracao_minutos          int NOT NULL, 
-  numero_min_participantes int NULL, 
-  numero_max_participantes int NULL, 
+  duracao_minutos          int NOT NULL,  
   dia_semana               int NOT NULL, 
   preco                    decimal(10, 2) NOT NULL, 
   ativo                    bit NOT NULL, 
-  UTILIZADORid_utilizador  int NULL, 
-  MODALIDADEid_modalidade  int NOT NULL, 
   PRIMARY KEY (id_preco));
 CREATE TABLE PEDIDO_COACHING (
   id_pedido_coaching       int IDENTITY NOT NULL, 
@@ -71,10 +67,10 @@ CREATE TABLE PEDIDO_COACHING (
   hora_inicio_pretendida   time(7) NOT NULL, 
   estado                   varchar(50) NOT NULL, 
   custo_estimado           decimal(10, 2) NULL, 
-  UTILIZADORid_utilizador  int NULL, 
+  UTILIZADORid_utilizador  int NOT NULL, 
   ANO_LETIVOid_ano_letivo  int NOT NULL, 
   MODALIDADEid_modalidade  int NOT NULL, 
-  UTILIZADORid_utilizador2 int NOT NULL, 
+  UTILIZADORid_utilizador2 int NULL, 
   PRIMARY KEY (id_pedido_coaching));
 CREATE TABLE VALIDACAO_COACHING (
   id_validacao            int IDENTITY NOT NULL, 
@@ -140,7 +136,6 @@ CREATE TABLE PECA (
 CREATE TABLE FOTO_PECA (
   id_foto_peca int IDENTITY NOT NULL, 
   foto         varchar(255) NOT NULL, 
-  descricao    varchar(255) NULL, 
   PECAid_peca  int NOT NULL, 
   PRIMARY KEY (id_foto_peca));
 CREATE TABLE EMPRESTIMO (
@@ -184,6 +179,7 @@ CREATE TABLE VENDA_PECA (
   UTILIZADORid_utilizador  int NOT NULL, 
   UTILIZADORid_utilizador2 int NOT NULL, 
   metodo_pagamento         varchar(50) NULL, 
+  metodos_aceites VARCHAR(255) NULL,
   PRIMARY KEY (id_venda));
 CREATE TABLE HORARIO (
   id_horario              int IDENTITY NOT NULL, 

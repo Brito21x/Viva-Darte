@@ -1,258 +1,280 @@
-// Localização: frontend/src/pages/.../VendaFigurinos.jsx
 import React, { useState, useEffect } from 'react';
 import './VendaFigurinos.css';
-import logoImg from '../../assets/logo.png'; // Ajusta o caminho se for diferente
+import logoImg from '../../assets/logo.png';
+import { API_URL, getAuthToken } from '../../services/api';
 
-export default function VendaFigurinos({ irParaLanding, irParaEmprestimos }) {
+export default function VendaFigurinos({
+  irParaLanding,
+  irParaEmprestimos
+}) {
   const [utilizador, setUtilizador] = useState(null);
   const [figurinos, setFigurinos] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
   
-  // Controlo de Modais
+  // --- NOVOS ESTADOS PARA OS FILTROS ---
+  const [pesquisa, setPesquisa] = useState('');
+  const [filtroEstado, setFiltroEstado] = useState('Todos');
+  const [ordenacao, setOrdenacao] = useState('recentes'); // recentes, preco_asc, preco_desc
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isCompraModalOpen, setIsCompraModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
-  // Estado para o nosso Alerta Customizado (Substitui o window.alert e window.confirm)
   const [customAlert, setCustomAlert] = useState({ show: false, message: '', type: 'alert', onConfirm: null });
-  
   const [figurinoSelecionado, setFigurinoSelecionado] = useState(null);
 
-  // Formulário de Nova Venda (Agora com tamanho e descricao)
   const [novaVenda, setNovaVenda] = useState({
-    PECA_nome: '', 
-    preco: '',
-    condicao: 'Novo',
-    tamanho: '',
-    descricao: '',
-    metodos_pagamento: ['MBWay'], 
-    fotos: [] 
+    PECA_nome: '', preco: '', condicao: 'Novo', tamanho: '', descricao: '',
+    metodos_pagamento: ['MBWay'], fotos: [] 
   });
 
   const [figurinoEmEdicao, setFigurinoEmEdicao] = useState(null);
   const [metodoPagamentoCompra, setMetodoPagamentoCompra] = useState('MBWay');
   const [indicesImagens, setIndicesImagens] = useState({});
 
-  // URL BASE DO BACKEND
-  const API_URL = 'http://localhost:3000/api/vendas';
+  const inventarioBase = `${API_URL}/api/inventario`;
 
-  // --- FUNÇÕES DE ALERTA ---
-  const mostrarAlerta = (msg) => {
-    setCustomAlert({ show: true, message: msg, type: 'alert', onConfirm: null });
-  };
+  const mostrarAlerta = (msg) => setCustomAlert({ show: true, message: msg, type: 'alert', onConfirm: null });
+  const fecharAlerta = () => setCustomAlert({ show: false, message: '', type: 'alert', onConfirm: null });
 
-  const fecharAlerta = () => {
-    setCustomAlert({ show: false, message: '', type: 'alert', onConfirm: null });
-  };
-
-  // --- CARREGAR DADOS INICIAIS ---
   useEffect(() => {
     const userGuardado = localStorage.getItem('viva_user');
-    if (userGuardado) {
-      setUtilizador(JSON.parse(userGuardado));
-    }
-    document.title = "Venda de Figurinos | Escola de Dança";
-    carregarFigurinos();
+    if (userGuardado) setUtilizador(JSON.parse(userGuardado));
+    document.title = "Venda de Figurinos | Viva D'arte";
+    
+    carregarFigurinos(true);
+
+    const interval = setInterval(() => {
+      carregarFigurinos(false);
+    }, 5000);
+
+    return () => clearInterval(interval);
   }, []);
 
-  const carregarFigurinos = async () => {
+  const getToken = () => getAuthToken() || '';
+
+  const carregarFigurinos = async (mostrarLoading = false) => {
+    if (mostrarLoading) setIsLoading(true); 
     try {
-      const response = await fetch(API_URL);
+      const response = await fetch(`${inventarioBase}/vendas`, {
+        method: 'GET',
+        headers: { 
+          'Authorization': `Bearer ${getToken()}`
+        },
+        cache: 'no-store' 
+      });
+      
       if (response.ok) {
         const data = await response.json();
         setFigurinos(data);
       }
     } catch (error) {
       console.error("Erro a carregar figurinos:", error);
+    } finally {
+      if (mostrarLoading) setIsLoading(false); 
     }
   };
 
   const handleLogout = () => {
     localStorage.removeItem('viva_user');
+    localStorage.removeItem('viva_token');
+    localStorage.removeItem('token');
     setUtilizador(null);
     if(irParaLanding) irParaLanding(); 
     window.location.reload();
   };
 
-  /* --- NAVEGAÇÃO DE IMAGENS --- */
   const proximaImagem = (e, id_venda, totalFotos) => {
-    e.stopPropagation();
-    setIndicesImagens(prev => ({
-      ...prev, [id_venda]: ((prev[id_venda] || 0) + 1) % totalFotos
-    }));
+    e.stopPropagation(); setIndicesImagens(prev => ({ ...prev, [id_venda]: ((prev[id_venda] || 0) + 1) % totalFotos }));
   };
-
   const imagemAnterior = (e, id_venda, totalFotos) => {
-    e.stopPropagation();
-    setIndicesImagens(prev => ({
-      ...prev, [id_venda]: ((prev[id_venda] || 0) - 1 + totalFotos) % totalFotos
-    }));
+    e.stopPropagation(); setIndicesImagens(prev => ({ ...prev, [id_venda]: ((prev[id_venda] || 0) - 1 + totalFotos) % totalFotos }));
   };
 
-  /* --- UPLOAD E COMPRESSÃO DE FOTOS --- */
   const handleFotosUpload = async (e) => {
     const files = Array.from(e.target.files);
+    if(files.length === 0) return;
     
     const comprimirImagem = (file) => {
       return new Promise((resolve) => {
         const reader = new FileReader();
         reader.readAsDataURL(file);
         reader.onload = (event) => {
-          const img = new Image();
-          img.src = event.target.result;
+          const img = new Image(); img.src = event.target.result;
           img.onload = () => {
             const canvas = document.createElement('canvas');
-            const MAX_WIDTH = 800; 
-            const MAX_HEIGHT = 800;
-            let width = img.width;
-            let height = img.height;
-
-            if (width > height) {
-              if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; }
-            } else {
-              if (height > MAX_HEIGHT) { width *= MAX_HEIGHT / height; height = MAX_HEIGHT; }
-            }
-
-            canvas.width = width;
-            canvas.height = height;
-            const ctx = canvas.getContext('2d');
-            ctx.drawImage(img, 0, 0, width, height);
+            let width = img.width, height = img.height;
+            if (width > height) { if (width > 800) { height *= 800 / width; width = 800; } } 
+            else { if (height > 800) { width *= 800 / height; height = 800; } }
+            canvas.width = width; canvas.height = height;
+            canvas.getContext('2d').drawImage(img, 0, 0, width, height);
             resolve(canvas.toDataURL('image/jpeg', 0.7));
           };
         };
       });
     };
-
+    
     try {
-        const base64Fotos = await Promise.all(files.map(file => comprimirImagem(file)));
-        setNovaVenda(prev => ({ ...prev, fotos: [...prev.fotos, ...base64Fotos] }));
-    } catch (error) {
-        console.error("Erro ao converter fotos:", error);
-        mostrarAlerta("Erro ao processar as imagens.");
-    }
+        const NovasFotos = await Promise.all(files.map(file => comprimirImagem(file)));
+        setNovaVenda(prev => ({ ...prev, fotos: [...prev.fotos, ...NovasFotos] }));
+    } catch (error) { mostrarAlerta("Erro ao processar as imagens."); }
   };
-
-  const removerFoto = (indexParaRemover) => {
-    setNovaVenda(prev => ({ ...prev, fotos: prev.fotos.filter((_, index) => index !== indexParaRemover) }));
-  };
-
+  
+  const removerFoto = (i) => setNovaVenda(prev => ({ ...prev, fotos: prev.fotos.filter((_, idx) => idx !== i) }));
+  
   const handleCheckboxPagamento = (metodo) => {
-    setNovaVenda(prev => {
-      const jaSelecionado = prev.metodos_pagamento.includes(metodo);
-      return jaSelecionado 
-        ? { ...prev, metodos_pagamento: prev.metodos_pagamento.filter(m => m !== metodo) }
-        : { ...prev, metodos_pagamento: [...prev.metodos_pagamento, metodo] };
-    });
+    setNovaVenda(prev => ({
+      ...prev, metodos_pagamento: prev.metodos_pagamento.includes(metodo) 
+        ? prev.metodos_pagamento.filter(m => m !== metodo) : [...prev.metodos_pagamento, metodo]
+    }));
   };
 
-  // --- SUBMETER VENDA (POST) ---
   const handleSubmeterVenda = async (e) => {
     e.preventDefault();
     setIsSubmitting(true); 
     
-    const userId = utilizador?.id_utilizador || utilizador?.id;
-
-    if (!userId) {
-        mostrarAlerta("Erro: Sessão inválida. O ID de utilizador não foi encontrado. Tenta fazer Logout e Login novamente.");
-        setIsSubmitting(false); 
-        return;
+    if (!utilizador) {
+        mostrarAlerta("Erro: Sessão inválida.");
+        setIsSubmitting(false); return;
     }
 
     if (novaVenda.metodos_pagamento.length === 0) {
-      mostrarAlerta("Por favor, seleciona pelo menos um método de pagamento.");
-      setIsSubmitting(false); 
-      return;
+        mostrarAlerta("Tens de selecionar pelo menos um método de pagamento.");
+        setIsSubmitting(false); return;
     }
 
-    const payload = {
-        ...novaVenda,
-        id_utilizador: userId
-    };
-
     try {
-        const response = await fetch(API_URL, {
+        const resPeca = await fetch(inventarioBase, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` },
+            body: JSON.stringify({
+                nome: novaVenda.PECA_nome,
+                descricao: novaVenda.descricao,
+                tamanho: novaVenda.tamanho,
+                estado: novaVenda.condicao,
+                idCategoria: 1, 
+                fotos: novaVenda.fotos || [] 
+            })
         });
 
-        if (response.ok) {
+        if (!resPeca.ok) {
+            const erro = await resPeca.json();
+            throw new Error(erro.mensagem || "Erro ao registar a peça.");
+        }
+        
+        const dataPeca = await resPeca.json();
+
+        const resVenda = await fetch(`${inventarioBase}/vendas`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` },
+            body: JSON.stringify({
+                idPeca: dataPeca.idPeca,
+                preco: parseFloat(novaVenda.preco),
+                nomePeca: novaVenda.PECA_nome,
+                condicaoPeca: novaVenda.condicao,
+                metodosPagamento: novaVenda.metodos_pagamento
+            })
+        });
+
+        if (resVenda.ok) {
             mostrarAlerta('Figurino colocado à venda com sucesso!');
             setNovaVenda({ PECA_nome: '', preco: '', condicao: 'Novo', tamanho: '', descricao: '', metodos_pagamento: ['MBWay'], fotos: [] });
             setIsModalOpen(false);
-            carregarFigurinos();
+            carregarFigurinos(false);
         } else {
-            mostrarAlerta('Ocorreu um erro ao guardar na base de dados.');
+            const erro = await resVenda.json();
+            throw new Error(erro.mensagem || "Erro ao colocar a peça à venda.");
         }
     } catch (error) {
-        console.error("Erro:", error);
-        mostrarAlerta('Erro de ligação ao servidor.');
+        mostrarAlerta(error.message);
     } finally {
         setIsSubmitting(false); 
     }
   };
 
-  // --- APAGAR VENDA (DELETE) COM CONFIRMAÇÃO CUSTOMIZADA ---
-  const handleApagar = (id_venda) => {
+  const confirmarEliminacao = (idVenda, idPeca) => {
     setCustomAlert({
       show: true,
+      message: `Tens a certeza que queres apagar este produto?`,
       type: 'confirm',
-      message: 'Tens a certeza absoluta que queres apagar este figurino?',
-      onConfirm: async () => {
-        try {
-            const response = await fetch(`${API_URL}/${id_venda}`, { method: 'DELETE' });
-            if (response.ok) {
-                carregarFigurinos();
-            } else {
-                mostrarAlerta('Erro ao apagar o figurino.');
-            }
-        } catch (error) {
-            console.error("Erro ao apagar:", error);
-        }
-        fecharAlerta();
-      }
+      onConfirm: () => executarApagar(idPeca)
     });
   };
 
-  // --- EDITAR VENDA (PUT) ---
+  const executarApagar = async (idPeca) => {
+    fecharAlerta(); 
+    if (!idPeca) return mostrarAlerta("Erro: ID da peça não encontrado.");
+
+    try {
+      const response = await fetch(`${inventarioBase}/${idPeca}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${getToken()}` }
+      });
+
+      if (response.ok) {
+        mostrarAlerta("Produto removido com sucesso!");
+        carregarFigurinos(false);
+      } else {
+        const data = await response.json();
+        mostrarAlerta(data.mensagem || "Erro ao apagar o produto.");
+      }
+    } catch (error) {
+      mostrarAlerta("Erro de rede: Não foi possível contactar o servidor.");
+    }
+  };
+
   const abrirEdicao = (figurino) => {
-    setFigurinoEmEdicao({ ...figurino });
+    setFigurinoEmEdicao({
+      ...figurino,
+      PECA_nome: figurino.nome_peca,
+      preco: figurino.preco,
+      tamanho: figurino.tamanho || '',
+      estadoPeca: figurino.condicao_peca || 'Usado',
+      descricao: figurino.descricao || '',
+      metodos_pagamento: figurino.metodos_aceites ? figurino.metodos_aceites.split(',') : ['MBWay', 'Transferência', 'Numerário']
+    });
     setIsEditModalOpen(true);
   };
 
   const handleGuardarEdicao = async (e) => {
     e.preventDefault();
+    if (figurinoEmEdicao.metodos_pagamento.length === 0) {
+        mostrarAlerta("Tens de selecionar pelo menos um método de pagamento.");
+        return;
+    }
+
     try {
-        const response = await fetch(`${API_URL}/${figurinoEmEdicao.id_venda}`, {
+        const response = await fetch(`${inventarioBase}/${figurinoEmEdicao.id_peca}/editar`, {
             method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` },
             body: JSON.stringify({
-                PECA_nome: figurinoEmEdicao.PECA_nome,
-                preco: figurinoEmEdicao.preco,
-                estado: figurinoEmEdicao.estado,
+                nome: figurinoEmEdicao.PECA_nome,
+                preco: parseFloat(figurinoEmEdicao.preco),
                 tamanho: figurinoEmEdicao.tamanho,
-                descricao: figurinoEmEdicao.descricao
+                estado: figurinoEmEdicao.estadoPeca,
+                descricao: figurinoEmEdicao.descricao,
+                metodosPagamento: figurinoEmEdicao.metodos_pagamento
             })
         });
 
         if (response.ok) {
-            mostrarAlerta('Alterações guardadas com sucesso!');
+            mostrarAlerta('Figurino atualizado com sucesso!');
             setIsEditModalOpen(false);
-            carregarFigurinos();
+            carregarFigurinos(false);
         } else {
-          mostrarAlerta('Erro ao guardar as alterações.');
+            const data = await response.json();
+            mostrarAlerta(data.mensagem || 'Erro ao guardar as alterações.');
         }
     } catch (error) {
-        console.error("Erro ao editar:", error);
+        mostrarAlerta("Erro de rede.");
     }
   };
 
-  // --- COMPRAR VENDA (PUT) ---
   const handleComprar = (figurino) => {
     setFigurinoSelecionado(figurino);
-    if (figurino.metodos_pagamento && figurino.metodos_pagamento.length > 0) {
-      setMetodoPagamentoCompra(figurino.metodos_pagamento[0]);
-    }
+    const acceptedMethods = figurino.metodos_aceites ? figurino.metodos_aceites.split(',') : ['MBWay'];
+    setMetodoPagamentoCompra(acceptedMethods[0]);
     setIsCompraModalOpen(true);
   };
 
@@ -260,39 +282,46 @@ export default function VendaFigurinos({ irParaLanding, irParaEmprestimos }) {
     e.preventDefault();
     setIsSubmitting(true); 
 
-    const idComprador = utilizador?.id_utilizador || utilizador?.id;
-
-    if (!idComprador) {
-        mostrarAlerta("Erro: Sessão inválida. Por favor, faz login novamente para comprar.");
-        setIsSubmitting(false);
-        return;
+    if (!utilizador) {
+        mostrarAlerta("Sessão inválida. Por favor, faz login novamente.");
+        setIsSubmitting(false); return;
     }
 
     try {
-        const response = await fetch(`${API_URL}/${figurinoSelecionado.id_venda}`, {
+        const response = await fetch(`${inventarioBase}/vendas/${figurinoSelecionado.id_venda}/concluir`, {
             method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` },
             body: JSON.stringify({
-                PECA_nome: figurinoSelecionado.PECA_nome,
-                preco: figurinoSelecionado.preco,
-                estado: 'Vendido', 
-                UTILIZADORid_utilizador2: idComprador 
+                idComprador: utilizador.id_utilizador || utilizador.id,
+                metodoPagamento: metodoPagamentoCompra
             })
         });
 
         if (response.ok) {
-            mostrarAlerta(`Compra de ${figurinoSelecionado.PECA_nome} confirmada!`);
+            mostrarAlerta(`Compra de ${figurinoSelecionado.nome_peca} confirmada!`);
             setIsCompraModalOpen(false);
-            carregarFigurinos(); 
+            carregarFigurinos(false); 
         } else {
-            mostrarAlerta('Ocorreu um erro ao confirmar a compra.');
+            const err = await response.json();
+            mostrarAlerta(err.mensagem || 'Ocorreu um erro.');
         }
     } catch (error) {
-        console.error("Erro a confirmar compra:", error);
+        mostrarAlerta("Erro de rede.");
     } finally {
         setIsSubmitting(false);
     }
   };
+
+  // --- LÓGICA DOS FILTROS E ORDENAÇÃO ---
+  const figurinosFiltrados = figurinos
+    .filter(fig => fig.nome_peca?.toLowerCase().includes(pesquisa.toLowerCase()))
+    .filter(fig => filtroEstado === 'Todos' ? true : fig.condicao_peca === filtroEstado)
+    .sort((a, b) => {
+      if (ordenacao === 'preco_asc') return parseFloat(a.preco) - parseFloat(b.preco);
+      if (ordenacao === 'preco_desc') return parseFloat(b.preco) - parseFloat(a.preco);
+      // 'recentes' - assume IDs maiores como sendo mais recentes
+      return b.id_venda - a.id_venda;
+    });
 
   return (
     <div className="page-wrapper">
@@ -302,24 +331,21 @@ export default function VendaFigurinos({ irParaLanding, irParaEmprestimos }) {
           <span>VIVA D'ARTE</span>
         </div>
         <ul className="nav-menu">
-  <li><a href="#" onClick={(e) => { e.preventDefault(); irParaLanding(); }}>Início</a></li>
-  
-  {utilizador?.perfil === 'Professor' ? (
-    <>
-      <li><span className="nav-separator">|</span></li>
-      <li><a href="#" className="special-link">Coaching Agendados</a></li>
-      <li><a href="#" className="special-link" onClick={(e) => { e.preventDefault(); irParaEmprestimos(); }}>Empréstimos de peças</a></li>
-      <li><a href="#" className="special-link active">Venda de figurinos</a></li>
-    </>
-  ) : utilizador ? (
-    <>
-      <li><span className="nav-separator">|</span></li>
-      <li><a href="#" className="special-link">Agendar Coaching</a></li>
-      <li><a href="#" className="special-link" onClick={(e) => { e.preventDefault(); irParaEmprestimos(); }}>Empréstimos de peças</a></li>
-      <li><a href="#" className="special-link active">Venda de figurinos</a></li>
-    </>
-  ) : null}
-</ul>
+          <li><a href="#" onClick={(e) => { e.preventDefault(); irParaLanding(); }}>Início</a></li>
+          {utilizador?.perfil === 'Professor' ? (
+            <>
+              <li><span className="nav-separator">|</span></li>
+              <li><a href="#" className="special-link" onClick={(e) => { e.preventDefault(); irParaEmprestimos(); }}>Empréstimos de peças</a></li>
+              <li><a href="#" className="special-link active">Venda de figurinos</a></li>
+            </>
+          ) : utilizador ? (
+            <>
+              <li><span className="nav-separator">|</span></li>
+              <li><a href="#" className="special-link" onClick={(e) => { e.preventDefault(); irParaEmprestimos(); }}>Empréstimos de peças</a></li>
+              <li><a href="#" className="special-link active">Venda de figurinos</a></li>
+            </>
+          ) : null}
+        </ul>
         <div className="nav-actions">
           {utilizador && (
             <div className="user-profile">
@@ -343,17 +369,75 @@ export default function VendaFigurinos({ irParaLanding, irParaEmprestimos }) {
           )}
         </div>
 
-        <div className="figurinos-grid">
-          {figurinos.map((fig) => {
+        {/* --- BARRA DE FILTROS --- */}
+        {!isLoading && figurinos.length > 0 && (
+          <div style={{ display: 'flex', gap: '15px', marginBottom: '25px', flexWrap: 'wrap' }}>
+            <input 
+              type="text" 
+              placeholder="Pesquisar por nome..." 
+              value={pesquisa} 
+              onChange={(e) => setPesquisa(e.target.value)} 
+              style={{ flex: 1, minWidth: '220px', padding: '12px 16px', borderRadius: '8px', border: '1px solid rgba(0,0,0,0.12)', fontSize: '0.95rem' }}
+            />
+            <select 
+              value={filtroEstado} 
+              onChange={(e) => setFiltroEstado(e.target.value)}
+              style={{ padding: '12px 16px', borderRadius: '8px', border: '1px solid rgba(0,0,0,0.12)', fontSize: '0.95rem', cursor: 'pointer', backgroundColor: '#fff' }}
+            >
+              <option value="Todos">Todos os Estados</option>
+              <option value="Novo">Novo</option>
+              <option value="Bom">Bom</option>
+              <option value="Usado">Usado</option>
+              <option value="Danificado">Danificado</option>
+            </select>
+            <select 
+              value={ordenacao} 
+              onChange={(e) => setOrdenacao(e.target.value)}
+              style={{ padding: '12px 16px', borderRadius: '8px', border: '1px solid rgba(0,0,0,0.12)', fontSize: '0.95rem', cursor: 'pointer', backgroundColor: '#fff' }}
+            >
+              <option value="recentes">Mais Recentes</option>
+              <option value="preco_asc">Preço: Mais Barato</option>
+              <option value="preco_desc">Preço: Mais Caro</option>
+            </select>
+          </div>
+        )}
+
+        {isLoading ? (
+          <div className="empty-state">
+            A carregar figurinos...
+          </div>
+        ) : figurinos.length === 0 ? (
+          <div className="empty-state">
+            Ainda não existem figurinos disponíveis para venda de momento.
+          </div>
+        ) : figurinosFiltrados.length === 0 ? (
+          <div className="empty-state">
+            Nenhum figurino encontrado com esses filtros. Tenta outra pesquisa!
+          </div>
+        ) : (
+          <div className="figurinos-grid">
+          {figurinosFiltrados.map((fig) => {
             const idxImg = indicesImagens[fig.id_venda] || 0;
             const totalFotos = fig.fotos && fig.fotos.length > 0 ? fig.fotos.length : 0;
+            const fotoExibida = totalFotos > 0 && fig.fotos[idxImg] ? fig.fotos[idxImg] : null;
 
             return (
-              <div className={`figurino-card ${fig.estado === 'Vendido' ? 'vendido' : ''}`} key={fig.id_venda}>
-                
-                <div className="figurino-img" style={{ backgroundImage: `url(${fig.fotos ? fig.fotos[idxImg] : ''})` }}>
-                  <span className={`badge-estado ${fig.estado === 'Vendido' ? 'bg-red' : 'bg-green'}`}>
-                    {fig.estado}
+              <div className={`figurino-card ${fig.estado_venda === 'Concluída' || fig.estado_venda === 'Concluida' ? 'vendido' : ''}`} key={fig.id_venda}>
+                <div 
+                  className="figurino-img" 
+                  style={{ 
+                    backgroundImage: fotoExibida ? `url(${fotoExibida})` : 'none',
+                    backgroundColor: fotoExibida ? 'transparent' : '#dcd7ce' 
+                  }}
+                >
+                  {!fotoExibida && (
+                    <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6b665e', fontWeight: '500', fontSize: '0.9rem' }}>
+                      Sem Imagem
+                    </div>
+                  )}
+
+                  <span className={`badge-estado ${fig.estado_venda === 'Concluída' || fig.estado_venda === 'Concluida' ? 'bg-red' : 'bg-green'}`}>
+                    {fig.estado_venda === 'Concluída' || fig.estado_venda === 'Concluida' ? 'Vendido' : 'Disponível'}
                   </span>
 
                   {totalFotos > 1 && (
@@ -368,59 +452,57 @@ export default function VendaFigurinos({ irParaLanding, irParaEmprestimos }) {
                     </>
                   )}
 
-                  {utilizador?.id_utilizador === fig.id_utilizador && (
+                  {(utilizador?.nome === fig.vendedor) && (
                     <div className="acoes-dono">
-                      {fig.estado !== 'Vendido' && (
-                        <button className="btn-icon edit" title="Editar" onClick={() => abrirEdicao(fig)}>✎</button>
+                      {(fig.estado_venda !== 'Concluída' && fig.estado_venda !== 'Concluida') && (
+                        <button className="btn-icon edit" title="Editar Informações" onClick={() => abrirEdicao(fig)}>✎</button>
                       )}
-                      <button className="btn-icon delete" title="Apagar" onClick={() => handleApagar(fig.id_venda)}>🗑️</button>
+                      <button className="btn-icon delete" title="Apagar" onClick={() => confirmarEliminacao(fig.id_venda, fig.id_peca)}>🗑️</button>
                     </div>
                   )}
                 </div>
 
                 <div className="figurino-info">
-                  <h3>{fig.PECA_nome}</h3>
+                  <h3>{fig.nome_peca}</h3>
                   <div className="tags-container">
-                    <span className="badge-condicao">{fig.condicao}</span>
+                    <span className="badge-condicao">{fig.condicao_peca}</span>
                     {fig.tamanho && <span className="badge-tamanho">Tam: {fig.tamanho}</span>}
                   </div>
-                  
                   {fig.descricao && <p className="descricao-peca">{fig.descricao}</p>}
-                  <p className="vendedor">Por: {fig.UTILIZADOR_nome}</p>
+                  <p className="vendedor">Por: {fig.vendedor}</p>
                   
                   <div className="metodos-pagamento-tags">
-                    {fig.metodos_pagamento?.map(m => <span key={m} className="tag-pagamento">{m}</span>)}
+                    {fig.metodos_aceites && fig.metodos_aceites.split(',').map(m => (
+                      <span key={m} className="tag-pagamento">{m}</span>
+                    ))}
                   </div>
 
                   <div className="figurino-footer">
                     <span className="preco">{Number(fig.preco).toFixed(2)} €</span>
                     
-                    {fig.estado === 'Disponível' && utilizador?.id_utilizador !== fig.id_utilizador && (
-                      <button className="btn-outline btn-sm" onClick={() => handleComprar(fig)} disabled={!utilizador}>
-                        Comprar
-                      </button>
+                    {(fig.estado_venda === 'Disponível' || fig.estado_venda === 'Disponivel') && utilizador?.nome !== fig.vendedor && (
+                      <button className="btn-outline btn-sm" onClick={() => handleComprar(fig)} disabled={!utilizador}>Comprar</button>
                     )}
                     
-                    {fig.estado === 'Disponível' && utilizador?.id_utilizador === fig.id_utilizador && (
+                    {(fig.estado_venda === 'Disponível' || fig.estado_venda === 'Disponivel') && utilizador?.nome === fig.vendedor && (
                       <span className="texto-teu-item">O teu item</span>
                     )}
-
-                    {fig.estado === 'Vendido' && fig.COMPRADOR_nome && (
-                      <span className="texto-teu-item" style={{ color: '#b38b59', fontWeight: 'bold' }}>
-                        Comprado por: {fig.COMPRADOR_nome}
-                      </span>
+                    
+                    {(fig.estado_venda === 'Concluída' || fig.estado_venda === 'Concluida') && (
+                      <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                        <span className="texto-teu-item" style={{ color: '#b38b59', fontWeight: 'bold' }}>Vendido</span>
+                        {fig.comprador && (
+                          <span style={{ fontSize: '0.7rem', color: '#666', marginTop: '2px' }}>a {fig.comprador}</span>
+                        )}
+                      </div>
                     )}
                   </div>
                 </div>
               </div>
             );
           })}
-          {figurinos.length === 0 && (
-             <div className="empty-state">
-               <p>Não há figurinos à venda de momento.</p>
-             </div>
-          )}
         </div>
+        )}
       </div>
 
       <footer className="main-footer">
@@ -428,8 +510,8 @@ export default function VendaFigurinos({ irParaLanding, irParaEmprestimos }) {
           <div className="footer-column">
             <h3>Contacto</h3>
             <ul className="footer-info">
-              <li><span>📍</span> Rua das Artes, nº 123, Lisboa</li>
-              <li><span>📞</span> +351 912 345 678</li>
+              <li><span>📍</span> Rua das Artes, nº 123, Braga</li>
+              <li><span>📞</span> +351 000 000 000</li>
               <li><span>✉️</span> geral@vivadarte.pt</li>
             </ul>
           </div>
@@ -457,9 +539,7 @@ export default function VendaFigurinos({ irParaLanding, irParaEmprestimos }) {
         </div>
       </footer>
 
-      {/* --- MODAIS DE COMPRA, VENDA E ALERTA --- */}
-      
-      {/* 1. Modal de Nova Venda */}
+      {/* --- MODAL 1: VENDA --- */}
       {isModalOpen && (
         <div className="modal-overlay">
           <div className="modal-content form-venda">
@@ -467,33 +547,33 @@ export default function VendaFigurinos({ irParaLanding, irParaEmprestimos }) {
             <form onSubmit={handleSubmeterVenda}>
               <div className="form-group">
                 <label>Nome da Peça</label>
-                <input type="text" value={novaVenda.PECA_nome} onChange={(e) => setNovaVenda({...novaVenda, PECA_nome: e.target.value})} required />
+                <input type="text" placeholder="Ex: Tutu Azul" value={novaVenda.PECA_nome} onChange={(e) => setNovaVenda({...novaVenda, PECA_nome: e.target.value})} required />
               </div>
               <div className="form-row">
                 <div className="form-group">
                   <label>Preço (€)</label>
-                  <input type="number" step="0.01" value={novaVenda.preco} onChange={(e) => setNovaVenda({...novaVenda, preco: e.target.value})} required />
+                  <input type="number" placeholder="Ex: 15.45" step="0.01" min="0.01" value={novaVenda.preco} onChange={(e) => setNovaVenda({...novaVenda, preco: e.target.value})} required />
                 </div>
                 <div className="form-group">
                   <label>Tamanho</label>
-                  <input type="text" placeholder="Ex: S, 38, Único" value={novaVenda.tamanho} onChange={(e) => setNovaVenda({...novaVenda, tamanho: e.target.value})} />
+                  <input type="text" placeholder="Ex: S, 38, Único" value={novaVenda.tamanho} onChange={(e) => setNovaVenda({...novaVenda, tamanho: e.target.value})} required />
                 </div>
                 <div className="form-group">
                   <label>Condição</label>
-                  <select value={novaVenda.condicao} onChange={(e) => setNovaVenda({...novaVenda, condicao: e.target.value})}>
+                  <select value={novaVenda.condicao} onChange={(e) => setNovaVenda({...novaVenda, condicao: e.target.value})} required>
                     <option value="Novo">Novo</option>
-                    <option value="Usado - Como Novo">Usado - Como Novo</option>
-                    <option value="Usado - Bom estado">Usado - Bom estado</option>
-                    <option value="Usado - Marcas de uso">Usado - Marcas de uso</option>
+                    <option value="Bom">Bom</option>
+                    <option value="Usado">Usado</option>
+                    <option value="Danificado">Danificado</option>
                   </select>
                 </div>
               </div>
               <div className="form-group">
                 <label>Descrição e Detalhes</label>
-                <textarea rows="3" placeholder="Descreve o material, detalhes ou marcas de uso..." value={novaVenda.descricao} onChange={(e) => setNovaVenda({...novaVenda, descricao: e.target.value})}></textarea>
+                <textarea rows="3" maxLength="120" placeholder="Descreve o material, detalhes ou marcas de uso... (Máx: 120 caracteres)" value={novaVenda.descricao} onChange={(e) => setNovaVenda({...novaVenda, descricao: e.target.value})} required></textarea>
               </div>
               <div className="form-group">
-                <label>Métodos de Pagamento</label>
+                <label>Métodos de Pagamento Aceites</label>
                 <div className="checkbox-group">
                   {['MBWay', 'Transferência', 'Numerário'].map(metodo => (
                     <label className="checkbox-label" key={metodo}>
@@ -516,7 +596,7 @@ export default function VendaFigurinos({ irParaLanding, irParaEmprestimos }) {
                 {novaVenda.fotos.length < 4 && (
                   <label className="btn-upload-foto">
                     <span>+ Adicionar Foto</span>
-                    <input type="file" accept="image/*" multiple onChange={handleFotosUpload} style={{ display: 'none' }} />
+                    <input type="file" accept="image/*" multiple onChange={handleFotosUpload} onClick={(e) => e.target.value = null} style={{ display: 'none' }} />
                   </label>
                 )}
               </div>
@@ -529,7 +609,7 @@ export default function VendaFigurinos({ irParaLanding, irParaEmprestimos }) {
         </div>
       )}
 
-      {/* 2. Modal Editar */}
+      {/* --- MODAL 2: EDIÇÃO --- */}
       {isEditModalOpen && figurinoEmEdicao && (
         <div className="modal-overlay">
           <div className="modal-content form-venda">
@@ -537,28 +617,52 @@ export default function VendaFigurinos({ irParaLanding, irParaEmprestimos }) {
             <form onSubmit={handleGuardarEdicao}>
               <div className="form-group">
                 <label>Nome da Peça</label>
-                <input type="text" value={figurinoEmEdicao.PECA_nome || ''} onChange={(e) => setFigurinoEmEdicao({...figurinoEmEdicao, PECA_nome: e.target.value})} required />
+                <input type="text" value={figurinoEmEdicao.PECA_nome} onChange={(e) => setFigurinoEmEdicao({...figurinoEmEdicao, PECA_nome: e.target.value})} required />
               </div>
               <div className="form-row">
                 <div className="form-group">
                   <label>Preço (€)</label>
-                  <input type="number" step="0.01" value={figurinoEmEdicao.preco || ''} onChange={(e) => setFigurinoEmEdicao({...figurinoEmEdicao, preco: e.target.value})} required />
+                  <input type="number" step="0.01" min="0.01" value={figurinoEmEdicao.preco} onChange={(e) => setFigurinoEmEdicao({...figurinoEmEdicao, preco: e.target.value})} required />
                 </div>
                 <div className="form-group">
                   <label>Tamanho</label>
-                  <input type="text" value={figurinoEmEdicao.tamanho || ''} onChange={(e) => setFigurinoEmEdicao({...figurinoEmEdicao, tamanho: e.target.value})} />
+                  <input type="text" value={figurinoEmEdicao.tamanho} onChange={(e) => setFigurinoEmEdicao({...figurinoEmEdicao, tamanho: e.target.value})} required />
                 </div>
                 <div className="form-group">
-                  <label>Estado</label>
-                  <select value={figurinoEmEdicao.estado || ''} onChange={(e) => setFigurinoEmEdicao({...figurinoEmEdicao, estado: e.target.value})}>
-                    <option value="Disponível">Disponível</option>
-                    <option value="Vendido">Vendido</option>
+                  <label>Condição</label>
+                  <select value={figurinoEmEdicao.estadoPeca || ''} onChange={(e) => setFigurinoEmEdicao({...figurinoEmEdicao, estadoPeca: e.target.value})} required>
+                    <option value="Novo">Novo</option>
+                    <option value="Bom">Bom</option>
+                    <option value="Usado">Usado</option>
+                    <option value="Danificado">Danificado</option>
                   </select>
                 </div>
               </div>
               <div className="form-group">
-                <label>Descrição</label>
-                <textarea rows="3" value={figurinoEmEdicao.descricao || ''} onChange={(e) => setFigurinoEmEdicao({...figurinoEmEdicao, descricao: e.target.value})}></textarea>
+                <label>Descrição e Detalhes</label>
+                <textarea rows="3" maxLength="120" value={figurinoEmEdicao.descricao} onChange={(e) => setFigurinoEmEdicao({...figurinoEmEdicao, descricao: e.target.value})} required></textarea>
+              </div>
+              <div className="form-group">
+                <label>Métodos de Pagamento Aceites</label>
+                <div className="checkbox-group">
+                  {['MBWay', 'Transferência', 'Numerário'].map(metodo => (
+                    <label className="checkbox-label" key={metodo}>
+                      <input 
+                        type="checkbox" 
+                        checked={figurinoEmEdicao.metodos_pagamento?.includes(metodo)} 
+                        onChange={() => {
+                          setFigurinoEmEdicao(prev => ({
+                            ...prev, 
+                            metodos_pagamento: prev.metodos_pagamento.includes(metodo) 
+                              ? prev.metodos_pagamento.filter(m => m !== metodo) 
+                              : [...(prev.metodos_pagamento || []), metodo]
+                          }));
+                        }} 
+                      />
+                      {metodo}
+                    </label>
+                  ))}
+                </div>
               </div>
               <div className="modal-actions">
                 <button type="button" className="btn-text" onClick={() => setIsEditModalOpen(false)}>Cancelar</button>
@@ -569,21 +673,23 @@ export default function VendaFigurinos({ irParaLanding, irParaEmprestimos }) {
         </div>
       )}
 
-      {/* 3. Modal Compra */}
+      {/* --- MODAL 3: COMPRA --- */}
       {isCompraModalOpen && figurinoSelecionado && (
         <div className="modal-overlay">
           <div className="modal-content">
             <h2>Confirmar Compra</h2>
             <div className="resumo-compra">
-              <p><strong>Item:</strong> {figurinoSelecionado.PECA_nome}</p>
+              <p><strong>Item:</strong> {figurinoSelecionado.nome_peca}</p>
               {figurinoSelecionado.tamanho && <p><strong>Tamanho:</strong> {figurinoSelecionado.tamanho}</p>}
               <p><strong>Total:</strong> {Number(figurinoSelecionado.preco).toFixed(2)} €</p>
             </div>
             <form onSubmit={confirmarCompra}>
               <div className="form-group">
-                <label>Pagamento</label>
-                <select value={metodoPagamentoCompra} onChange={(e) => setMetodoPagamentoCompra(e.target.value)}>
-                  {figurinoSelecionado.metodos_pagamento?.map(m => <option key={m} value={m}>{m}</option>)}
+                <label>Método de Pagamento</label>
+                <select value={metodoPagamentoCompra} onChange={(e) => setMetodoPagamentoCompra(e.target.value)} required>
+                  {figurinoSelecionado.metodos_aceites?.split(',').map(m => (
+                    <option key={m} value={m}>{m}</option>
+                  ))}
                 </select>
               </div>
               <div className="modal-actions">
@@ -595,7 +701,6 @@ export default function VendaFigurinos({ irParaLanding, irParaEmprestimos }) {
         </div>
       )}
 
-      {/* 4. NOSSO NOVO ALERTA CUSTOMIZADO (Substitui os Alertas do Navegador) */}
       {customAlert.show && (
         <div className="modal-overlay" style={{ zIndex: 9999 }}>
           <div className="modal-content alert-box">

@@ -1,4 +1,15 @@
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+/** Base URL do backend — usar sempre isto no login/registo para coincidir com `apiAuthFetch`. */
+export const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+
+export function getAuthToken() {
+  return localStorage.getItem('viva_token');
+}
+
+/** Pedido autenticado (usa `viva_token` do localStorage). */
+export function apiAuthFetch(path, options = {}) {
+  const token = getAuthToken();
+  return apiFetch(path, { ...options, token });
+}
 
 async function apiFetch(path, { method = 'GET', body, token } = {}) {
   const headers = { 'Content-Type': 'application/json' };
@@ -14,7 +25,7 @@ async function apiFetch(path, { method = 'GET', body, token } = {}) {
   const data = isJson ? await res.json().catch(() => ({})) : null;
 
   if (!res.ok) {
-    const msg = data?.error || 'Erro ao comunicar com o servidor';
+    const msg = data?.error || data?.mensagem || 'Erro ao comunicar com o servidor';
     const err = new Error(msg);
     err.status = res.status;
     err.data = data;
@@ -24,8 +35,8 @@ async function apiFetch(path, { method = 'GET', body, token } = {}) {
   return data;
 }
 
-export function authLogin({ email, password }) {
-  return apiFetch('/api/auth/login', { method: 'POST', body: { email, password } });
+export function authLogin({ email, password, tipo }) {
+  return apiFetch('/api/auth/login', { method: 'POST', body: { email, password, tipo } });
 }
 
 export function authRegister({ nome, email, telefone, password, tipo }) {

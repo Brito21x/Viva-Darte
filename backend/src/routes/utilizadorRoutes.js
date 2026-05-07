@@ -1,16 +1,24 @@
-// Localização: backend/src/routes/authRoutes.js
 const express = require('express');
 const router = express.Router();
+
 const utilizadorController = require('../controllers/utilizadorController');
-const { autenticar } = require('../middlewares/auth');
+const { autenticar, autorizar } = require('../middlewares/auth');
 
-// Rotas Públicas
-router.post('/register', utilizadorController.registar);
-router.post('/login', utilizadorController.login);
-router.post('/reset-password', utilizadorController.resetPassword);
-router.post('/verificar-telefone', utilizadorController.verificarTelefone);
+router.use(autenticar);
 
-// Rotas Protegidas (precisam de token)
-router.get('/me', autenticar, utilizadorController.me);
+// GET /api/utilizadores/me/alunos — alunos do EE autenticado (antes de /:id)
+router.get('/me/alunos', utilizadorController.getMeusAlunos);
+
+// GET /api/utilizadores — lista (Admin)
+router.get('/', autorizar('Admin'), utilizadorController.listarUtilizadores);
+
+// POST /api/utilizadores — criar conta (Admin)
+router.post('/', autorizar('Admin'), utilizadorController.criarUtilizadorAdmin);
+
+// PUT /api/utilizadores/:id — editar (Admin)
+router.put('/:id', autorizar('Admin'), utilizadorController.editarUtilizador);
+
+// PATCH /api/utilizadores/:id/estado — ativar/desativar (Admin)
+router.patch('/:id/estado', autorizar('Admin'), utilizadorController.alterarEstado);
 
 module.exports = router;

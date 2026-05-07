@@ -92,7 +92,7 @@ function duracaoSlotMinutos(horaInicio, horaFim) {
 // US09 / RF11 — ADICIONAR DISPONIBILIDADE (Professor)
 // POST /api/coaching/disponibilidades
 // Body: { diaSemana, horaInicio, horaFim }
-// diaSemana: 1 = Seg-Qui | 2 = Sáb-Dom
+// diaSemana: 1 = Seg-Sex | 2 = Sáb-Dom
 // ============================================================================
 async function adicionarDisponibilidade(req, res, next) {
     try {

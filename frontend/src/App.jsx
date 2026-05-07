@@ -6,6 +6,7 @@ import RecoverPassword from './pages/Login-Registo/RecoverPassword';
 import VendaFigurinos from './pages/VendaFigurinos/VendaFigurinos';
 import EmprestimosPecas from './pages/EmprestimosPecas/EmprestimosPecas';
 import AdminDashboard from './pages/AdminDashboard/AdminDashboard';
+import MinhaAgendaProfessor from './pages/MinhaAgendaProfessor/MinhaAgendaProfessor';
 
 function App() {
   const [paginaAtual, setPaginaAtual] = useState(() => {
@@ -30,6 +31,7 @@ function App() {
     recuperar: () => setPaginaAtual('recuperar'),
     venda_figurinos: () => setPaginaAtual('venda_figurinos'),
     emprestimos_pecas: () => setPaginaAtual('emprestimos_pecas'),
+    minha_agenda_professor: () => setPaginaAtual('minha_agenda_professor'),
   };
 
   return (
@@ -42,6 +44,7 @@ function App() {
           irParaRegisto={nav.registo} 
           irParaVendaFigurinos={nav.venda_figurinos} 
           irParaEmprestimos={nav.emprestimos_pecas}
+          irParaMinhaAgendaProfessor={nav.minha_agenda_professor}
         />
       )}
       
@@ -84,6 +87,11 @@ function App() {
           irParaLanding={nav.landing} 
           irParaVendaFigurinos={nav.venda_figurinos}
         />
+      )}
+
+      {/* MINHA AGENDA PROFESSOR */}
+      {paginaAtual === 'minha_agenda_professor' && (
+        <MinhaAgendaProfessor irParaLanding={nav.landing} />
       )}
 
       {/* ADMIN DASHBOARD */}

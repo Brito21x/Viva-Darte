@@ -1,5 +1,23 @@
 const { poolPromise } = require('../config/db');
 const sql = require('mssql');
+
+function normalizarHoraSql(valor) {
+    const s = String(valor ?? '').trim();
+    const m = s.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+    if (!m) return null;
+    const hh = Number(m[1]);
+    const mm = Number(m[2]);
+    const ss = Number(m[3] ?? '0');
+    if (hh < 0 || hh > 23 || mm < 0 || mm > 59 || ss < 0 || ss > 59) return null;
+    return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}`;
+}
+
+function minutosDaHora(valor) {
+    const h = normalizarHoraSql(valor);
+    if (!h) return null;
+    const [hh, mm] = h.split(':').map(Number);
+    return hh * 60 + mm;
+}
  
 // ============================================================================
 // 1. GESTÃO DE DISPONIBILIDADES DOS PROFESSORES (US09 / RF11)
@@ -11,42 +29,48 @@ const sql = require('mssql');
 async function adicionarDisponibilidadeProfessor({ diaSemana, horaInicio, horaFim, idProfessor }) {
     try {
         const pool = await poolPromise;
- 
+
+        const horaInicioNorm = normalizarHoraSql(horaInicio);
+        const horaFimNorm = normalizarHoraSql(horaFim);
+        if (!horaInicioNorm || !horaFimNorm) {
+            throw new Error('Formato de hora inválido. Use HH:mm.');
+        }
+
         // Validar que hora_fim é posterior a hora_inicio
-        if (horaFim <= horaInicio) {
+        if (minutosDaHora(horaFimNorm) <= minutosDaHora(horaInicioNorm)) {
             throw new Error('A hora de fim deve ser posterior à hora de início.');
         }
- 
+
         // Verificar sobreposição de disponibilidades do mesmo professor no mesmo dia
         const conflito = await pool.request()
             .input('IdProfessor', sql.Int, idProfessor)
             .input('DiaSemana', sql.Int, diaSemana)
-            .input('HoraInicio', sql.Time, horaInicio)
-            .input('HoraFim', sql.Time, horaFim)
+            .input('HoraInicio', sql.VarChar(8), horaInicioNorm)
+            .input('HoraFim', sql.VarChar(8), horaFimNorm)
             .query(`
                 SELECT 1 FROM DISPONIBILIDADE_PROFESSOR
                 WHERE UTILIZADORid_utilizador = @IdProfessor
                   AND dia_semana = @DiaSemana
-                  AND hora_inicio < @HoraFim
-                  AND hora_fim > @HoraInicio;
+                  AND hora_inicio < TRY_CONVERT(time, @HoraFim)
+                  AND hora_fim > TRY_CONVERT(time, @HoraInicio);
             `);
- 
+
         if (conflito.recordset.length > 0) {
             throw new Error('Já existe uma disponibilidade que se sobrepõe a este horário.');
         }
- 
+
         const result = await pool.request()
             .input('DiaSemana', sql.Int, diaSemana)
-            .input('HoraInicio', sql.Time, horaInicio)
-            .input('HoraFim', sql.Time, horaFim)
+            .input('HoraInicio', sql.VarChar(8), horaInicioNorm)
+            .input('HoraFim', sql.VarChar(8), horaFimNorm)
             .input('IdProfessor', sql.Int, idProfessor)
             .query(`
                 INSERT INTO DISPONIBILIDADE_PROFESSOR 
                     (dia_semana, hora_inicio, hora_fim, UTILIZADORid_utilizador)
                 VALUES 
-                    (@DiaSemana, @HoraInicio, @HoraFim, @IdProfessor);
+                    (@DiaSemana, TRY_CONVERT(time, @HoraInicio), TRY_CONVERT(time, @HoraFim), @IdProfessor);
             `);
- 
+
         return result.rowsAffected[0] > 0;
     } catch (error) {
         console.error('Erro no Modelo (adicionarDisponibilidadeProfessor):', error);
@@ -306,29 +330,39 @@ async function assertAlunosPertencemAoEncarregado(transaction, idEncarregado, id
 /**
  * Cria um pedido de coaching e os seus participantes numa transação.
  */
-async function criarPedidoCoaching(dadosPedido, alunosIds) {
+async function criarPedidoCoaching(dadosPedido, alunosIds, opts = {}) {
     const pool = await poolPromise;
     const transaction = pool.transaction();
     await transaction.begin();
  
     try {
+        const skipAlunoValidation = !!opts.skipAlunoValidation;
+        const numeroParticipantesOverride =
+            opts.numeroParticipantesOverride != null ? Number(opts.numeroParticipantesOverride) : null;
+
         const idsUnicos = [
             ...new Set(alunosIds.map((id) => Number(id)).filter((n) => Number.isFinite(n) && n > 0))
         ];
-        if (idsUnicos.length === 0) {
+        if (!skipAlunoValidation && idsUnicos.length === 0) {
             const e = new Error('Indica pelo menos um aluno com identificador válido.');
             e.isOperational = true;
             throw e;
         }
 
-        await assertAlunosPertencemAoEncarregado(transaction, dadosPedido.idEncarregado, idsUnicos);
+        if (!skipAlunoValidation) {
+            await assertAlunosPertencemAoEncarregado(transaction, dadosPedido.idEncarregado, idsUnicos);
+        }
+
+        const numeroParticipantes = skipAlunoValidation
+            ? (Number.isFinite(numeroParticipantesOverride) && numeroParticipantesOverride > 0 ? numeroParticipantesOverride : 1)
+            : idsUnicos.length;
 
         const idPedido = await transaction.request()
             .input('Formato', sql.VarChar(50), dadosPedido.formatoAula)
             .input('Duracao', sql.Int, dadosPedido.duracaoMinutos)
-            .input('NumParticipantes', sql.Int, idsUnicos.length)
+            .input('NumParticipantes', sql.Int, numeroParticipantes)
             .input('DataAula', sql.Date, dadosPedido.dataAula)
-            .input('HoraInicio', sql.Time, dadosPedido.horaInicio)
+            .input('HoraInicio', sql.VarChar(8), String(dadosPedido.horaInicio))
             .input('CustoEstimado', sql.Decimal(10, 2), dadosPedido.custoEstimado)
             .input('IdEncarregado', sql.Int, dadosPedido.idEncarregado)
             .input('IdAnoLetivo', sql.Int, dadosPedido.idAnoLetivo)
@@ -344,23 +378,25 @@ async function criarPedidoCoaching(dadosPedido, alunosIds) {
                 OUTPUT INSERTED.id_pedido_coaching
                 VALUES (
                     @Formato, @Duracao, @NumParticipantes, 
-                    GETDATE(), @DataAula, @HoraInicio, 
+                    GETDATE(), @DataAula, TRY_CONVERT(time, @HoraInicio), 
                     'Pendente', @CustoEstimado, @IdEncarregado, 
                     @IdAnoLetivo, @IdModalidade, @IdProfessor
                 );
             `)
             .then(r => r.recordset[0].id_pedido_coaching);
  
-        for (const idAluno of idsUnicos) {
-            await transaction.request()
-                .input('IdAluno', sql.Int, idAluno)
-                .input('IdPedido', sql.Int, idPedido)
-                .input('HoraInicio', sql.Time, dadosPedido.horaInicio)
-                .query(`
-                    INSERT INTO PEDIDO_COACHING_PARTICIPANTE 
-                        (ALUNOid_aluno, PEDIDO_COACHINGid_pedido_coaching, PEDIDO_COACHINGhora_inicio_pretendida)
-                    VALUES (@IdAluno, @IdPedido, @HoraInicio);
-                `);
+        if (idsUnicos.length > 0) {
+            for (const idAluno of idsUnicos) {
+                await transaction.request()
+                    .input('IdAluno', sql.Int, idAluno)
+                    .input('IdPedido', sql.Int, idPedido)
+                    .input('HoraInicio', sql.VarChar(8), String(dadosPedido.horaInicio))
+                    .query(`
+                        INSERT INTO PEDIDO_COACHING_PARTICIPANTE 
+                            (ALUNOid_aluno, PEDIDO_COACHINGid_pedido_coaching, PEDIDO_COACHINGhora_inicio_pretendida)
+                        VALUES (@IdAluno, @IdPedido, TRY_CONVERT(time, @HoraInicio));
+                    `);
+            }
         }
  
         await transaction.commit();
@@ -621,6 +657,12 @@ async function aprovarEAgendarCoaching(dadosAgendamento) {
     await transaction.begin();
  
     try {
+        const mHora = String(dadosAgendamento.horaInicio || '').match(/(\d{2}):(\d{2})(?::(\d{2}))?/);
+        const horaInicioNorm = mHora ? `${mHora[1]}:${mHora[2]}:${mHora[3] || '00'}` : null;
+        if (!horaInicioNorm) {
+            throw new Error('Hora de início inválida no pedido.');
+        }
+
         // RF10: Compatibilidade Professor ↔ Modalidade
         const compatProfModal = await transaction
             .request()
@@ -686,15 +728,15 @@ async function aprovarEAgendarCoaching(dadosAgendamento) {
         const conflitoProf = await transaction.request()
             .input('IdProfessor', sql.Int, dadosAgendamento.idProfessor)
             .input('DataAula', sql.Date, dadosAgendamento.dataAula)
-            .input('HoraInicio', sql.Time, dadosAgendamento.horaInicio)
+            .input('HoraInicio', sql.VarChar(8), horaInicioNorm)
             .input('Duracao', sql.Int, dadosAgendamento.duracaoMinutos)
             .query(`
                 SELECT 1 FROM COACHING
                 WHERE UTILIZADORid_utilizador = @IdProfessor
                   AND data_aula = @DataAula
                   AND estado IN ('Agendado', 'Confirmado')
-                  AND hora_inicio < DATEADD(MINUTE, @Duracao, CAST(@HoraInicio AS DATETIME))
-                  AND DATEADD(MINUTE, duracao_minutos, CAST(hora_inicio AS DATETIME)) > CAST(@HoraInicio AS DATETIME);
+                  AND hora_inicio < CAST(DATEADD(MINUTE, @Duracao, CAST(TRY_CONVERT(time, @HoraInicio) AS datetime)) AS time)
+                  AND CAST(DATEADD(MINUTE, duracao_minutos, CAST(hora_inicio AS datetime)) AS time) > TRY_CONVERT(time, @HoraInicio);
             `);
  
         if (conflitoProf.recordset.length > 0) {
@@ -705,15 +747,15 @@ async function aprovarEAgendarCoaching(dadosAgendamento) {
         const conflitoSala = await transaction.request()
             .input('IdSala', sql.Int, dadosAgendamento.idSala)
             .input('DataAula', sql.Date, dadosAgendamento.dataAula)
-            .input('HoraInicio', sql.Time, dadosAgendamento.horaInicio)
+            .input('HoraInicio', sql.VarChar(8), horaInicioNorm)
             .input('Duracao', sql.Int, dadosAgendamento.duracaoMinutos)
             .query(`
                 SELECT 1 FROM COACHING
                 WHERE SALAid_sala = @IdSala
                   AND data_aula = @DataAula
                   AND estado IN ('Agendado', 'Confirmado')
-                  AND hora_inicio < DATEADD(MINUTE, @Duracao, CAST(@HoraInicio AS DATETIME))
-                  AND DATEADD(MINUTE, duracao_minutos, CAST(hora_inicio AS DATETIME)) > CAST(@HoraInicio AS DATETIME);
+                  AND hora_inicio < CAST(DATEADD(MINUTE, @Duracao, CAST(TRY_CONVERT(time, @HoraInicio) AS datetime)) AS time)
+                  AND CAST(DATEADD(MINUTE, duracao_minutos, CAST(hora_inicio AS datetime)) AS time) > TRY_CONVERT(time, @HoraInicio);
             `);
  
         if (conflitoSala.recordset.length > 0) {
@@ -724,15 +766,15 @@ async function aprovarEAgendarCoaching(dadosAgendamento) {
         const conflitoHorarioProf = await transaction.request()
             .input('IdProfessor', sql.Int, dadosAgendamento.idProfessor)
             .input('DiaSemana', sql.Int, dadosAgendamento.diaSemanaCoaching) // Requer cálculo prévio no Controller
-            .input('HoraInicio', sql.Time, dadosAgendamento.horaInicio)
+            .input('HoraInicio', sql.VarChar(8), horaInicioNorm)
             .input('Duracao', sql.Int, dadosAgendamento.duracaoMinutos)
             .query(`
                 SELECT 1 FROM HORARIO
                 WHERE UTILIZADORid_utilizador = @IdProfessor
                   AND dia_semana = @DiaSemana
                   AND ativo = 1
-                  AND hora_inicio < DATEADD(MINUTE, @Duracao, CAST(@HoraInicio AS DATETIME))
-                  AND hora_fim > CAST(@HoraInicio AS DATETIME);
+                  AND hora_inicio < CAST(DATEADD(MINUTE, @Duracao, CAST(TRY_CONVERT(time, @HoraInicio) AS datetime)) AS time)
+                  AND hora_fim > TRY_CONVERT(time, @HoraInicio);
             `);
 
         if (conflitoHorarioProf.recordset.length > 0) {
@@ -743,15 +785,15 @@ async function aprovarEAgendarCoaching(dadosAgendamento) {
         const conflitoHorarioSala = await transaction.request()
             .input('IdSala', sql.Int, dadosAgendamento.idSala)
             .input('DiaSemana', sql.Int, dadosAgendamento.diaSemanaCoaching) // Requer cálculo prévio no Controller
-            .input('HoraInicio', sql.Time, dadosAgendamento.horaInicio)
+            .input('HoraInicio', sql.VarChar(8), horaInicioNorm)
             .input('Duracao', sql.Int, dadosAgendamento.duracaoMinutos)
             .query(`
                 SELECT 1 FROM HORARIO
                 WHERE SALAid_sala = @IdSala
                   AND dia_semana = @DiaSemana
                   AND ativo = 1
-                  AND hora_inicio < DATEADD(MINUTE, @Duracao, CAST(@HoraInicio AS DATETIME))
-                  AND hora_fim > CAST(@HoraInicio AS DATETIME);
+                  AND hora_inicio < CAST(DATEADD(MINUTE, @Duracao, CAST(TRY_CONVERT(time, @HoraInicio) AS datetime)) AS time)
+                  AND hora_fim > TRY_CONVERT(time, @HoraInicio);
             `);
 
         if (conflitoHorarioSala.recordset.length > 0) {
@@ -769,7 +811,7 @@ async function aprovarEAgendarCoaching(dadosAgendamento) {
             .input('Duracao', sql.Int, dadosAgendamento.duracaoMinutos)
             .input('NumParticipantes', sql.Int, dadosAgendamento.numeroParticipantes)
             .input('DataAula', sql.Date, dadosAgendamento.dataAula)
-            .input('HoraInicio', sql.Time, dadosAgendamento.horaInicio)
+            .input('HoraInicio', sql.VarChar(8), horaInicioNorm)
             .input('IdProfessor', sql.Int, dadosAgendamento.idProfessor)
             .input('IdAnoLetivo', sql.Int, dadosAgendamento.idAnoLetivo)
             .input('IdModalidade', sql.Int, dadosAgendamento.idModalidade)
@@ -785,7 +827,7 @@ async function aprovarEAgendarCoaching(dadosAgendamento) {
                 OUTPUT INSERTED.id_coaching
                 VALUES (
                     @Formato, @Duracao, @NumParticipantes, @DataAula, 
-                    @HoraInicio, 'Agendado', @IdProfessor, @IdAnoLetivo, 
+                    TRY_CONVERT(time, @HoraInicio), 'Agendado', @IdProfessor, @IdAnoLetivo, 
                     @IdModalidade, @IdSala, @IdPedido, @ValorFinal
                 );
             `)
@@ -808,6 +850,99 @@ async function aprovarEAgendarCoaching(dadosAgendamento) {
     } catch (error) {
         await transaction.rollback();
         console.error('Erro no Modelo Transacional (aprovarEAgendarCoaching):', error);
+        throw error;
+    }
+}
+
+// ============================================================================
+// 4.x. UTILITÁRIOS — VALIDAR SLOT LIVRE (Professor) (US08 / RF10)
+// ============================================================================
+async function professorTemDisponibilidadeNoSlot({ idProfessor, dataAula, horaInicio, duracaoMinutos, diaSemanaCoaching }) {
+    try {
+        const pool = await poolPromise;
+
+        const mHora = String(horaInicio || '').match(/(\d{2}):(\d{2})(?::(\d{2}))?/);
+        const horaInicioNorm = mHora ? `${mHora[1]}:${mHora[2]}:${mHora[3] || '00'}` : null;
+        if (!horaInicioNorm) return false;
+
+        const diaSemanaReal =
+            Number.isFinite(Number(diaSemanaCoaching)) && Number(diaSemanaCoaching) >= 1 && Number(diaSemanaCoaching) <= 7
+                ? Number(diaSemanaCoaching)
+                : ((new Date(`${dataAula}T00:00:00`)).getDay() || 7);
+        // DISPONIBILIDADE_PROFESSOR usa blocos:
+        // 1 = Seg-Sex | 2 = Sáb-Dom
+        const diaSemanaDisponibilidade = diaSemanaReal >= 1 && diaSemanaReal <= 5 ? 1 : 2;
+
+        const r = await pool.request()
+            .input('IdProfessor', sql.Int, idProfessor)
+            .input('DiaSemana', sql.Int, diaSemanaDisponibilidade)
+            .input('HoraInicio', sql.VarChar(8), horaInicioNorm)
+            .input('Duracao', sql.Int, Number(duracaoMinutos))
+            .query(`
+                SELECT TOP 1 1 AS ok
+                FROM DISPONIBILIDADE_PROFESSOR
+                WHERE UTILIZADORid_utilizador = @IdProfessor
+                  AND dia_semana = @DiaSemana
+                  AND hora_inicio <= TRY_CONVERT(time, @HoraInicio)
+                  AND hora_fim >= CAST(
+                        DATEADD(MINUTE, @Duracao, CAST(TRY_CONVERT(time, @HoraInicio) AS datetime))
+                      AS time
+                  );
+            `);
+
+        return r.recordset.length > 0;
+    } catch (error) {
+        console.error('Erro no Modelo (professorTemDisponibilidadeNoSlot):', error);
+        throw error;
+    }
+}
+
+async function verificarSlotLivreProfessor({ idProfessor, dataAula, horaInicio, duracaoMinutos, diaSemanaCoaching }) {
+    try {
+        const pool = await poolPromise;
+
+        // Conflito no COACHING — professor
+        const conflitoProf = await pool.request()
+            .input('IdProfessor', sql.Int, idProfessor)
+            .input('DataAula', sql.Date, dataAula)
+            // Evitar erro "Invalid time" do driver: passar como texto e converter em SQL
+            .input('HoraInicio', sql.VarChar(8), String(horaInicio))
+            .input('Duracao', sql.Int, duracaoMinutos)
+            .query(`
+                SELECT 1 FROM COACHING
+                WHERE UTILIZADORid_utilizador = @IdProfessor
+                  AND data_aula = @DataAula
+                  AND estado IN ('Agendado', 'Confirmado')
+                  AND hora_inicio < CAST(DATEADD(MINUTE, @Duracao, CAST(TRY_CONVERT(time, @HoraInicio) AS datetime)) AS time)
+                  AND CAST(DATEADD(MINUTE, duracao_minutos, CAST(hora_inicio AS datetime)) AS time) > TRY_CONVERT(time, @HoraInicio);
+            `);
+
+        if (conflitoProf.recordset.length > 0) {
+            return { livre: false, motivo: 'Conflito de horário: o professor já tem um coaching agendado neste horário.' };
+        }
+
+        // Conflito com HORARIO regular — Professor
+        const conflitoHorarioProf = await pool.request()
+            .input('IdProfessor', sql.Int, idProfessor)
+            .input('DiaSemana', sql.Int, diaSemanaCoaching)
+            .input('HoraInicio', sql.VarChar(8), String(horaInicio))
+            .input('Duracao', sql.Int, duracaoMinutos)
+            .query(`
+                SELECT 1 FROM HORARIO
+                WHERE UTILIZADORid_utilizador = @IdProfessor
+                  AND dia_semana = @DiaSemana
+                  AND ativo = 1
+                  AND hora_inicio < CAST(DATEADD(MINUTE, @Duracao, CAST(TRY_CONVERT(time, @HoraInicio) AS datetime)) AS time)
+                  AND hora_fim > TRY_CONVERT(time, @HoraInicio);
+            `);
+
+        if (conflitoHorarioProf.recordset.length > 0) {
+            return { livre: false, motivo: 'Conflito com aula regular: o professor já tem uma aula marcada neste horário.' };
+        }
+
+        return { livre: true, motivo: null };
+    } catch (error) {
+        console.error('Erro no Modelo (verificarSlotLivreProfessor):', error);
         throw error;
     }
 }
@@ -1087,6 +1222,8 @@ module.exports = {
     getPedidosPendentes,
     getPedidoCoachingPorId,
     aprovarEAgendarCoaching,
+    professorTemDisponibilidadeNoSlot,
+    verificarSlotLivreProfessor,
     rejeitarPedidoCoaching,
     cancelarCoaching,
     registarValidacaoAula,

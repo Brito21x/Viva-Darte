@@ -57,12 +57,32 @@ app.use('/api/faturacao', faturacaoRoutes);
 app.use(errorHandler);
 
 const PORT = process.env.PORT || 3000;
+const MAX_LISTEN_RETRIES = 10;
+const RETRY_DELAY_MS = 400;
+
+function startHttpServer(attempt = 1) {
+    const server = app.listen(PORT, () => {
+        console.log(`✅ Servidor a bombar em: http://localhost:${PORT}`);
+    });
+
+    server.on('error', (error) => {
+        if (error?.code === 'EADDRINUSE' && attempt < MAX_LISTEN_RETRIES) {
+            const nextAttempt = attempt + 1;
+            console.warn(
+                `⚠️ Porta ${PORT} ocupada no arranque (tentativa ${attempt}/${MAX_LISTEN_RETRIES}). A tentar novamente...`
+            );
+            setTimeout(() => startHttpServer(nextAttempt), RETRY_DELAY_MS);
+            return;
+        }
+
+        console.error(`❌ Falha ao iniciar servidor HTTP na porta ${PORT}:`, error.message);
+        process.exit(1);
+    });
+}
 
 poolConnect
     .then(() => {
-        app.listen(PORT, () => {
-            console.log(`✅ Servidor a bombar em: http://localhost:${PORT}`);
-        });
+        startHttpServer();
     })
     .catch((error) => {
         console.error('❌ Erro crítico ao ligar à BD:', error.message);

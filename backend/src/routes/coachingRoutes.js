@@ -24,9 +24,17 @@ router.get('/vagas', autorizar('EE'), coachingController.getVagasDisponiveis);
 // GET  /api/coaching/agenda?dataInicio=&dataFim=
 router.get('/agenda', autorizar('Professor'), coachingController.getAgenda);
 
+// ── PREÇO ESTIMADO (Professor) ────────────────────────────────────────────────
+// GET /api/coaching/preco-estimado?dataAula=&horaInicio=&formatoAula=&duracaoMinutos=
+router.get('/preco-estimado', autorizar('Professor'), coachingController.getPrecoEstimado);
+
+// ── SLOT LIVRE (Professor) ────────────────────────────────────────────────────
+// GET /api/coaching/slot-livre?dataAula=&horaInicio=&duracaoMinutos=
+router.get('/slot-livre', autorizar('Professor'), coachingController.getSlotLivre);
+
 // ── PEDIDOS ───────────────────────────────────────────────────────────────────
-// POST /api/coaching/pedidos — submeter pedido (EE)
-router.post('/pedidos', autorizar('EE'), coachingController.criarPedidoCoaching);
+// POST /api/coaching/pedidos — submeter pedido (EE ou Professor)
+router.post('/pedidos', autorizar('EE', 'Professor'), coachingController.criarPedidoCoaching);
 
 // GET  /api/coaching/pedidos/pendentes — pedidos para tratar (Coordenação)
 router.get('/pedidos/pendentes', autorizar('Admin'), coachingController.getPedidosPendentes);

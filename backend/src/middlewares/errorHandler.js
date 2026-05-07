@@ -20,6 +20,14 @@ function errorHandler(err, req, res, next) {
         });
     }
 
+    // Erros comuns de conversão/validação do SQL Server (ex.: TIME inválido)
+    // 245 = Conversion failed, 8114 = Error converting data type
+    if (err.number === 245 || err.number === 8114) {
+        return res.status(400).json({
+            mensagem: 'Dados inválidos. Verifique o formato das horas (HH:mm) e tente novamente.'
+        });
+    }
+
     // Erros de negócio lançados pelos modelos (ex.: alunos que não pertencem ao EE)
     if (err.isOperational) {
         const status = Number.isInteger(err.statusCode) && err.statusCode >= 400 && err.statusCode < 600

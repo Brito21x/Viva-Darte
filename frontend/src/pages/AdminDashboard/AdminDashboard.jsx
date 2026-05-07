@@ -4,6 +4,23 @@ import logoImg from '../../assets/logo.png';
 
 const API_URL = 'http://localhost:3000';
 
+function traduzErroCoaching(err, fallback) {
+  const msg = String(err?.message || '').trim();
+  if (!msg) return fallback;
+  const low = msg.toLowerCase();
+  if (
+    low.includes('fora da disponibilidade') ||
+    low.includes('não tem disponibilidade') ||
+    low.includes('nao tem disponibilidade')
+  ) {
+    return 'Professor sem disponibilidade no horário escolhido.';
+  }
+  if (low.includes('ocorreu um erro interno') || low.includes('erro interno')) {
+    return 'Não foi possível aprovar. O horário pode estar fora da disponibilidade do professor.';
+  }
+  return msg;
+}
+
 function apiFetch(path, token, opts = {}) {
   return fetch(`${API_URL}${path}`, {
     ...opts,
@@ -14,6 +31,23 @@ function apiFetch(path, token, opts = {}) {
     },
     body: opts.body ? JSON.stringify(opts.body) : undefined,
   }).then(r => r.json());
+}
+
+async function apiFetchChecked(path, token, opts = {}) {
+  const res = await fetch(`${API_URL}${path}`, {
+    ...opts,
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+      ...(opts.headers || {}),
+    },
+    body: opts.body ? JSON.stringify(opts.body) : undefined,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data?.mensagem || data?.error || 'Erro na operação');
+  }
+  return data;
 }
 
 function StatCard({ icon, label, value, accent }) {
@@ -44,6 +78,14 @@ function Section({ title, icon, children, defaultOpen = false, actionButton = nu
   );
 }
 
+function formatHoraCurta(valor) {
+  const s = String(valor || '').trim();
+  if (!s) return '—';
+  const m = s.match(/(\d{2}):(\d{2})(?::\d{2})?/);
+  if (m) return `${m[1]}:${m[2]}`;
+  return '—';
+}
+
 export default function AdminDashboard({ irParaLanding }) {
   const [isAuthorized, setIsAuthorized] = useState(false);
   const [email, setEmail] = useState('');
@@ -56,9 +98,21 @@ export default function AdminDashboard({ irParaLanding }) {
   const [activeTab, setActiveTab] = useState('overview');
 
   const [usuarios, setUsuarios] = useState([]); 
+  const [pedidosPendentes, setPedidosPendentes] = useState([]);
   const [msg, setMsg] = useState('');
 
   const [modalUser, setModalUser] = useState({ isOpen: false, mode: 'create', data: {} });
+  const [modalAprovacao, setModalAprovacao] = useState({
+    isOpen: false,
+    pedido: null,
+    professores: [],
+    salas: [],
+    idProfessor: '',
+    idSala: '',
+    valorFinal: '',
+    isSaving: false,
+    erro: ''
+  });
 
   useEffect(() => {
     document.title = "Painel Admin | Viva D'arte";
@@ -104,6 +158,8 @@ export default function AdminDashboard({ irParaLanding }) {
     try {
       const usersData = await apiFetch('/api/auth/utilizadores', token).catch(() => []);
       if (Array.isArray(usersData)) setUsuarios(usersData);
+      const pedidos = await apiFetch('/api/coaching/pedidos/pendentes', token).catch(() => []);
+      if (Array.isArray(pedidos)) setPedidosPendentes(pedidos);
     } catch (e) { mostrarMsg('Erro ao carregar dados.', 'erro'); }
   }
 
@@ -280,7 +336,126 @@ export default function AdminDashboard({ irParaLanding }) {
     </table>
   );
 
-  const tabs = [ { id: 'overview', label: '🏠 Visão Geral' }, { id: 'usuarios', label: '👥 Usuários' } ];
+  async function handleRejeitarPedido(idPedido) {
+    const justificacao = window.prompt('Indica a justificação da rejeição:');
+    if (!justificacao) return;
+    try {
+      await apiFetchChecked(`/api/coaching/pedidos/${idPedido}/rejeitar`, token, {
+        method: 'POST',
+        body: { justificacao }
+      });
+      mostrarMsg('Pedido rejeitado com sucesso.', 'ok');
+      carregarDados();
+    } catch (e) {
+      mostrarMsg(e.message || 'Erro ao rejeitar pedido.', 'erro');
+    }
+  }
+
+  async function handleAprovarPedido(pedido) {
+    try {
+      const profs = await apiFetchChecked(`/api/escola/modalidades/${pedido.id_modalidade}/professores`, token);
+      const salas = await apiFetchChecked(`/api/escola/modalidades/${pedido.id_modalidade}/salas`, token);
+      const profSug = pedido.id_professor_desejado || profs?.[0]?.id_professor || '';
+      const salaSug = salas?.[0]?.id_sala || '';
+      const valorSug = Number(pedido.custo_estimado || 0).toFixed(2);
+      setModalAprovacao({
+        isOpen: true,
+        pedido,
+        professores: Array.isArray(profs) ? profs : [],
+        salas: Array.isArray(salas) ? salas : [],
+        idProfessor: String(profSug || ''),
+        idSala: String(salaSug || ''),
+        valorFinal: String(valorSug),
+        isSaving: false,
+        erro: ''
+      });
+    } catch (e) {
+      mostrarMsg(e.message || 'Erro ao aprovar pedido.', 'erro');
+    }
+  }
+
+  function fecharModalAprovacao() {
+    setModalAprovacao({
+      isOpen: false,
+      pedido: null,
+      professores: [],
+      salas: [],
+      idProfessor: '',
+      idSala: '',
+      valorFinal: '',
+      isSaving: false,
+      erro: ''
+    });
+  }
+
+  async function confirmarAprovacaoPedido() {
+    if (!modalAprovacao.pedido) return;
+    if (!modalAprovacao.idProfessor || !modalAprovacao.idSala || !modalAprovacao.valorFinal) {
+      setModalAprovacao((m) => ({ ...m, erro: 'Seleciona professor, sala e valor final.' }));
+      return;
+    }
+    const valorNormalizado = Number(String(modalAprovacao.valorFinal).replace(',', '.'));
+    if (!Number.isFinite(valorNormalizado) || valorNormalizado <= 0) {
+      setModalAprovacao((m) => ({ ...m, erro: 'Valor final inválido.' }));
+      return;
+    }
+    setModalAprovacao((m) => ({ ...m, isSaving: true, erro: '' }));
+    try {
+      await apiFetchChecked(`/api/coaching/pedidos/${modalAprovacao.pedido.id_pedido_coaching}/aprovar`, token, {
+        method: 'POST',
+        body: {
+          idProfessor: Number(modalAprovacao.idProfessor),
+          idSala: Number(modalAprovacao.idSala),
+          valorFinal: valorNormalizado
+        }
+      });
+      fecharModalAprovacao();
+      mostrarMsg('Pedido aprovado e coaching agendado.', 'ok');
+      carregarDados();
+    } catch (e) {
+      setModalAprovacao((m) => ({
+        ...m,
+        isSaving: false,
+        erro: traduzErroCoaching(e, 'Erro ao aprovar pedido.')
+      }));
+    }
+  }
+
+  const renderTabelaPedidos = (lista) => (
+    <table className="admin-table">
+      <thead>
+        <tr>
+          <th>ID</th><th>Data</th><th>Hora</th><th>Modalidade</th><th>Formato</th><th>Professor</th><th>EE</th><th>Alunos</th><th>Custo</th><th style={{ textAlign: 'center' }}>Ações</th>
+        </tr>
+      </thead>
+      <tbody>
+        {lista.map((p) => (
+          <tr key={p.id_pedido_coaching}>
+            <td>{p.id_pedido_coaching}</td>
+            <td>{new Date(p.data_aula_pretendida).toLocaleDateString('pt-PT')}</td>
+            <td>{formatHoraCurta(p.hora_inicio_pretendida)}</td>
+            <td>{p.modalidade || `#${p.id_modalidade}`}</td>
+            <td>{p.formato_aula} ({p.duracao_minutos}m)</td>
+            <td>{p.professor_desejado || 'Sem preferência'}</td>
+            <td>{p.requisitante}<br /><span style={{ opacity: 0.7, fontSize: '0.78rem' }}>{p.email_requisitante}</span></td>
+            <td>{p.total_alunos || 0}</td>
+            <td><strong>{Number(p.custo_estimado || 0).toFixed(2)} EUR</strong></td>
+            <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
+              <button className="btn-sm btn-sm--green" style={{ marginRight: 8 }} onClick={() => handleAprovarPedido(p)}>Aprovar</button>
+              <button className="btn-sm btn-sm--danger" onClick={() => handleRejeitarPedido(p.id_pedido_coaching)}>Rejeitar</button>
+            </td>
+          </tr>
+        ))}
+        {lista.length === 0 && (<tr><td colSpan={10} className="empty-row">Sem pedidos pendentes.</td></tr>)}
+      </tbody>
+    </table>
+  );
+
+  const tabs = [
+    { id: 'overview', label: '🏠 Visão Geral' },
+    { id: 'usuarios', label: '👥 Usuários' },
+    { id: 'coaching', label: '🗓️ Pedidos Coaching' }
+  ];
   const labelStyle = { display: 'block', fontSize: '0.75rem', fontWeight: '700', color: '#555', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.5px', fontFamily: "'Poppins', sans-serif" };
   const inputStyle = { width: '100%', padding: '12px 14px', border: '1px solid #e0e0e0', borderRadius: '8px', fontSize: '0.95rem', fontFamily: "'Poppins', sans-serif", backgroundColor: '#faf9f7', outline: 'none', transition: 'border 0.3s' };
 
@@ -296,6 +471,7 @@ export default function AdminDashboard({ irParaLanding }) {
             <button key={t.id} className={`nav-item ${activeTab === t.id ? 'nav-item--active' : ''}`} onClick={() => setActiveTab(t.id)}>
               {t.label}
               {t.id === 'usuarios' && pendentes.length > 0 && (<span style={{ marginLeft: '8px', background: 'var(--red)', color: 'white', padding: '2px 6px', borderRadius: '10px', fontSize: '0.7rem' }}>{pendentes.length}</span>)}
+              {t.id === 'coaching' && pedidosPendentes.length > 0 && (<span style={{ marginLeft: '8px', background: 'var(--teal)', color: 'white', padding: '2px 6px', borderRadius: '10px', fontSize: '0.7rem' }}>{pedidosPendentes.length}</span>)}
             </button>
           ))}
         </nav>
@@ -313,6 +489,7 @@ export default function AdminDashboard({ irParaLanding }) {
             <div className="stats-grid">
               <StatCard icon="👥" label="Total Utilizadores" value={usuarios.length} accent="blue" />
               <StatCard icon="⏳" label="Por Aprovar" value={pendentes.length} accent="orange" />
+              <StatCard icon="🗓️" label="Pedidos Coaching" value={pedidosPendentes.length} accent="teal" />
             </div>
           </div>
         )}
@@ -349,6 +526,16 @@ export default function AdminDashboard({ irParaLanding }) {
               {renderTabelaUsuarios(adminsEOutros)}
             </Section>
 
+          </div>
+        )}
+
+        {activeTab === 'coaching' && (
+          <div className="tab-content">
+            <h1 className="page-title">🗓️ Pedidos de Coaching Pendentes</h1>
+            <p className="page-subtitle">Aprovar agendação ou rejeitar pedidos enviados.</p>
+            <Section title={`⏳ Pendentes (${pedidosPendentes.length})`} icon="🎯" defaultOpen={true}>
+              {renderTabelaPedidos(pedidosPendentes)}
+            </Section>
           </div>
         )}
       </main>
@@ -405,6 +592,59 @@ export default function AdminDashboard({ irParaLanding }) {
                     </div>
                 </form>
             </div>
+        </div>
+      )}
+
+      {modalAprovacao.isOpen && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(3px)', zIndex: 9999, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+          <div style={{ backgroundColor: '#ffffff', padding: '30px', borderRadius: '16px', width: '92%', maxWidth: '620px', boxShadow: '0 20px 40px rgba(0,0,0,0.15)', fontFamily: "'Poppins', sans-serif" }}>
+            <h2 style={{ marginBottom: '14px', fontFamily: "'Cormorant Garamond', serif", fontSize: '2rem', color: '#333' }}>
+              Aprovar Pedido #{modalAprovacao.pedido?.id_pedido_coaching}
+            </h2>
+            <p style={{ marginTop: 0, color: '#7b756f' }}>
+              {modalAprovacao.pedido?.modalidade} • {modalAprovacao.pedido?.formato_aula} ({modalAprovacao.pedido?.duracao_minutos} min)
+            </p>
+
+            <div className="form-grid">
+              <div className="field">
+                <label>Professor</label>
+                <select value={modalAprovacao.idProfessor} onChange={(e) => setModalAprovacao((m) => ({ ...m, idProfessor: e.target.value }))}>
+                  <option value="">Selecionar professor</option>
+                  {modalAprovacao.professores.map((p) => (
+                    <option key={p.id_professor} value={p.id_professor}>{p.nome_professor}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="field">
+                <label>Sala</label>
+                <select value={modalAprovacao.idSala} onChange={(e) => setModalAprovacao((m) => ({ ...m, idSala: e.target.value }))}>
+                  <option value="">Selecionar sala</option>
+                  {modalAprovacao.salas.map((s) => (
+                    <option key={s.id_sala} value={s.id_sala}>{s.nome_sala || s.nome}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="field">
+                <label>Valor final (EUR)</label>
+                <input type="number" step="0.01" min="0" value={modalAprovacao.valorFinal} onChange={(e) => setModalAprovacao((m) => ({ ...m, valorFinal: e.target.value }))} />
+              </div>
+            </div>
+
+            {modalAprovacao.erro && (
+              <div className="info-note" style={{ marginTop: '14px', borderLeftColor: 'var(--red)', backgroundColor: '#fce8e8', color: 'var(--red)' }}>
+                {modalAprovacao.erro}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '22px' }}>
+              <button type="button" className="btn-sm" style={{ backgroundColor: '#f1f1f1', color: '#555' }} onClick={fecharModalAprovacao}>
+                Cancelar
+              </button>
+              <button type="button" className="btn-sm btn-sm--green" onClick={confirmarAprovacaoPedido} disabled={modalAprovacao.isSaving}>
+                {modalAprovacao.isSaving ? 'A aprovar…' : 'Confirmar Aprovação'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

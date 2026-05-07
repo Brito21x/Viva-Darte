@@ -4,6 +4,7 @@ const { utilizadorTemPerfil } = require('../middlewares/auth');
 
 /** Data fixa só para parsear horas (`time`) como instante; a duração depende só da diferença entre horas. */
 const DATA_REF_COMPARACAO_HORAS = '2026-01-01';
+const MSG_SEM_DISPONIBILIDADE = 'O professor não tem horário disponível nesse período.';
 
 /** Evita bugs de timezone com strings `YYYY-MM-DD` (interpretação UTC vs local). */
 function parseDateParts(dataValor) {
@@ -31,6 +32,21 @@ function diaSemanaCoachingFromDateValue(dataValor) {
     if (!dt) return 1;
     const day = dt.getDay();
     return day === 0 ? 7 : day;
+}
+
+function mensagemDisponibilidade(mensagemOriginal) {
+    const msg = String(mensagemOriginal || '').toLowerCase();
+    if (
+        msg.includes('fora da disponibilidade') ||
+        msg.includes('não tem disponibilidade') ||
+        msg.includes('nao tem disponibilidade') ||
+        msg.includes('horário indisponível') ||
+        msg.includes('horario indisponivel') ||
+        msg.includes('conflito')
+    ) {
+        return MSG_SEM_DISPONIBILIDADE;
+    }
+    return mensagemOriginal || MSG_SEM_DISPONIBILIDADE;
 }
 
 /** Início da aula no fuso local (data_aula + hora_inicio). */
@@ -91,10 +107,37 @@ async function adicionarDisponibilidade(req, res, next) {
             return res.status(400).json({ mensagem: 'diaSemana deve ser 1 (Seg-Qui) ou 2 (Sáb-Dom).' });
         }
 
+        const normalizarHora = (v) => {
+            const s = String(v ?? '').trim();
+            if (!s) return s;
+            // Aceitar HH:mm ou HH:mm:ss
+            const m24 = s.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+            if (m24) {
+                const hh = String(m24[1]).padStart(2, '0');
+                const mm = m24[2];
+                const ss = m24[3] ?? '00';
+                return `${hh}:${mm}:${ss}`;
+            }
+            // Aceitar "02:00 PM" / "2:00 PM"
+            const m12 = s.match(/^(\d{1,2}):(\d{2})\s*([AaPp][Mm])$/);
+            if (m12) {
+                let hh = parseInt(m12[1], 10);
+                const mm = m12[2];
+                const ampm = m12[3].toUpperCase();
+                if (ampm === 'PM' && hh < 12) hh += 12;
+                if (ampm === 'AM' && hh === 12) hh = 0;
+                return `${String(hh).padStart(2, '0')}:${mm}:00`;
+            }
+            return s;
+        };
+
+        const hIni = normalizarHora(horaInicio);
+        const hFim = normalizarHora(horaFim);
+
         await coachingModel.adicionarDisponibilidadeProfessor({
             diaSemana: Number(diaSemana),
-            horaInicio,
-            horaFim,
+            horaInicio: hIni,
+            horaFim: hFim,
             idProfessor
         });
 
@@ -103,7 +146,146 @@ async function adicionarDisponibilidade(req, res, next) {
         if (error.message.includes('sobrepõe') || error.message.includes('posterior')) {
             return res.status(409).json({ mensagem: error.message });
         }
+        if (error.number === 245 || error.number === 8114) {
+            return res.status(400).json({
+                mensagem: 'Horas inválidas. Use o formato HH:mm (ex: 14:00) e tente novamente.'
+            });
+        }
+        // Para esta operação (editar horários), preferimos devolver a mensagem para o frontend
+        // em vez de cair no erro genérico "interno do servidor".
+        if (error?.message) {
+            return res.status(400).json({ mensagem: error.message });
+        }
         next(error);
+    }
+}
+
+// ============================================================================
+// GET /api/coaching/preco-estimado?dataAula=&horaInicio=&formatoAula=&duracaoMinutos=
+// (Professor) — devolve preço estimado baseado na tabela de preços
+// ============================================================================
+async function getPrecoEstimado(req, res, next) {
+    try {
+        const { dataAula, horaInicio, formatoAula, duracaoMinutos, idModalidade, idProfessor } = req.query;
+
+        if (!dataAula || !horaInicio) {
+            return res.status(400).json({ mensagem: 'dataAula e horaInicio são obrigatórios.' });
+        }
+
+        const formato = formatoAula || 'Solo';
+        const dur = duracaoMinutos != null && duracaoMinutos !== '' ? parseInt(duracaoMinutos, 10) : 60;
+        if (Number.isNaN(dur) || dur <= 0) {
+            return res.status(400).json({ mensagem: 'duracaoMinutos inválida.' });
+        }
+
+        // US08/RF10: validar se o slot está livre (COACHING + HORARIO) antes de calcular/preencher preço
+        const normalizarHoraSqlTime = (v) => {
+            const s = String(v ?? '').trim();
+            const m = s.match(/(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+            if (!m) return null;
+            const hh = String(m[1]).padStart(2, '0');
+            const mm = m[2];
+            const ss = m[3] ?? '00';
+            return `${hh}:${mm}:${ss}`;
+        };
+
+        const hIni = normalizarHoraSqlTime(horaInicio);
+        if (!hIni) return res.status(400).json({ mensagem: 'horaInicio inválida.' });
+
+        const idProf = req.utilizador?.id;
+        const dataParts = parseDateParts(dataAula);
+        if (!dataParts) return res.status(400).json({ mensagem: 'dataAula inválida.' });
+
+        const diaSemanaCoaching = diaSemanaCoachingFromDateValue(dataAula);
+        const conflito = await coachingModel.verificarSlotLivreProfessor({
+            idProfessor: idProf,
+            dataAula: dataParts,
+            horaInicio: hIni,
+            duracaoMinutos: dur,
+            diaSemanaCoaching
+        });
+
+        if (!conflito?.livre) {
+            return res.status(409).json({
+                mensagem: mensagemDisponibilidade(conflito?.motivo),
+                motivo: conflito?.motivo || null
+            });
+        }
+
+        const diaSemanaPreco = diaSemanaPrecoFromDateValue(dataAula);
+
+        const custoEstimado = await faturacaoModel.calcularCustoAutomatico(
+            formato,
+            dur,
+            diaSemanaPreco,
+            idModalidade ? parseInt(idModalidade, 10) : null,
+            idProfessor ? parseInt(idProfessor, 10) : null
+        );
+
+        if (custoEstimado === null || custoEstimado === undefined) {
+            return res.status(404).json({
+                mensagem: 'Não foi encontrada tabela de preços para esta combinação (formato, duração, dia).'
+            });
+        }
+
+        return res.status(200).json({
+            dataAula: String(dataAula).split('T')[0],
+            horaInicio: String(horaInicio).trim(),
+            formatoAula: formato,
+            duracaoMinutos: dur,
+            diaSemanaPreco,
+            custoEstimado
+        });
+    } catch (error) {
+        // Dev-friendly: não esconder a causa nestas rotas novas
+        console.error('[preco-estimado] erro:', error);
+        return res.status(500).json({ mensagem: error?.message || 'Ocorreu um erro interno no servidor.' });
+    }
+}
+
+// ============================================================================
+// GET /api/coaching/slot-livre?dataAula=&horaInicio=&duracaoMinutos=
+// (Professor) — valida conflitos (COACHING + HORARIO)
+// ============================================================================
+async function getSlotLivre(req, res, next) {
+    try {
+        const { dataAula, horaInicio, duracaoMinutos } = req.query;
+        if (!dataAula || !horaInicio) {
+            return res.status(400).json({ mensagem: 'dataAula e horaInicio são obrigatórios.' });
+        }
+        const dur = duracaoMinutos != null && duracaoMinutos !== '' ? parseInt(duracaoMinutos, 10) : 60;
+        if (Number.isNaN(dur) || dur <= 0) {
+            return res.status(400).json({ mensagem: 'duracaoMinutos inválida.' });
+        }
+
+        const normalizarHoraSqlTime = (v) => {
+            const s = String(v ?? '').trim();
+            const m = s.match(/(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+            if (!m) return null;
+            const hh = String(m[1]).padStart(2, '0');
+            const mm = m[2];
+            const ss = m[3] ?? '00';
+            return `${hh}:${mm}:${ss}`;
+        };
+        const hIni = normalizarHoraSqlTime(horaInicio);
+        if (!hIni) return res.status(400).json({ mensagem: 'horaInicio inválida.' });
+
+        const dataParts = parseDateParts(dataAula);
+        if (!dataParts) return res.status(400).json({ mensagem: 'dataAula inválida.' });
+
+        const diaSemanaCoaching = diaSemanaCoachingFromDateValue(dataAula);
+        const r = await coachingModel.verificarSlotLivreProfessor({
+            idProfessor: req.utilizador.id,
+            dataAula: dataParts,
+            horaInicio: hIni,
+            duracaoMinutos: dur,
+            diaSemanaCoaching
+        });
+
+        return res.status(200).json(r);
+    } catch (error) {
+        console.error('[slot-livre] erro:', error);
+        return res.status(500).json({ mensagem: error?.message || 'Ocorreu um erro interno no servidor.' });
     }
 }
 
@@ -245,6 +427,9 @@ async function getAgenda(req, res, next) {
 async function criarPedidoCoaching(req, res, next) {
     try {
         const idEncarregado = req.utilizador.id;
+        const perfis = req.utilizador.perfis || [];
+        const isEE = utilizadorTemPerfil(perfis, 'EE');
+        const isProfessor = utilizadorTemPerfil(perfis, 'Professor');
         const {
             idModalidade,
             idProfessor,
@@ -253,7 +438,8 @@ async function criarPedidoCoaching(req, res, next) {
             dataAula,
             horaInicio,
             idAnoLetivo,
-            alunosIds
+            alunosIds,
+            numeroParticipantes
         } = req.body;
 
         // Validações de campos obrigatórios
@@ -263,8 +449,19 @@ async function criarPedidoCoaching(req, res, next) {
             });
         }
 
-        if (!Array.isArray(alunosIds) || alunosIds.length === 0) {
+        if (!isEE && !isProfessor) {
+            return res.status(403).json({ mensagem: 'Perfil sem permissão para criar pedidos de coaching.' });
+        }
+
+        if (isEE && (!Array.isArray(alunosIds) || alunosIds.length === 0)) {
             return res.status(400).json({ mensagem: 'É necessário indicar pelo menos um aluno participante.' });
+        }
+
+        if (isProfessor) {
+            const num = Number(numeroParticipantes || 1);
+            if (!Number.isFinite(num) || num < 1) {
+                return res.status(400).json({ mensagem: 'numeroParticipantes inválido.' });
+            }
         }
 
         const formatosValidos = ['Solo', 'Dueto', 'Trio', 'Ensemble'];
@@ -279,6 +476,22 @@ async function criarPedidoCoaching(req, res, next) {
             return res.status(400).json({
                 mensagem: `Duração inválida. Valores aceites: ${duracoesValidas.join(', ')} minutos.`
             });
+        }
+
+        if (idProfessor) {
+            const diaSemanaCoaching = diaSemanaCoachingFromDateValue(dataAula);
+            const temDisponibilidade = await coachingModel.professorTemDisponibilidadeNoSlot({
+                idProfessor: parseInt(idProfessor, 10),
+                dataAula,
+                horaInicio,
+                duracaoMinutos: Number(duracaoMinutos),
+                diaSemanaCoaching
+            });
+            if (!temDisponibilidade) {
+                return res.status(409).json({
+                    mensagem: MSG_SEM_DISPONIBILIDADE
+                });
+            }
         }
 
         // Calcular custo estimado automaticamente (US16 / RF18)
@@ -310,7 +523,11 @@ async function criarPedidoCoaching(req, res, next) {
                 idModalidade: parseInt(idModalidade),
                 idProfessor: idProfessor ? parseInt(idProfessor) : null
             },
-            alunosIds.map(Number)
+            Array.isArray(alunosIds) ? alunosIds.map(Number) : [],
+            {
+                skipAlunoValidation: isProfessor,
+                numeroParticipantesOverride: isProfessor ? Number(numeroParticipantes || 1) : null
+            }
         );
 
         return res.status(201).json({
@@ -319,6 +536,10 @@ async function criarPedidoCoaching(req, res, next) {
             custoEstimado
         });
     } catch (error) {
+        console.error('[criarPedidoCoaching] erro:', error);
+        if (error?.message) {
+            return res.status(400).json({ mensagem: error.message });
+        }
         next(error);
     }
 }
@@ -428,6 +649,11 @@ async function aprovarPedido(req, res, next) {
             return res.status(400).json({ mensagem: 'idSala, idProfessor e valorFinal são obrigatórios.' });
         }
 
+        const valorNum = Number(String(valorFinal).replace(',', '.'));
+        if (!Number.isFinite(valorNum) || valorNum <= 0) {
+            return res.status(400).json({ mensagem: 'valorFinal inválido.' });
+        }
+
         const pedido = await coachingModel.getPedidoCoachingPorId(idPedido);
         if (!pedido) {
             return res.status(404).json({ mensagem: 'Pedido não encontrado.' });
@@ -440,7 +666,9 @@ async function aprovarPedido(req, res, next) {
         const duracaoMinutos = pedido.duracao_minutos;
         const numeroParticipantes = pedido.numero_participantes;
         const dataAula = pedido.data_aula_pretendida;
-        const horaInicio = pedido.hora_inicio_pretendida;
+        const horaInicioRaw = pedido.hora_inicio_pretendida;
+        const mHora = String(horaInicioRaw || '').match(/(\d{2}):(\d{2})(?::(\d{2}))?/);
+        const horaInicio = mHora ? `${mHora[1]}:${mHora[2]}:${mHora[3] || '00'}` : null;
         const idAnoLetivo = pedido.ANO_LETIVOid_ano_letivo;
         const idModalidade = pedido.MODALIDADEid_modalidade;
 
@@ -465,6 +693,19 @@ async function aprovarPedido(req, res, next) {
 
         const diaSemanaCoaching = diaSemanaCoachingFromDateValue(dataAula);
 
+        const temDisponibilidade = await coachingModel.professorTemDisponibilidadeNoSlot({
+            idProfessor: parseInt(idProfessor, 10),
+            dataAula,
+            horaInicio,
+            duracaoMinutos: Number(duracaoMinutos),
+            diaSemanaCoaching
+        });
+        if (!temDisponibilidade) {
+            return res.status(409).json({
+                mensagem: MSG_SEM_DISPONIBILIDADE
+            });
+        }
+
         const idCoaching = await coachingModel.aprovarEAgendarCoaching({
             idPedido,
             formatoAula,
@@ -477,7 +718,7 @@ async function aprovarPedido(req, res, next) {
             idAnoLetivo: parseInt(idAnoLetivo, 10),
             idModalidade: parseInt(idModalidade, 10),
             idSala: parseInt(idSala, 10),
-            valorFinal: parseFloat(valorFinal),
+            valorFinal: valorNum,
             idValidador
         });
 
@@ -494,6 +735,9 @@ async function aprovarPedido(req, res, next) {
             error.message.includes('Sala inválida')
         ) {
             return res.status(409).json({ mensagem: error.message });
+        }
+        if (error?.message) {
+            return res.status(400).json({ mensagem: error.message });
         }
         next(error);
     }
@@ -721,6 +965,8 @@ async function concluirCoaching(req, res, next) {
 
 module.exports = {
     adicionarDisponibilidade,
+    getPrecoEstimado,
+    getSlotLivre,
     getDisponibilidades,
     removerDisponibilidade,
     getVagasDisponiveis,

@@ -48,14 +48,27 @@ export default function EmprestimosPecas({ irParaLanding, irParaVendaFigurinos }
   const mostrarAlerta = (msg) => setCustomAlert({ show: true, message: msg, type: 'alert', onConfirm: null });
   const fecharAlerta  = ()    => setCustomAlert({ show: false, message: '', type: 'alert', onConfirm: null });
 
-  const parsearLocalizacao = (localizacao) => {
-    if (!localizacao || !localizacao.includes('valor_dia:')) return {};
-    try {
-      const partes = localizacao.split(';');
-      const valor_dia = partes.find(p => p.startsWith('valor_dia:'))?.split(':')[1] || '0';
-      const metodosStr = partes.find(p => p.startsWith('metodos:'))?.split(':')[1] || 'MBWay';
-      return { valor_dia, metodos: metodosStr.split(',') };
-    } catch { return {}; }
+  const parsearLocalizacao = (peca) => {
+    // 1. Prevenção de erro crítico: Se a peça for null, undefined ou não for um objeto
+    if (!peca || typeof peca !== 'object') {
+      return { valor_dia: '0', metodos: ['MBWay'] };
+    }
+
+    // 2. Compatibilidade com registos antigos que tenham ficado na BD
+    if (typeof peca.localizacao === 'string' && peca.localizacao.includes('valor_dia:')) {
+      try {
+        const partes = peca.localizacao.split(';');
+        const valor_dia = partes.find(p => p.startsWith('valor_dia:'))?.split(':')[1] || '0';
+        const metodosStr = partes.find(p => p.startsWith('metodos:'))?.split(':')[1] || 'MBWay';
+        return { valor_dia, metodos: metodosStr.split(',') };
+      } catch { return { valor_dia: '0', metodos: ['MBWay'] }; }
+    }
+    
+    // 3. Nova estrutura lida diretamente das colunas adicionadas no SQL OUTER APPLY
+    return { 
+        valor_dia: peca.valor_dia || '0', 
+        metodos: (typeof peca.metodos_pagamento === 'string') ? peca.metodos_pagamento.split(',') : ['MBWay'] 
+    };
   };
 
   const carregarPecas = async (mostrarLoading = false) => {
@@ -187,12 +200,14 @@ export default function EmprestimosPecas({ irParaLanding, irParaVendaFigurinos }
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` },
         body: JSON.stringify({
-          nome:        novaPeca.nome,
-          descricao:   novaPeca.descricao,
-          tamanho:     novaPeca.tamanho,
-          estado:      novaPeca.condicao,
-          idCategoria: 1,
-          fotos:       novaPeca.fotos
+          nome:              novaPeca.nome,
+          descricao:         novaPeca.descricao,
+          tamanho:           novaPeca.tamanho,
+          estado:            novaPeca.condicao,
+          idCategoria:       1,
+          fotos:             novaPeca.fotos,
+          valor_dia:         novaPeca.valor_dia, // Agora enviado diretamente na criação
+          metodos_pagamento: novaPeca.metodos_pagamento
         })
       });
 
@@ -200,21 +215,6 @@ export default function EmprestimosPecas({ irParaLanding, irParaVendaFigurinos }
         const erro = await resPeca.json();
         throw new Error(erro.mensagem || "Erro ao registar a peça.");
       }
-
-      const { idPeca } = await resPeca.json();
-
-      const resDisp = await fetch(`${API_URL}/${idPeca}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` },
-        body: JSON.stringify({
-          estado:               novaPeca.condicao,
-          disponivelEmprestimo: true,
-          disponivelVenda:      false,
-          localizacao:          `valor_dia:${novaPeca.valor_dia};metodos:${novaPeca.metodos_pagamento.join(',')}`
-        })
-      });
-
-      if (!resDisp.ok) throw new Error("Erro ao marcar disponibilidade.");
 
       mostrarAlerta('Peça disponibilizada para empréstimo com sucesso!');
       setNovaPeca({ nome: '', tamanho: '', condicao: 'Novo', valor_dia: '', descricao: '', metodos_pagamento: ['MBWay'], fotos: [] });
@@ -228,7 +228,7 @@ export default function EmprestimosPecas({ irParaLanding, irParaVendaFigurinos }
   };
 
   const abrirEdicao = (peca) => {
-    const metaParsed = parsearLocalizacao(peca.localizacao || '');
+    const metaParsed = parsearLocalizacao(peca);
     setPecaEmEdicao({
       ...peca,
       valor_dia:         metaParsed.valor_dia || '',
@@ -303,7 +303,7 @@ export default function EmprestimosPecas({ irParaLanding, irParaVendaFigurinos }
   };
 
   const handleAbrirSolicitar = async (peca) => {
-    const metaParsed = parsearLocalizacao(peca.localizacao || '');
+    const metaParsed = parsearLocalizacao(peca);
     setPecaSelecionada({
       ...peca,
       valor_dia:         metaParsed.valor_dia || '0',
@@ -331,14 +331,13 @@ export default function EmprestimosPecas({ irParaLanding, irParaVendaFigurinos }
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` },
         body: JSON.stringify({
-          dataInicio:  dataInicio,
-          dataFim:     dataFim,
-          observacoes: observacoesSolicitacao
-            ? `Método: ${metodoPagamentoSolicitacao} | ${observacoesSolicitacao}`
-            : `Método: ${metodoPagamentoSolicitacao}`,
+          dataInicio:      dataInicio,
+          dataFim:         dataFim,
+          metodoPagamento: metodoPagamentoSolicitacao, // Enviado para a coluna método_pagamento
+          observacoes:     observacoesSolicitacao,     // Enviado sem misturar com o método
           itens: [{
             idPeca:        pecaSelecionada.id_peca,
-            estadoEntrega: pecaSelecionada.condicao_peca || pecaSelecionada.estado || 'Bom'
+            estadoEntrega: pecaSelecionada.condicao_peca || pecaSelecionada.estado || 'Bom' // Estado lido para a bd
           }]
         })
       });
@@ -420,15 +419,25 @@ export default function EmprestimosPecas({ irParaLanding, irParaVendaFigurinos }
     finally { setIsSubmitting(false); }
   };
 
+  const userId = utilizador?.id_utilizador || utilizador?.id;
+
   const pecasFiltradas = pecas
-    .filter(p => (p.nome_peca || p.nome)?.toLowerCase().includes(pesquisa.toLowerCase()))
-    .filter(p => filtroEstado === 'Todos' ? true : (p.condicao_peca || p.estado) === filtroEstado)
+    .filter(p => (p?.nome_peca || p?.nome || '').toLowerCase().includes((pesquisa || '').toLowerCase()))
+    .filter(p => filtroEstado === 'Todos' ? true : (p?.condicao_peca || p?.estado) === filtroEstado)
     .sort((a, b) => {
-      const vaA = parseFloat(parsearLocalizacao(a.localizacao || '').valor_dia || 0);
-      const vaB = parseFloat(parsearLocalizacao(b.localizacao || '').valor_dia || 0);
+      const eMeuA = Boolean(userId && a?.UTILIZADORid_utilizador && userId === a.UTILIZADORid_utilizador);
+      const eMeuB = Boolean(userId && b?.UTILIZADORid_utilizador && userId === b.UTILIZADORid_utilizador);
+
+      if (eMeuA && !eMeuB) return -1;
+      if (!eMeuA && eMeuB) return 1;
+
+      const vaA = parseFloat(parsearLocalizacao(a).valor_dia || 0);
+      const vaB = parseFloat(parsearLocalizacao(b).valor_dia || 0);
+      
       if (ordenacao === 'preco_asc')  return vaA - vaB;
       if (ordenacao === 'preco_desc') return vaB - vaA;
-      return b.id_peca - a.id_peca;
+      
+      return (b?.id_peca || 0) - (a?.id_peca || 0);
     });
 
   return (
@@ -530,15 +539,15 @@ export default function EmprestimosPecas({ irParaLanding, irParaVendaFigurinos }
           ) : (
             pecasFiltradas.map((peca) => {
               const idxImg        = indicesImagens[peca.id_peca] || 0;
-              const totalFotos    = peca.fotos?.length || 0;
-              const estaEmprestado = peca.disponivel_para_emprestimo === false || peca.disponivel_para_emprestimo === 0 || peca.estado === 'Emprestado';
-              const metaParsed    = parsearLocalizacao(peca.localizacao || '');
+              const totalFotos = peca.fotos?.length || 0;
+              const estaEmprestado = !!peca.emprestimo_inicio;
+              const metaParsed = parsearLocalizacao(peca);
               const valorDia      = parseFloat(metaParsed.valor_dia || 0);
               const metodos       = metaParsed.metodos || [];
               const nomePeca      = peca.nome_peca || peca.nome || 'Sem nome';
               const condicaoPeca  = peca.condicao_peca || peca.estado || 'Bom';
               
-              const userId = utilizador?.id_utilizador || utilizador?.id; 
+              const userId = utilizador?.id_utilizador || utilizador?.id;
               const eMinhaPeca = Boolean(userId && peca.UTILIZADORid_utilizador && userId === peca.UTILIZADORid_utilizador);
 
               return (
@@ -599,29 +608,31 @@ export default function EmprestimosPecas({ irParaLanding, irParaVendaFigurinos }
                     </div>
 
                     <div className="peca-footer">
-                      <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
-                        <span className="preco">{valorDia.toFixed(2)} €</span>
-                        <span className="texto-dia">/dia</span>
-                      </div>
-
-                      {estaEmprestado ? (
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', lineHeight: '1.2' }}>
-                          {eMinhaPeca ? (
-                            <button className="btn-dark btn-sm" onClick={() => handleAbrirAcoesEmprestimo(peca)} title="Atualizar BD">
-                              Gerir Empréstimo
-                            </button>
-                          ) : (
-                            <span className="texto-emprestado-rodape">Emprestado</span>
-                          )}
-                        </div>
-                      ) : eMinhaPeca ? (
-                        <span className="texto-teu-item">O teu item</span>
-                      ) : (
-                        <button className="btn-outline btn-sm" onClick={() => handleAbrirSolicitar(peca)} disabled={!utilizador} title={!utilizador ? 'Faz login para solicitar' : ''}>
-                          Solicitar
-                        </button>
-                      )}
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
+                      <span className="preco">{valorDia.toFixed(2)} €</span>
+                      <span className="texto-dia">/dia</span>
                     </div>
+
+                    {estaEmprestado ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', lineHeight: '1.2' }}>
+                        {eMinhaPeca ? (
+                          // O dono vê sempre este botão se a peça estiver emprestada
+                          <button className="btn-dark btn-sm" onClick={() => handleAbrirAcoesEmprestimo(peca)}>
+                            Gerir Empréstimo
+                          </button>
+                        ) : (
+                          // Outros utilizadores apenas vêem o texto informativo
+                          <span className="texto-emprestado-rodape">Emprestado</span>
+                        )}
+                      </div>
+                    ) : eMinhaPeca ? (
+                      <span className="texto-teu-item">O teu item</span>
+                    ) : (
+                      <button className="btn-outline btn-sm" onClick={() => handleAbrirSolicitar(peca)} disabled={!utilizador}>
+                        Solicitar
+                      </button>
+                    )}
+                  </div>
                   </div>
 
                 </div>

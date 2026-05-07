@@ -14,7 +14,10 @@ async function getCatalogoPecas() {
                    p.data_registo, cp.nome AS categoria, u.nome AS registado_por, f.foto AS foto_principal,
                    p.UTILIZADORid_utilizador,
                    active_emp.data_inicio AS emprestimo_inicio,
-                   active_emp.data_fim AS emprestimo_fim
+                   active_emp.data_fim AS emprestimo_fim,
+                   base_emp.valor AS valor_dia,
+                   -- CORREÇÃO: Extrair os métodos do campo observacoes
+                   REPLACE(base_emp.observacoes, 'Métodos: ', '') AS metodos_pagamento
             FROM PECA p
             JOIN CATEGORIA_PECA cp ON p.CATEGORIA_PECAid_categoria_peca = cp.id_categoria_peca
             JOIN UTILIZADOR u ON p.UTILIZADORid_utilizador = u.id_utilizador
@@ -23,12 +26,22 @@ async function getCatalogoPecas() {
                 FROM FOTO_PECA GROUP BY PECAid_peca
             ) f ON p.id_peca = f.PECAid_peca
             OUTER APPLY (
+                -- Procura a configuração inicial do empréstimo (onde guardamos o preço base e os métodos nas observações)
+                SELECT TOP 1 e.valor, e.observacoes
+                FROM EMPRESTIMO_ITEM ei
+                JOIN EMPRESTIMO e ON ei.[EMPRESIMO id_emprestimo] = e.id_emprestimo
+                WHERE ei.PECAid_peca = p.id_peca 
+                ORDER BY e.id_emprestimo ASC
+            ) base_emp
+            OUTER APPLY (
                 -- Procura o empréstimo mais recente desta peça que ainda não foi devolvido
                 SELECT TOP 1 e.data_inicio, e.data_fim
                 FROM EMPRESTIMO_ITEM ei
                 JOIN EMPRESTIMO e ON ei.[EMPRESIMO id_emprestimo] = e.id_emprestimo
                 WHERE ei.PECAid_peca = p.id_peca 
                   AND e.data_devolucao IS NULL
+                  AND e.estado != 'Config Inicial'
+                  AND e.estado != 'Disponível'
                 ORDER BY e.id_emprestimo DESC
             ) active_emp
             ORDER BY p.nome ASC;
@@ -63,26 +76,56 @@ async function getPecaDetalhes(idPeca) {
 }
  
 async function registarNovaPeca(dadosPeca) {
+    const pool = await poolPromise;
+    const transaction = pool.transaction();
+    await transaction.begin();
+
     try {
-        const pool = await poolPromise;
-        const result = await pool.request()
+        // 1. Inserir sempre na tabela principal PECA
+        const resultPeca = await transaction.request()
             .input('Nome', sql.VarChar(255), dadosPeca.nome)
-            .input('Descricao', sql.VarChar(255), dadosPeca.descricao || null)
-            .input('Tamanho', sql.VarChar(50), dadosPeca.tamanho || null)
-            .input('Estado', sql.VarChar(50), dadosPeca.estado)
-            .input('Origem', sql.VarChar(50), dadosPeca.origem || null)
-            .input('Localizacao', sql.VarChar(255), dadosPeca.localizacao || null)
-            .input('DispEmprestimo', sql.Bit, dadosPeca.disponivelEmprestimo ? 1 : 0)
-            .input('DispVenda', sql.Bit, dadosPeca.disponivelVenda ? 1 : 0)
+            .input('Desc', sql.VarChar(255), dadosPeca.descricao || '')
+            .input('Tam', sql.VarChar(50), dadosPeca.tamanho || '')
+            .input('Est', sql.VarChar(50), dadosPeca.estado || 'Novo')
             .input('IdUtilizador', sql.Int, dadosPeca.idUtilizador)
-            .input('IdCategoria', sql.Int, dadosPeca.idCategoria)
+            .input('DispEmp', sql.Bit, dadosPeca.isEmprestimo ? 1 : 0)
+            .input('DispVenda', sql.Bit, dadosPeca.isVenda ? 1 : 0)
+            .input('IdCat', sql.Int, dadosPeca.idCategoria)
             .query(`
-                INSERT INTO PECA (nome, descricao, tamanho, estado, origem, localizacao, disponivel_para_emprestimo, disponivel_para_venda, data_registo, UTILIZADORid_utilizador, CATEGORIA_PECAid_categoria_peca)
+                INSERT INTO PECA (nome, descricao, tamanho, estado, localizacao, disponivel_para_emprestimo, disponivel_para_venda, data_registo, UTILIZADORid_utilizador, CATEGORIA_PECAid_categoria_peca)
                 OUTPUT INSERTED.id_peca
-                VALUES (@Nome, @Descricao, @Tamanho, @Estado, @Origem, @Localizacao, @DispEmprestimo, @DispVenda, GETDATE(), @IdUtilizador, @IdCategoria);
+                VALUES (@Nome, @Desc, @Tam, @Est, NULL, @DispEmp, @DispVenda, GETDATE(), @IdUtilizador, @IdCat);
             `);
-        return result.recordset[0].id_peca;
-    } catch (error) { throw error; }
+
+        const idPeca = resultPeca.recordset[0].id_peca;
+
+        // 2. SÓ CRIA AS LINHAS DE EMPRÉSTIMO SE A PEÇA FOR PARA EMPRESTAR
+        if (dadosPeca.isEmprestimo) {
+            const resultEmp = await transaction.request()
+                .input('Valor', sql.Decimal(10, 2), dadosPeca.valor_dia)
+                .input('Metodos', sql.VarChar(255), `Métodos: ${dadosPeca.metodosStr}`)
+                .input('IdUtilizador', sql.Int, dadosPeca.idUtilizador)
+                .query(`
+                    INSERT INTO EMPRESTIMO (valor, observacoes, estado, data_pedido, UTILIZADORid_utilizador)
+                    OUTPUT INSERTED.id_emprestimo
+                    VALUES (@Valor, @Metodos, 'Disponível', GETDATE(), @IdUtilizador);
+                `);
+            
+            const idEmprestimo = resultEmp.recordset[0].id_emprestimo;
+
+            await transaction.request()
+                .input('IdPeca', sql.Int, idPeca)
+                .input('IdEmp', sql.Int, idEmprestimo)
+                .query(`INSERT INTO EMPRESTIMO_ITEM (PECAid_peca, [EMPRESIMO id_emprestimo]) VALUES (@IdPeca, @IdEmp)`);
+        }
+        // Se a intenção for apenas vender, ele ignora o bloco de código acima!
+
+        await transaction.commit();
+        return idPeca;
+    } catch (error) {
+        await transaction.rollback();
+        throw error;
+    }
 }
  
 async function atualizarEstadoPeca(idPeca, { estado, disponivelEmprestimo, disponivelVenda, localizacao }) {
@@ -104,13 +147,34 @@ async function eliminarPecaCompleta(idPeca) {
     const transaction = pool.transaction();
     try {
         await transaction.begin();
-        await transaction.request().input('IdPeca', sql.Int, idPeca).query('DELETE FROM FOTO_PECA WHERE PECAid_peca = @IdPeca');
-        await transaction.request().input('IdPeca', sql.Int, idPeca).query('DELETE FROM VENDA_PECA WHERE PECAid_peca = @IdPeca');
-        const result = await transaction.request().input('IdPeca', sql.Int, idPeca).query('DELETE FROM PECA WHERE id_peca = @IdPeca');
+        const request = transaction.request().input('IdPeca', sql.Int, idPeca);
+
+        // 1. Obter todos os IDs de empréstimos ligados a esta peça
+        const emprestimos = await request.query(`SELECT [EMPRESIMO id_emprestimo] as id FROM EMPRESTIMO_ITEM WHERE PECAid_peca = @IdPeca`);
+        const idsEmp = emprestimos.recordset.map(e => e.id);
+
+        if (idsEmp.length > 0) {
+            const idsStr = idsEmp.join(',');
+            // 2. Apagar Penalizações desses empréstimos
+            await transaction.request().query(`DELETE FROM PENALIZACAO_PECA WHERE EMPRESTIMOid_emprestimo IN (${idsStr})`);
+            // 3. Apagar os Itens do Empréstimo
+            await transaction.request().query(`DELETE FROM EMPRESTIMO_ITEM WHERE PECAid_peca = @IdPeca`);
+            // 4. Apagar os Empréstimos propriamente ditos
+            await transaction.request().query(`DELETE FROM EMPRESTIMO WHERE id_emprestimo IN (${idsStr})`);
+        }
+
+        // 5. Apagar Fotos e Vendas
+        await request.query('DELETE FROM FOTO_PECA WHERE PECAid_peca = @IdPeca');
+        await request.query('DELETE FROM VENDA_PECA WHERE PECAid_peca = @IdPeca');
+
+        // 6. Por fim, apagar a Peça
+        const result = await request.query('DELETE FROM PECA WHERE id_peca = @IdPeca');
+
         await transaction.commit();
         return result.rowsAffected[0] > 0;
     } catch (error) {
         await transaction.rollback();
+        console.error("Erro ao eliminar peça:", error);
         throw error;
     }
 }
@@ -175,40 +239,57 @@ async function atualizarFotosPeca(idPeca, fotosBase64) {
 // 2. CICLO DE EMPRÉSTIMOS
 // ============================================================================
  
-async function requisitarEmprestimo(dadosEmprestimo, itensEmprestimo) {
+async function requisitarEmprestimo(dados) {
     const pool = await poolPromise;
     const transaction = pool.transaction();
     await transaction.begin();
+    
     try {
-        for (const item of itensEmprestimo) {
-            const disponivel = await transaction.request()
-                .input('IdPeca', sql.Int, item.idPeca)
-                .query(`SELECT disponivel_para_emprestimo FROM PECA WHERE id_peca = @IdPeca AND disponivel_para_emprestimo = 1;`);
-            if (disponivel.recordset.length === 0) throw new Error(`A peça com id ${item.idPeca} não está disponível.`);
+        // 1. Procurar o ID do empréstimo associado a esta peça
+        const result = await transaction.request()
+            .input('IdPeca', sql.Int, dados.idPeca)
+            .query("SELECT TOP 1 [EMPRESIMO id_emprestimo] as id FROM EMPRESTIMO_ITEM WHERE PECAid_peca = @IdPeca");
+
+        if (result.recordset.length === 0) {
+            throw new Error('Configuração de empréstimo não encontrada para esta peça.');
         }
- 
-        const idEmprestimo = await transaction.request()
-            .input('DataInicio', sql.Date, dadosEmprestimo.dataInicio)
-            .input('DataFim', sql.Date, dadosEmprestimo.dataFim)
-            .input('Observacoes', sql.VarChar(255), dadosEmprestimo.observacoes || null)
-            .input('IdUtilizador', sql.Int, dadosEmprestimo.idUtilizador)
+
+        const idEmprestimo = result.recordset[0].id;
+
+        // 2. Atualizar o EMPRESTIMO com as datas, utilizador requisitante e o Método de Pagamento
+        // Mantém as opções de pagamento iniciais nas observações e adiciona as notas extra (se existirem)
+        let setObservacoes = dados.observacoes ? "observacoes = observacoes + ' | Notas: ' + @Obs" : "observacoes = observacoes";
+
+        await transaction.request()
+            .input('IdEmp', sql.Int, idEmprestimo)
+            .input('IdUser', sql.Int, dados.idUtilizador)
+            .input('Inicio', sql.Date, dados.dataInicio)
+            .input('Fim', sql.Date, dados.dataFim)
+            .input('Obs', sql.VarChar(255), dados.observacoes || '')
+            .input('Metodo', sql.VarChar(50), dados.metodoPagamento)
             .query(`
-                INSERT INTO EMPRESTIMO (data_pedido, data_inicio, data_fim, estado, observacoes, UTILIZADORid_utilizador)
-                OUTPUT INSERTED.id_emprestimo
-                VALUES (GETDATE(), @DataInicio, @DataFim, 'Pendente', @Observacoes, @IdUtilizador);
-            `).then(r => r.recordset[0].id_emprestimo);
- 
-        for (const item of itensEmprestimo) {
-            await transaction.request()
-                .input('EstadoEntrega', sql.VarChar(50), item.estadoEntrega)
-                .input('IdPeca', sql.Int, item.idPeca)
-                .input('IdEmprestimo', sql.Int, idEmprestimo)
-                .query(`INSERT INTO EMPRESTIMO_ITEM (estado_entrega, PECAid_peca, [EMPRESIMO id_emprestimo]) VALUES (@EstadoEntrega, @IdPeca, @IdEmprestimo);`);
- 
-            await transaction.request().input('IdPeca', sql.Int, item.idPeca).query(`UPDATE PECA SET disponivel_para_emprestimo = 0 WHERE id_peca = @IdPeca;`);
-        }
+                UPDATE EMPRESTIMO 
+                SET UTILIZADORid_utilizador = @IdUser, 
+                    data_inicio = @Inicio, 
+                    data_fim = @Fim, 
+                    estado = 'Pendente',
+                    metodo_pagamento = @Metodo,
+                    ${setObservacoes}
+                WHERE id_emprestimo = @IdEmp
+            `);
+
+        // 3. Atualizar o EMPRESTIMO_ITEM com o estado em que a peça foi entregue
+        await transaction.request()
+            .input('IdEmp', sql.Int, idEmprestimo)
+            .input('IdPeca', sql.Int, dados.idPeca)
+            .input('EstadoEntrega', sql.VarChar(50), dados.estadoEntrega)
+            .query(`
+                UPDATE EMPRESTIMO_ITEM 
+                SET estado_entrega = @EstadoEntrega 
+                WHERE [EMPRESIMO id_emprestimo] = @IdEmp AND PECAid_peca = @IdPeca
+            `);
+            
         await transaction.commit();
-        return idEmprestimo;
     } catch (error) {
         await transaction.rollback();
         throw error;
@@ -270,23 +351,22 @@ async function registarPenalizacao(dadosPenalizacao) {
     }
 }
  
-async function atualizarPagamentoEmprestimo(idEmprestimo, valor, metodoPagamento, estadoPagamento) {
-    try {
-        const pool = await poolPromise;
-        const result = await pool.request()
-            .input('Valor', sql.Decimal(10, 2), valor)
-            .input('MetodoPagamento', sql.VarChar(50), metodoPagamento)
-            .input('EstadoPagamento', sql.VarChar(50), estadoPagamento)
-            .input('IdEmprestimo', sql.Int, idEmprestimo)
-            .query(`
-                UPDATE EMPRESTIMO 
-                SET valor = @Valor, metodo_pagamento = @MetodoPagamento, estado_pagamento = @EstadoPagamento, data_pagamento = GETDATE()
-                WHERE id_emprestimo = @IdEmprestimo;
-            `);
-        return result.rowsAffected[0] > 0;
-    } catch (error) {
-        throw error;
-    }
+async function atualizarPagamentoEmprestimo(idEmprestimo, dados) {
+    const pool = await poolPromise;
+    // Quem colocou a peça gere o estado e data de pagamento aqui
+    return await pool.request()
+        .input('IdEmp', sql.Int, idEmprestimo)
+        .input('Estado', sql.VarChar(50), dados.estadoPagamento)
+        .input('Metodo', sql.VarChar(50), dados.metodoPagamento)
+        .input('Valor', sql.Decimal(10, 2), dados.valor)
+        .query(`
+            UPDATE EMPRESTIMO 
+            SET estado_pagamento = @Estado, 
+                data_pagamento = GETDATE(), 
+                metodo_pagamento = @Metodo,
+                valor = @Valor
+            WHERE id_emprestimo = @IdEmp
+        `);
 }
  
 // ============================================================================
@@ -329,10 +409,14 @@ async function colocarPecaAVenda(idPeca, preco, idVendedor, nomePeca = null, con
     try {
         const pecaResult = await transaction.request()
             .input('IdPeca', sql.Int, idPeca)
-            .query(`SELECT disponivel_para_venda, nome, estado FROM PECA WHERE id_peca = @IdPeca;`);
+            .query(`SELECT nome, estado FROM PECA WHERE id_peca = @IdPeca;`);
             
         if (pecaResult.recordset.length === 0) throw new Error('Peça não encontrada.');
-        if (!pecaResult.recordset[0].disponivel_para_venda) throw new Error('Esta peça não está disponível para venda.');
+        
+        // CORREÇÃO: Agora coloca Disponível para Venda a 1 E Disponível para Empréstimo a 0
+        await transaction.request()
+            .input('IdPeca', sql.Int, idPeca)
+            .query(`UPDATE PECA SET disponivel_para_venda = 1, disponivel_para_emprestimo = 0 WHERE id_peca = @IdPeca;`);
  
         const nomeFinal = nomePeca || pecaResult.recordset[0].nome;
         const condicaoFinal = condicaoPeca || pecaResult.recordset[0].estado;

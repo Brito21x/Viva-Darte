@@ -28,18 +28,38 @@ async function getPecaDetalhes(req, res, next) {
 // Body: { nome, descricao, tamanho, estado, origem, localizacao,
 //         disponivelEmprestimo, disponivelVenda, idCategoria }
 // ============================================================================
-// inventarioController.js
 async function registarPeca(req, res, next) {
     try {
-        const { nome, descricao, tamanho, estado, idCategoria, fotos } = req.body;
+        const { nome, descricao, tamanho, estado, idCategoria, fotos, valor_dia, metodos_pagamento, disponivelVenda } = req.body;
         const idUtilizador = req.utilizador.id || req.utilizador.id_utilizador;
+
+        // LÓGICA DE DETEÇÃO: 
+        // Se vier um "valor_dia", sabemos que a peça foi adicionada na página de Empréstimos.
+        const isEmprestimo = valor_dia !== undefined && valor_dia !== '';
+        // Se não vier "valor_dia", assumimos automaticamente que é para a página de Vendas.
+        const isVenda = disponivelVenda === true || disponivelVenda === 'true' || !isEmprestimo;
+
+        const metodosStr = (metodos_pagamento && Array.isArray(metodos_pagamento) && metodos_pagamento.length > 0)
+            ? metodos_pagamento.join(',')
+            : 'MBWay';
+
         const idPeca = await inventarioModel.registarNovaPeca({
-            nome, descricao, tamanho, estado, idUtilizador, 
-            idCategoria: parseInt(idCategoria), disponivelVenda: true 
+            nome,
+            descricao,
+            tamanho,
+            estado,
+            idUtilizador,
+            idCategoria: parseInt(idCategoria) || 1,
+            isEmprestimo,
+            isVenda,
+            valor_dia: parseFloat(valor_dia || 0),
+            metodosStr
         });
+
         if (fotos && Array.isArray(fotos) && fotos.length > 0) {
             try { await inventarioModel.registarFotosPeca(idPeca, fotos); } catch (e) { console.error("Aviso fotos:", e); }
         }
+
         return res.status(201).json({ mensagem: 'Guardado com sucesso!', idPeca });
     } catch (error) { next(error); }
 }
@@ -71,40 +91,27 @@ async function atualizarEstadoPeca(req, res, next) {
 async function requisitarEmprestimo(req, res, next) {
     try {
         const idUtilizador = req.utilizador.id || req.utilizador.id_utilizador;
-        const { dataInicio, dataFim, observacoes, itens } = req.body;
-
-        if (!dataInicio || !dataFim) {
-            return res.status(400).json({ mensagem: 'dataInicio e dataFim são obrigatórios.' });
+        
+        // Agora recebemos o metodoPagamento em separado
+        const { dataInicio, dataFim, observacoes, metodoPagamento, itens } = req.body;
+        
+        if (!itens || itens.length === 0) {
+            return res.status(400).json({ mensagem: 'É necessário indicar a peça.' });
         }
 
-        if (!Array.isArray(itens) || itens.length === 0) {
-            return res.status(400).json({ mensagem: 'É necessário indicar pelo menos uma peça.' });
-        }
+        const idPeca = parseInt(itens[0].idPeca);
+        const estadoEntrega = itens[0].estadoEntrega; // Lemos o estado da peça
 
-        if (new Date(dataFim) <= new Date(dataInicio)) {
-            return res.status(400).json({ mensagem: 'A data de fim deve ser posterior à data de início.' });
-        }
-
-        for (const item of itens) {
-            if (!item.idPeca || !item.estadoEntrega) {
-                return res.status(400).json({ mensagem: 'Cada item deve ter idPeca e estadoEntrega.' });
-            }
-        }
-
-        const idEmprestimo = await inventarioModel.requisitarEmprestimo(
-            { dataInicio, dataFim, observacoes: observacoes || null, idUtilizador },
-            itens.map(i => ({ idPeca: parseInt(i.idPeca), estadoEntrega: i.estadoEntrega }))
-        );
-
-        return res.status(201).json({
-            mensagem: 'Empréstimo requisitado com sucesso.',
-            idEmprestimo
+        await inventarioModel.requisitarEmprestimo({
+            idPeca, dataInicio, dataFim, observacoes, metodoPagamento, estadoEntrega, idUtilizador
         });
-    } catch (error) {
-        if (error.message.includes('não está disponível')) {
-            return res.status(409).json({ mensagem: error.message });
+
+        return res.status(200).json({ mensagem: 'Solicitação enviada com sucesso!' });
+    } catch (error) { 
+        if (error.message.includes('não encontrada')) {
+            return res.status(404).json({ mensagem: error.message });
         }
-        next(error);
+        next(error); 
     }
 }
 

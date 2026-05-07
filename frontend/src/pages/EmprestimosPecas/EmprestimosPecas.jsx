@@ -365,10 +365,12 @@ export default function EmprestimosPecas({ irParaLanding, irParaVendaFigurinos }
 
   const handleSubmeterAcaoEmprestimo = async (e) => {
     e.preventDefault();
-    if (!acaoForm.idEmprestimo) return mostrarAlerta('Indica o ID do Empréstimo.');
+    
+    // O sistema agora vai buscar o ID do empréstimo automaticamente!
+    const idEmp = acaoPeca?.active_id_emprestimo;
+    if (!idEmp) return mostrarAlerta('Erro: Não foi possível identificar o empréstimo ativo. Atualiza a página.');
     
     setIsSubmitting(true);
-    const idEmp = parseInt(acaoForm.idEmprestimo);
 
     try {
       if (acaoForm.tipoAcao === 'Pagamento') {
@@ -381,7 +383,7 @@ export default function EmprestimosPecas({ irParaLanding, irParaVendaFigurinos }
             estadoPagamento: acaoForm.estadoPagamento
           })
         });
-        if (res.ok) mostrarAlerta('Pagamento registado com sucesso na base de dados!');
+        if (res.ok) mostrarAlerta('Pagamento registado com sucesso!');
         else { const err = await res.json(); mostrarAlerta(err.mensagem || 'Erro ao registar pagamento.'); }
       } 
       else if (acaoForm.tipoAcao === 'Devolucao') {
@@ -395,7 +397,7 @@ export default function EmprestimosPecas({ irParaLanding, irParaVendaFigurinos }
           })
         });
         if (res.ok) {
-          mostrarAlerta('Devolução efetuada e EMPRESTIMO_ITEM atualizado com sucesso!');
+          mostrarAlerta('Devolução concluída com sucesso!');
           setIsAcoesModalOpen(false);
           carregarPecas(false);
         }
@@ -412,7 +414,7 @@ export default function EmprestimosPecas({ irParaLanding, irParaVendaFigurinos }
             descricao: acaoForm.descricaoPenalizacao || null
           })
         });
-        if (res.ok) mostrarAlerta('Tabela PENALIZACAO_PECA populada com sucesso!');
+        if (res.ok) mostrarAlerta('Multa/Penalização aplicada com sucesso!');
         else { const err = await res.json(); mostrarAlerta(err.mensagem || 'Erro ao registar penalização.'); }
       }
     } catch { mostrarAlerta("Erro de rede."); }
@@ -893,39 +895,29 @@ export default function EmprestimosPecas({ irParaLanding, irParaVendaFigurinos }
       {isAcoesModalOpen && acaoPeca && (
         <div className="modal-overlay">
           <div className="modal-content form-venda">
-            <h2>Gerir Empréstimo / BD</h2>
-            <p className="resumo-compra" style={{fontSize: '0.85rem', marginBottom: '15px'}}>
-              Através desta aba podes preencher manualmente informações nas tabelas <strong>EMPRESTIMO</strong>, <strong>EMPRESTIMO_ITEM</strong> e <strong>PENALIZACAO_PECA</strong>. Insere o ID do Empréstimo ativo para esta peça.
+            <h2>Gerir Empréstimo</h2>
+            <p className="resumo-compra" style={{fontSize: '0.9rem', marginBottom: '20px'}}>
+              Estás a gerir o empréstimo ativo da peça: <strong>{acaoPeca.nome_peca || acaoPeca.nome}</strong>. Seleciona a ação que pretendes realizar.
             </p>
 
             <form onSubmit={handleSubmeterAcaoEmprestimo}>
-              <div className="form-row">
-                <div className="form-group">
-                  <label>ID do Empréstimo (Ver BD)</label>
-                  <input
-                    type="number" required placeholder="Ex: 12"
-                    value={acaoForm.idEmprestimo}
-                    onChange={(e) => setAcaoForm({ ...acaoForm, idEmprestimo: e.target.value })}
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Ação a Realizar</label>
-                  <select
-                    value={acaoForm.tipoAcao}
-                    onChange={(e) => setAcaoForm({ ...acaoForm, tipoAcao: e.target.value })}
-                  >
-                    <option value="Pagamento">1. Registar Pagamento (EMPRESTIMO)</option>
-                    <option value="Devolucao">2. Registar Devolução (EMPRESTIMO_ITEM)</option>
-                    <option value="Penalizacao">3. Registar Penalização (PENALIZACAO_PECA)</option>
-                  </select>
-                </div>
+              <div className="form-group">
+                <label>Ação a Realizar</label>
+                <select
+                  value={acaoForm.tipoAcao}
+                  onChange={(e) => setAcaoForm({ ...acaoForm, tipoAcao: e.target.value })}
+                >
+                  <option value="Pagamento">Registar Pagamento Recebido</option>
+                  <option value="Devolucao">Registar Devolução da Peça</option>
+                  <option value="Penalizacao">Aplicar Penalização (Multa)</option>
+                </select>
               </div>
 
               {acaoForm.tipoAcao === 'Pagamento' && (
                 <div className="form-row">
                   <div className="form-group">
                     <label>Valor Pago (€)</label>
-                    <input type="number" step="0.01" min="0" required value={acaoForm.valorPagamento} onChange={(e) => setAcaoForm({...acaoForm, valorPagamento: e.target.value})} />
+                    <input type="number" step="0.01" min="0" required placeholder="Ex: 15.00" value={acaoForm.valorPagamento} onChange={(e) => setAcaoForm({...acaoForm, valorPagamento: e.target.value})} />
                   </div>
                   <div className="form-group">
                     <label>Método de Pagamento</label>
@@ -949,25 +941,25 @@ export default function EmprestimosPecas({ irParaLanding, irParaVendaFigurinos }
                 <>
                   <div className="form-row">
                     <div className="form-group">
-                      <label>Estado Final do Empréstimo</label>
+                      <label>Estado do Empréstimo</label>
                       <select value={acaoForm.estadoFinalDevolucao} onChange={(e) => setAcaoForm({...acaoForm, estadoFinalDevolucao: e.target.value})}>
-                        <option value="Concluído">Concluído</option>
+                        <option value="Concluído">Concluído com sucesso</option>
                         <option value="Cancelado">Cancelado</option>
                       </select>
                     </div>
                     <div className="form-group">
                       <label>Condição em que foi devolvida</label>
                       <select value={acaoForm.estadoPecaDevolucao} onChange={(e) => setAcaoForm({...acaoForm, estadoPecaDevolucao: e.target.value})}>
-                        <option value="Bom">Bom</option>
-                        <option value="Usado">Usado</option>
+                        <option value="Bom">Bom estado</option>
+                        <option value="Usado">Marcas de Uso</option>
                         <option value="Danificado">Danificado</option>
                         <option value="Perdido">Perdido</option>
                       </select>
                     </div>
                   </div>
                   <div className="form-group">
-                    <label>Observações</label>
-                    <textarea rows="2" value={acaoForm.observacoesDevolucao} onChange={(e) => setAcaoForm({...acaoForm, observacoesDevolucao: e.target.value})} />
+                    <label>Observações sobre a devolução</label>
+                    <textarea rows="2" placeholder="Ex: Devolvido a tempo e horas..." value={acaoForm.observacoesDevolucao} onChange={(e) => setAcaoForm({...acaoForm, observacoesDevolucao: e.target.value})} />
                   </div>
                 </>
               )}
@@ -976,28 +968,28 @@ export default function EmprestimosPecas({ irParaLanding, irParaVendaFigurinos }
                 <>
                   <div className="form-row">
                     <div className="form-group">
-                      <label>Tipo de Penalização</label>
+                      <label>Motivo da Penalização</label>
                       <select value={acaoForm.tipoPenalizacao} onChange={(e) => setAcaoForm({...acaoForm, tipoPenalizacao: e.target.value})}>
-                        <option value="Atraso">Atraso</option>
-                        <option value="Dano">Dano</option>
-                        <option value="Perda">Perda</option>
+                        <option value="Atraso">Atraso na entrega</option>
+                        <option value="Dano">Danos à peça</option>
+                        <option value="Perda">Perda da peça</option>
                       </select>
                     </div>
                     <div className="form-group">
                       <label>Valor da Multa (€)</label>
-                      <input type="number" step="0.01" min="0.01" required value={acaoForm.valorPenalizacao} onChange={(e) => setAcaoForm({...acaoForm, valorPenalizacao: e.target.value})} />
+                      <input type="number" step="0.01" min="0.01" required placeholder="Ex: 5.00" value={acaoForm.valorPenalizacao} onChange={(e) => setAcaoForm({...acaoForm, valorPenalizacao: e.target.value})} />
                     </div>
                   </div>
                   <div className="form-group">
                     <label>Descrição da Penalização</label>
-                    <textarea rows="2" required value={acaoForm.descricaoPenalizacao} onChange={(e) => setAcaoForm({...acaoForm, descricaoPenalizacao: e.target.value})} />
+                    <textarea rows="2" required placeholder="Ex: A peça foi entregue com 3 dias de atraso..." value={acaoForm.descricaoPenalizacao} onChange={(e) => setAcaoForm({...acaoForm, descricaoPenalizacao: e.target.value})} />
                   </div>
                 </>
               )}
 
               <div className="modal-actions">
                 <button type="button" className="btn-text" onClick={() => setIsAcoesModalOpen(false)}>Cancelar</button>
-                <button type="submit" className="btn-dark" disabled={isSubmitting}>{isSubmitting ? 'A Processar...' : 'Atualizar Base de Dados'}</button>
+                <button type="submit" className="btn-dark" disabled={isSubmitting}>{isSubmitting ? 'A Processar...' : 'Confirmar Ação'}</button>
               </div>
             </form>
           </div>

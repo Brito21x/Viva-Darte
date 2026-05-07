@@ -13,10 +13,11 @@ async function getCatalogoPecas() {
                    p.origem, p.localizacao, p.disponivel_para_emprestimo, p.disponivel_para_venda,
                    p.data_registo, cp.nome AS categoria, u.nome AS registado_por, f.foto AS foto_principal,
                    p.UTILIZADORid_utilizador,
+                   -- ADICIONADO: O sistema agora extrai o ID do empréstimo ativo
+                   active_emp.id_emprestimo AS active_id_emprestimo,
                    active_emp.data_inicio AS emprestimo_inicio,
                    active_emp.data_fim AS emprestimo_fim,
                    base_emp.valor AS valor_dia,
-                   -- CORREÇÃO: Extrair os métodos do campo observacoes
                    REPLACE(base_emp.observacoes, 'Métodos: ', '') AS metodos_pagamento
             FROM PECA p
             JOIN CATEGORIA_PECA cp ON p.CATEGORIA_PECAid_categoria_peca = cp.id_categoria_peca
@@ -26,7 +27,6 @@ async function getCatalogoPecas() {
                 FROM FOTO_PECA GROUP BY PECAid_peca
             ) f ON p.id_peca = f.PECAid_peca
             OUTER APPLY (
-                -- Procura a configuração inicial do empréstimo (onde guardamos o preço base e os métodos nas observações)
                 SELECT TOP 1 e.valor, e.observacoes
                 FROM EMPRESTIMO_ITEM ei
                 JOIN EMPRESTIMO e ON ei.[EMPRESIMO id_emprestimo] = e.id_emprestimo
@@ -34,8 +34,8 @@ async function getCatalogoPecas() {
                 ORDER BY e.id_emprestimo ASC
             ) base_emp
             OUTER APPLY (
-                -- Procura o empréstimo mais recente desta peça que ainda não foi devolvido
-                SELECT TOP 1 e.data_inicio, e.data_fim
+                -- ADICIONADO: Seleciona o ID do empréstimo para uso no Front-end
+                SELECT TOP 1 e.id_emprestimo, e.data_inicio, e.data_fim
                 FROM EMPRESTIMO_ITEM ei
                 JOIN EMPRESTIMO e ON ei.[EMPRESIMO id_emprestimo] = e.id_emprestimo
                 WHERE ei.PECAid_peca = p.id_peca 
@@ -147,28 +147,42 @@ async function eliminarPecaCompleta(idPeca) {
     const transaction = pool.transaction();
     try {
         await transaction.begin();
-        const request = transaction.request().input('IdPeca', sql.Int, idPeca);
 
         // 1. Obter todos os IDs de empréstimos ligados a esta peça
-        const emprestimos = await request.query(`SELECT [EMPRESIMO id_emprestimo] as id FROM EMPRESTIMO_ITEM WHERE PECAid_peca = @IdPeca`);
+        const emprestimos = await transaction.request()
+            .input('IdPeca', sql.Int, idPeca)
+            .query(`SELECT [EMPRESIMO id_emprestimo] as id FROM EMPRESTIMO_ITEM WHERE PECAid_peca = @IdPeca`);
+            
         const idsEmp = emprestimos.recordset.map(e => e.id);
 
         if (idsEmp.length > 0) {
             const idsStr = idsEmp.join(',');
+            
             // 2. Apagar Penalizações desses empréstimos
             await transaction.request().query(`DELETE FROM PENALIZACAO_PECA WHERE EMPRESTIMOid_emprestimo IN (${idsStr})`);
-            // 3. Apagar os Itens do Empréstimo
-            await transaction.request().query(`DELETE FROM EMPRESTIMO_ITEM WHERE PECAid_peca = @IdPeca`);
+            
+            // 3. Apagar os Itens do Empréstimo (CORRIGIDO: A variável @IdPeca agora é declarada aqui)
+            await transaction.request()
+                .input('IdPeca', sql.Int, idPeca)
+                .query(`DELETE FROM EMPRESTIMO_ITEM WHERE PECAid_peca = @IdPeca`);
+                
             // 4. Apagar os Empréstimos propriamente ditos
             await transaction.request().query(`DELETE FROM EMPRESTIMO WHERE id_emprestimo IN (${idsStr})`);
         }
 
-        // 5. Apagar Fotos e Vendas
-        await request.query('DELETE FROM FOTO_PECA WHERE PECAid_peca = @IdPeca');
-        await request.query('DELETE FROM VENDA_PECA WHERE PECAid_peca = @IdPeca');
+        // 5. Apagar Fotos e Vendas (CORRIGIDO: A variável @IdPeca é declarada em cada query)
+        await transaction.request()
+            .input('IdPeca', sql.Int, idPeca)
+            .query('DELETE FROM FOTO_PECA WHERE PECAid_peca = @IdPeca');
+            
+        await transaction.request()
+            .input('IdPeca', sql.Int, idPeca)
+            .query('DELETE FROM VENDA_PECA WHERE PECAid_peca = @IdPeca');
 
         // 6. Por fim, apagar a Peça
-        const result = await request.query('DELETE FROM PECA WHERE id_peca = @IdPeca');
+        const result = await transaction.request()
+            .input('IdPeca', sql.Int, idPeca)
+            .query('DELETE FROM PECA WHERE id_peca = @IdPeca');
 
         await transaction.commit();
         return result.rowsAffected[0] > 0;

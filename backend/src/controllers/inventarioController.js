@@ -1,7 +1,7 @@
 /**
  * Controlador de Inventário (Peças, Empréstimos e Vendas)
  * Este ficheiro gere o catálogo de peças, requisições de empréstimo, devoluções,
- * penalizações e o mercado de vendas em 2ª mão.
+ * penalizações e o mercado de vendas.
  */
 
 const inventarioModel = require('../models/inventarioModel');

@@ -4,8 +4,8 @@
  * peças, fotografias, empréstimos, multas e transações do mercado de segunda mão.
  */
 
-const { poolPromise } = require('../config/db'); // Pool de ligações SQL Server
-const sql = require('mssql'); // Driver nativo para executar queries SQL
+const { poolPromise } = require('../config/db');
+const sql = require('mssql');
  
 // ============================================================================
 // 1. CATÁLOGO E GESTÃO DE PEÇAS

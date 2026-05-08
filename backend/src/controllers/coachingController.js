@@ -1,5 +1,5 @@
 const coachingModel = require('../models/coachingModel');
-const faturacaoModel = require('../models/faturacaoModel');
+const precoCoachingModel = require('../models/precoCoachingModel');
 const { utilizadorTemPerfil } = require('../middlewares/auth');
 
 /** Data fixa só para parsear horas (`time`) como instante; a duração depende só da diferença entre horas. */
@@ -214,7 +214,7 @@ async function getPrecoEstimado(req, res, next) {
 
         const diaSemanaPreco = diaSemanaPrecoFromDateValue(dataAula);
 
-        const custoEstimado = await faturacaoModel.calcularCustoAutomatico(
+        const custoEstimado = await precoCoachingModel.calcularCustoAutomatico(
             formato,
             dur,
             diaSemanaPreco,
@@ -497,7 +497,7 @@ async function criarPedidoCoaching(req, res, next) {
         // Calcular custo estimado automaticamente (US16 / RF18)
         const diaSemanaPreco = diaSemanaPrecoFromDateValue(dataAula);
 
-        const custoEstimado = await faturacaoModel.calcularCustoAutomatico(
+        const custoEstimado = await precoCoachingModel.calcularCustoAutomatico(
             formatoAula,
             Number(duracaoMinutos),
             diaSemanaPreco,

@@ -9,7 +9,6 @@ const utilizadorRoutes = require('./src/routes/utilizadorRoutes');
 const escolaRoutes = require('./src/routes/escolaRoutes');
 const coachingRoutes = require('./src/routes/coachingRoutes');
 const inventarioRoutes = require('./src/routes/inventarioRoutes');
-const faturacaoRoutes = require('./src/routes/faturacaoRoutes');
 
 const app = express();
 
@@ -52,7 +51,6 @@ app.use('/api/utilizadores', utilizadorRoutes);
 app.use('/api/escola', escolaRoutes);
 app.use('/api/coaching', coachingRoutes);
 app.use('/api/inventario', inventarioRoutes);
-app.use('/api/faturacao', faturacaoRoutes);
 
 app.use(errorHandler);
 

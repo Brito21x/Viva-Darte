@@ -20,6 +20,112 @@ function traduzErroCoaching(err, fallback) {
   return msg;
 }
 
+function formatHoraCurta(valor) {
+  const s = String(valor || '').trim();
+  if (!s) return '';
+  const m = s.match(/(\d{2}):(\d{2})(?::\d{2})?/);
+  if (m) return `${m[1]}:${m[2]}`;
+  return '';
+}
+
+function addDays(date, days) {
+  const d = new Date(date);
+  d.setDate(d.getDate() + days);
+  return d;
+}
+
+function getMonday(date) {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = (day === 0 ? -6 : 1) - day;
+  d.setDate(d.getDate() + diff);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function formatYMD(date) {
+  const d = new Date(date);
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function diaSemanaAbrev(dataAula) {
+  const d = new Date(dataAula);
+  if (Number.isNaN(d.getTime())) return null;
+  const js = d.getDay();
+  const map = { 1: 'Seg', 2: 'Ter', 3: 'Qua', 4: 'Qui', 5: 'Sex', 6: 'Sáb', 0: 'Dom' };
+  return map[js] || null;
+}
+
+function horaParaSlot(horaInicio) {
+  const hhmm = formatHoraCurta(horaInicio);
+  if (!hhmm) return null;
+  const hh = hhmm.slice(0, 2);
+  return `${hh}:00`;
+}
+
+function parseTimeToMinutes(hhmmss) {
+  const hhmm = formatHoraCurta(hhmmss);
+  if (!hhmm) return null;
+  const hh = parseInt(hhmm.slice(0, 2), 10);
+  const mm = parseInt(hhmm.slice(3, 5), 10);
+  if (Number.isNaN(hh) || Number.isNaN(mm)) return null;
+  return hh * 60 + mm;
+}
+
+function minutesToHHMM(mins) {
+  const h = String(Math.floor(mins / 60)).padStart(2, '0');
+  const m = String(mins % 60).padStart(2, '0');
+  return `${h}:${m}`;
+}
+
+function formatIntervalo(horaInicio, duracaoMinutos) {
+  const start = parseTimeToMinutes(horaInicio);
+  const dur = Number(duracaoMinutos || 0);
+  if (start == null || !Number.isFinite(dur)) return String(horaInicio || '');
+  return `${minutesToHHMM(start)} - ${minutesToHHMM(start + dur)}`;
+}
+
+function coachingJaTerminou(dataAula, horaInicio, duracaoMinutos) {
+  const d = new Date(dataAula);
+  if (Number.isNaN(d.getTime())) return false;
+  const mins = parseTimeToMinutes(horaInicio);
+  if (mins == null) return false;
+  d.setHours(0, 0, 0, 0);
+  const fim = new Date(d.getTime() + (mins + Number(duracaoMinutos || 0)) * 60000);
+  return fim.getTime() <= Date.now();
+}
+
+function modalidadeParaClasse(modalidade) {
+  const s = String(modalidade || '').toLowerCase();
+  if (s.includes('ballet')) return 'ballet';
+  if (s.includes('jazz')) return 'jazz';
+  if (s.includes('acrobat')) return 'acrobatica';
+  if (s.includes('acrodance')) return 'acrodance';
+  return 'ballet';
+}
+
+function formatDM(date) {
+  const d = new Date(date);
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  return `${dd}/${mm}`;
+}
+
+function nomeDiaSemana(diaSemana) {
+  if (Number(diaSemana) === 1) return 'Seg-Sex';
+  if (Number(diaSemana) === 2) return 'Sáb-Dom';
+  return `Dia ${diaSemana}`;
+}
+
+function normalizeTime(hhmm) {
+  const hora = formatHoraCurta(hhmm);
+  if (!hora) return String(hhmm || '').trim();
+  return `${hora}:00`;
+}
+
 export default function MinhaAgendaProfessor({ irParaLanding }) {
   const [agenda, setAgenda] = useState([]);
   const [utilizador, setUtilizador] = useState(null);
@@ -84,8 +190,16 @@ export default function MinhaAgendaProfessor({ irParaLanding }) {
 
   useEffect(() => {
     const userRaw = localStorage.getItem('viva_user');
-    const userGuardado = userRaw ? JSON.parse(userRaw) : null;
-    setUtilizador(userGuardado);
+    if (!userRaw) {
+      setUtilizador(null);
+      return;
+    }
+    try {
+      setUtilizador(JSON.parse(userRaw));
+    } catch {
+      localStorage.removeItem('viva_user');
+      setUtilizador(null);
+    }
   }, []);
 
   useEffect(() => {
@@ -753,113 +867,4 @@ export default function MinhaAgendaProfessor({ irParaLanding }) {
       </footer>
     </div>
   );
-}
-
-function addDays(date, days) {
-  const d = new Date(date);
-  d.setDate(d.getDate() + days);
-  return d;
-}
-
-function getMonday(date) {
-  const d = new Date(date);
-  const day = d.getDay(); // 0..6 (Sun..Sat)
-  const diff = (day === 0 ? -6 : 1) - day; // monday
-  d.setDate(d.getDate() + diff);
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
-
-function formatYMD(date) {
-  const d = new Date(date);
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const dd = String(d.getDate()).padStart(2, '0');
-  return `${yyyy}-${mm}-${dd}`;
-}
-
-function diaSemanaAbrev(dataAula) {
-  const d = new Date(dataAula);
-  if (Number.isNaN(d.getTime())) return null;
-  // 1..6 Monday..Saturday
-  const js = d.getDay();
-  const map = { 1: 'Seg', 2: 'Ter', 3: 'Qua', 4: 'Qui', 5: 'Sex', 6: 'Sáb', 0: 'Dom' };
-  return map[js] || null;
-}
-
-function horaParaSlot(horaInicio) {
-  const hhmm = formatHoraCurta(horaInicio);
-  if (!hhmm) return null;
-  const hh = hhmm.slice(0, 2);
-  return `${hh}:00`;
-}
-
-function parseTimeToMinutes(hhmmss) {
-  const hhmm = formatHoraCurta(hhmmss);
-  if (!hhmm) return null;
-  const hh = parseInt(hhmm.slice(0, 2), 10);
-  const mm = parseInt(hhmm.slice(3, 5), 10);
-  if (Number.isNaN(hh) || Number.isNaN(mm)) return null;
-  return hh * 60 + mm;
-}
-
-function minutesToHHMM(mins) {
-  const h = String(Math.floor(mins / 60)).padStart(2, '0');
-  const m = String(mins % 60).padStart(2, '0');
-  return `${h}:${m}`;
-}
-
-function formatIntervalo(horaInicio, duracaoMinutos) {
-  const start = parseTimeToMinutes(horaInicio);
-  const dur = Number(duracaoMinutos || 0);
-  if (start == null || !Number.isFinite(dur)) return String(horaInicio || '');
-  return `${minutesToHHMM(start)} - ${minutesToHHMM(start + dur)}`;
-}
-
-function coachingJaTerminou(dataAula, horaInicio, duracaoMinutos) {
-  const d = new Date(dataAula);
-  if (Number.isNaN(d.getTime())) return false;
-  const mins = parseTimeToMinutes(horaInicio);
-  if (mins == null) return false;
-  d.setHours(0, 0, 0, 0);
-  const fim = new Date(d.getTime() + (mins + Number(duracaoMinutos || 0)) * 60000);
-  return fim.getTime() <= Date.now();
-}
-
-function modalidadeParaClasse(modalidade) {
-  const s = String(modalidade || '').toLowerCase();
-  if (s.includes('ballet')) return 'ballet';
-  if (s.includes('jazz')) return 'jazz';
-  if (s.includes('acrobat')) return 'acrobatica';
-  if (s.includes('acrodance')) return 'acrodance';
-  return 'ballet';
-}
-
-function formatDM(date) {
-  const d = new Date(date);
-  const dd = String(d.getDate()).padStart(2, '0');
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  return `${dd}/${mm}`;
-}
-
-function nomeDiaSemana(diaSemana) {
-  // Nota: no backend atual, dia_semana é 1 (dias úteis) ou 2 (fim-de-semana).
-  if (Number(diaSemana) === 1) return 'Seg-Sex';
-  if (Number(diaSemana) === 2) return 'Sáb-Dom';
-  return `Dia ${diaSemana}`;
-}
-
-function normalizeTime(hhmm) {
-  const hora = formatHoraCurta(hhmm);
-  if (!hora) return String(hhmm || '').trim();
-  return `${hora}:00`;
-}
-
-function formatHoraCurta(valor) {
-  const s = String(valor || '').trim();
-  if (!s) return '';
-  // Caso típico: "14:00", "14:00:00" ou "1970-01-01T14:00:00.000Z"
-  const m = s.match(/(\d{2}):(\d{2})(?::\d{2})?/);
-  if (m) return `${m[1]}:${m[2]}`;
-  return '';
 }

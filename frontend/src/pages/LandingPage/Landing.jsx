@@ -8,7 +8,8 @@ export default function Landing({
   irParaRegisto,
   irParaVendaFigurinos,
   irParaEmprestimos,
-  irParaMinhaAgendaProfessor
+  irParaMinhaAgendaProfessor,
+  irParaMinhaAgendaEE
 }) {
   const [utilizador, setUtilizador] = useState(null);
   const [modoPortal, setModoPortal] = useState(false);
@@ -135,17 +136,31 @@ export default function Landing({
                   </li>
                 </>
               ) : (
-                <li className="student-menu-group" onClick={(e) => {
-                  e.preventDefault();
-                  setModoPortal(true);
-                  window.scrollTo({ top: 0, behavior: 'smooth' });
-                }}>
-                  <div className="student-menu-bg" style={{ cursor: 'pointer', padding: '8px 20px' }}>
-                    <a href="#portal" className="student-link" onClick={(e) => e.preventDefault()}>
-                      Portal do EE
+                <>
+                  <li>
+                    <a
+                      href="#minha-agenda-ee"
+                      className="special-link"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        irParaMinhaAgendaEE?.();
+                      }}
+                    >
+                      Minha Agenda
                     </a>
-                  </div>
-                </li>
+                  </li>
+                  <li className="student-menu-group" onClick={(e) => {
+                    e.preventDefault();
+                    setModoPortal(true);
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}>
+                    <div className="student-menu-bg" style={{ cursor: 'pointer', padding: '8px 20px' }}>
+                      <a href="#portal" className="student-link" onClick={(e) => e.preventDefault()}>
+                        Portal do EE
+                      </a>
+                    </div>
+                  </li>
+                </>
               )}
             </>
           ) : (
@@ -160,7 +175,7 @@ export default function Landing({
                 </>
               ) : (
                 <>
-                  {/* Atualizado com a navegação para empréstimos */}
+                  <li><a href="#minha-agenda-ee" className="special-link" onClick={(e) => { e.preventDefault(); irParaMinhaAgendaEE?.(); }}>Minha Agenda</a></li>
                   <li><a href="#emprestimos" className="special-link" onClick={(e) => { e.preventDefault(); irParaEmprestimos(); }}>Empréstimos de peças</a></li>
                   <li><a href="#figurinos" className="special-link" onClick={(e) => { e.preventDefault(); irParaVendaFigurinos(); }}>Venda de figurinos</a></li>
                 </>

@@ -162,7 +162,7 @@ async function adicionarDisponibilidade(req, res, next) {
 
 // ============================================================================
 // GET /api/coaching/preco-estimado?dataAula=&horaInicio=&formatoAula=&duracaoMinutos=
-// (Professor) — devolve preço estimado baseado na tabela de preços
+// (EE) — devolve preço estimado baseado na tabela de preços
 // ============================================================================
 async function getPrecoEstimado(req, res, next) {
     try {
@@ -192,24 +192,28 @@ async function getPrecoEstimado(req, res, next) {
         const hIni = normalizarHoraSqlTime(horaInicio);
         if (!hIni) return res.status(400).json({ mensagem: 'horaInicio inválida.' });
 
+        const perfis = req.utilizador?.perfis || [];
+        const isProfessor = utilizadorTemPerfil(perfis, 'Professor');
         const idProf = req.utilizador?.id;
         const dataParts = parseDateParts(dataAula);
         if (!dataParts) return res.status(400).json({ mensagem: 'dataAula inválida.' });
 
-        const diaSemanaCoaching = diaSemanaCoachingFromDateValue(dataAula);
-        const conflito = await coachingModel.verificarSlotLivreProfessor({
-            idProfessor: idProf,
-            dataAula: dataParts,
-            horaInicio: hIni,
-            duracaoMinutos: dur,
-            diaSemanaCoaching
-        });
-
-        if (!conflito?.livre) {
-            return res.status(409).json({
-                mensagem: mensagemDisponibilidade(conflito?.motivo),
-                motivo: conflito?.motivo || null
+        if (isProfessor) {
+            const diaSemanaCoaching = diaSemanaCoachingFromDateValue(dataAula);
+            const conflito = await coachingModel.verificarSlotLivreProfessor({
+                idProfessor: idProf,
+                dataAula: dataParts,
+                horaInicio: hIni,
+                duracaoMinutos: dur,
+                diaSemanaCoaching
             });
+
+            if (!conflito?.livre) {
+                return res.status(409).json({
+                    mensagem: mensagemDisponibilidade(conflito?.motivo),
+                    motivo: conflito?.motivo || null
+                });
+            }
         }
 
         const diaSemanaPreco = diaSemanaPrecoFromDateValue(dataAula);
@@ -429,7 +433,6 @@ async function criarPedidoCoaching(req, res, next) {
         const idEncarregado = req.utilizador.id;
         const perfis = req.utilizador.perfis || [];
         const isEE = utilizadorTemPerfil(perfis, 'EE');
-        const isProfessor = utilizadorTemPerfil(perfis, 'Professor');
         const {
             idModalidade,
             idProfessor,
@@ -438,8 +441,7 @@ async function criarPedidoCoaching(req, res, next) {
             dataAula,
             horaInicio,
             idAnoLetivo,
-            alunosIds,
-            numeroParticipantes
+            alunosIds
         } = req.body;
 
         // Validações de campos obrigatórios
@@ -449,19 +451,12 @@ async function criarPedidoCoaching(req, res, next) {
             });
         }
 
-        if (!isEE && !isProfessor) {
-            return res.status(403).json({ mensagem: 'Perfil sem permissão para criar pedidos de coaching.' });
+        if (!isEE) {
+            return res.status(403).json({ mensagem: 'Apenas o encarregado de educação pode pedir aulas de coaching.' });
         }
 
-        if (isEE && (!Array.isArray(alunosIds) || alunosIds.length === 0)) {
+        if (!Array.isArray(alunosIds) || alunosIds.length === 0) {
             return res.status(400).json({ mensagem: 'É necessário indicar pelo menos um aluno participante.' });
-        }
-
-        if (isProfessor) {
-            const num = Number(numeroParticipantes || 1);
-            if (!Number.isFinite(num) || num < 1) {
-                return res.status(400).json({ mensagem: 'numeroParticipantes inválido.' });
-            }
         }
 
         const formatosValidos = ['Solo', 'Dueto', 'Trio', 'Ensemble'];
@@ -525,8 +520,8 @@ async function criarPedidoCoaching(req, res, next) {
             },
             Array.isArray(alunosIds) ? alunosIds.map(Number) : [],
             {
-                skipAlunoValidation: isProfessor,
-                numeroParticipantesOverride: isProfessor ? Number(numeroParticipantes || 1) : null
+                skipAlunoValidation: false,
+                numeroParticipantesOverride: null
             }
         );
 

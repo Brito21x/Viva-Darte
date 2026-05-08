@@ -1,5 +1,73 @@
 const { poolPromise } = require('../config/db');
 const sql = require('mssql');
+
+function normalizarIdsModalidades(idsModalidades) {
+    if (!Array.isArray(idsModalidades)) return null;
+    return [
+        ...new Set(
+            idsModalidades
+                .map((id) => Number(id))
+                .filter((id) => Number.isInteger(id) && id > 0)
+        )
+    ];
+}
+
+async function resolverIdPerfil(transaction, nomePerfil) {
+    let query;
+    if (nomePerfil === 'Professor') {
+        query = "SELECT TOP 1 id_perfil FROM PERFIL WHERE nome LIKE '%Prof%'";
+    } else if (nomePerfil === 'Admin') {
+        query = "SELECT TOP 1 id_perfil FROM PERFIL WHERE nome LIKE '%Admin%' OR nome LIKE '%Coord%'";
+    } else {
+        query = "SELECT TOP 1 id_perfil FROM PERFIL WHERE nome LIKE '%Encarregado%' OR nome LIKE '%Educação%' OR nome LIKE '%Educacao%' OR nome = 'EE'";
+    }
+
+    const result = await transaction.request().query(query);
+    const idPerfil = result.recordset[0]?.id_perfil;
+    if (!idPerfil) {
+        const perfisDisponiveis = await transaction.request().query('SELECT nome FROM PERFIL');
+        const lista = perfisDisponiveis.recordset.map(p => p.nome).join(' | ');
+        throw new Error(`PERFIL_NAO_ENCONTRADO:${lista}`);
+    }
+    return idPerfil;
+}
+
+async function utilizadorTemPerfilProfessorNaTransacao(transaction, idUtilizador) {
+    const result = await transaction.request()
+        .input('IdUtilizador', sql.Int, idUtilizador)
+        .query(`
+            SELECT 1 AS ok
+            FROM UTILIZADOR_PERFIL up
+            JOIN PERFIL p ON up.PERFILid_perfil = p.id_perfil
+            WHERE up.UTILIZADORid_utilizador = @IdUtilizador
+              AND p.nome LIKE '%Prof%';
+        `);
+
+    return result.recordset.length > 0;
+}
+
+async function sincronizarModalidadesProfessor(transaction, idProfessor, idsModalidades) {
+    const ids = normalizarIdsModalidades(idsModalidades);
+    if (ids === null) return;
+    if (ids.length === 0) {
+        throw new Error('Seleciona pelo menos uma modalidade para este professor.');
+    }
+
+    await transaction.request()
+        .input('IdProfessor', sql.Int, idProfessor)
+        .query('DELETE FROM PROFESSOR_MODALIDADE WHERE UTILIZADORid_utilizador = @IdProfessor;');
+
+    for (const idModalidade of ids) {
+        await transaction.request()
+            .input('IdProfessor', sql.Int, idProfessor)
+            .input('IdModalidade', sql.Int, idModalidade)
+            .query(`
+                INSERT INTO PROFESSOR_MODALIDADE (UTILIZADORid_utilizador, MODALIDADEid_modalidade)
+                SELECT @IdProfessor, @IdModalidade
+                WHERE EXISTS (SELECT 1 FROM MODALIDADE WHERE id_modalidade = @IdModalidade);
+            `);
+    }
+}
  
 // ============================================================================
 // 1. AUTENTICAÇÃO E PERFIS (US01 / RF01)
@@ -54,66 +122,36 @@ async function getPerfisDoUtilizador(idUtilizador) {
 // 2. GESTÃO DE CONTAS PELO ADMIN (US03 / RF03)
 // ============================================================================
 
-/**
- * Professores aparecem no coaching (dropdown + vagas) via PROFESSOR_MODALIDADE.
- * Ao registar/editar com perfil Professor, associa a todas as modalidades ativas (idempotente).
- */
-async function associarProfessorATodasModalidadesAtivas(transaction, idUtilizador) {
-    await transaction
-        .request()
-        .input('IdUser', sql.Int, idUtilizador)
-        .query(`
-            INSERT INTO PROFESSOR_MODALIDADE (UTILIZADORid_utilizador, MODALIDADEid_modalidade)
-            SELECT @IdUser, m.id_modalidade
-            FROM MODALIDADE m
-            WHERE m.ativo = 1
-              AND NOT EXISTS (
-                  SELECT 1
-                  FROM PROFESSOR_MODALIDADE pm
-                  WHERE pm.UTILIZADORid_utilizador = @IdUser
-                    AND pm.MODALIDADEid_modalidade = m.id_modalidade
-              );
-        `);
-}
-
-/** Associa o professor apenas às modalidades indicadas (US03 / coaching). */
-async function associarProfessorModalidadesSelecionadas(transaction, idUtilizador, idsModalidades) {
-    const ids = [...new Set(idsModalidades.map((id) => parseInt(id, 10)).filter((n) => Number.isFinite(n) && n > 0))];
-    for (const idMod of ids) {
-        await transaction
-            .request()
-            .input('IdUser', sql.Int, idUtilizador)
-            .input('IdMod', sql.Int, idMod)
-            .query(`
-                IF EXISTS (SELECT 1 FROM MODALIDADE WHERE id_modalidade = @IdMod)
-                INSERT INTO PROFESSOR_MODALIDADE (UTILIZADORid_utilizador, MODALIDADEid_modalidade)
-                SELECT @IdUser, @IdMod
-                WHERE NOT EXISTS (
-                    SELECT 1 FROM PROFESSOR_MODALIDADE pm
-                    WHERE pm.UTILIZADORid_utilizador = @IdUser
-                      AND pm.MODALIDADEid_modalidade = @IdMod
-                );
-            `);
-    }
-}
-
 async function listarTodosUtilizadores() {
     try {
         const pool = await poolPromise;
         const query = `
-            SELECT 
+            SELECT
                 u.id_utilizador,
                 u.nome,
                 u.email,
                 u.telefone,
                 u.ativo,
                 u.data_criacao,
-                STRING_AGG(p.nome, ', ') AS perfis
+                perf.perfis,
+                mods.ids_modalidades,
+                mods.modalidades
             FROM UTILIZADOR u
-            LEFT JOIN UTILIZADOR_PERFIL up ON u.id_utilizador = up.UTILIZADORid_utilizador
-            LEFT JOIN PERFIL p ON up.PERFILid_perfil = p.id_perfil
-            GROUP BY u.id_utilizador, u.nome, u.email, u.telefone, u.ativo, u.data_criacao
-            ORDER BY u.nome ASC;
+            OUTER APPLY (
+                SELECT STRING_AGG(p.nome, ', ') AS perfis
+                FROM UTILIZADOR_PERFIL up
+                JOIN PERFIL p ON up.PERFILid_perfil = p.id_perfil
+                WHERE up.UTILIZADORid_utilizador = u.id_utilizador
+            ) perf
+            OUTER APPLY (
+                SELECT
+                    STRING_AGG(CAST(m.id_modalidade AS varchar(20)), ',') AS ids_modalidades,
+                    STRING_AGG(m.nome, ', ') AS modalidades
+                FROM PROFESSOR_MODALIDADE pm
+                JOIN MODALIDADE m ON pm.MODALIDADEid_modalidade = m.id_modalidade
+                WHERE pm.UTILIZADORid_utilizador = u.id_utilizador
+            ) mods
+            ORDER BY u.id_utilizador ASC;
         `;
         const result = await pool.request().query(query);
         return result.recordset;
@@ -123,7 +161,7 @@ async function listarTodosUtilizadores() {
     }
 }
  
-async function criarUtilizador({ nome, email, passwordHash, telefone, nomePerfil, idsModalidades }) {
+async function criarUtilizador({ nome, email, passwordHash, telefone, nomePerfil, ativo = 0, idsModalidades = null }) {
     const pool = await poolPromise;
     const transaction = pool.transaction();
     await transaction.begin();
@@ -138,34 +176,20 @@ async function criarUtilizador({ nome, email, passwordHash, telefone, nomePerfil
             throw new Error('Já existe um utilizador com este email.');
         }
  
-        // Obter ID do Perfil de forma MUITO flexível
-        let idPerfil = null;
-        if (nomePerfil === 'Professor') {
-            const result = await transaction.request().query("SELECT TOP 1 id_perfil FROM PERFIL WHERE nome LIKE '%Prof%'");
-            idPerfil = result.recordset[0]?.id_perfil;
-        } else {
-            const result = await transaction.request().query("SELECT TOP 1 id_perfil FROM PERFIL WHERE nome LIKE '%Encarregado%' OR nome LIKE '%Educação%' OR nome = 'EE'");
-            idPerfil = result.recordset[0]?.id_perfil;
-        }
- 
-        // Se mesmo assim não encontrar, rebenta com um erro que lista o que está na BD
-        if (!idPerfil) {
-            const perfisDisponiveis = await transaction.request().query('SELECT nome FROM PERFIL');
-            const lista = perfisDisponiveis.recordset.map(p => p.nome).join(' | ');
-            throw new Error(`PERFIL_NAO_ENCONTRADO:${lista}`);
-        }
+        const idPerfil = await resolverIdPerfil(transaction, nomePerfil);
  
         // Inserir Utilizador
         const insertUserQuery = `
             INSERT INTO UTILIZADOR (nome, email, password, telefone, ativo, data_criacao)
             OUTPUT INSERTED.id_utilizador, INSERTED.nome, INSERTED.email, INSERTED.ativo
-            VALUES (@Nome, @Email, @Password, @Telefone, 1, GETDATE());
+            VALUES (@Nome, @Email, @Password, @Telefone, @Ativo, GETDATE());
         `;
         const novoUserResult = await transaction.request()
             .input('Nome', sql.VarChar(255), nome)
             .input('Email', sql.VarChar(255), email)
             .input('Password', sql.VarChar(255), passwordHash)
             .input('Telefone', sql.VarChar(30), telefone || null)
+            .input('Ativo', sql.Bit, ativo ? 1 : 0)
             .query(insertUserQuery);
  
         const novoUtilizador = novoUserResult.recordset[0];
@@ -179,16 +203,8 @@ async function criarUtilizador({ nome, email, passwordHash, telefone, nomePerfil
                 VALUES (@IdUser, @IdPerfil);
             `);
 
-        if (nomePerfil === 'Professor') {
-            if (Array.isArray(idsModalidades) && idsModalidades.length > 0) {
-                await associarProfessorModalidadesSelecionadas(
-                    transaction,
-                    novoUtilizador.id_utilizador,
-                    idsModalidades
-                );
-            } else {
-                await associarProfessorATodasModalidadesAtivas(transaction, novoUtilizador.id_utilizador);
-            }
+        if (nomePerfil === 'Professor' && idsModalidades !== null) {
+            await sincronizarModalidadesProfessor(transaction, novoUtilizador.id_utilizador, idsModalidades);
         }
 
         await transaction.commit();
@@ -200,33 +216,27 @@ async function criarUtilizador({ nome, email, passwordHash, telefone, nomePerfil
     }
 }
  
-async function editarUtilizador(idUtilizador, { nome, telefone, nomePerfil }) {
+async function atualizarUtilizadorCompleto(idUtilizador, { nome, email, telefone, passwordHash, nomePerfil, idsModalidades = null }) {
     const pool = await poolPromise;
     const transaction = pool.transaction();
     await transaction.begin();
  
     try {
-        await transaction.request()
+        let queryUpdate = 'UPDATE UTILIZADOR SET nome = @Nome, telefone = @Telefone';
+        if (email !== undefined) queryUpdate += ', email = @Email';
+        if (passwordHash) queryUpdate += ', password = @Password';
+        queryUpdate += ' WHERE id_utilizador = @IdUtilizador;';
+
+        const req = transaction.request()
             .input('Nome', sql.VarChar(255), nome)
             .input('Telefone', sql.VarChar(30), telefone || null)
-            .input('IdUtilizador', sql.Int, idUtilizador)
-            .query(`
-                UPDATE UTILIZADOR 
-                SET nome = @Nome, telefone = @Telefone 
-                WHERE id_utilizador = @IdUtilizador;
-            `);
+            .input('IdUtilizador', sql.Int, idUtilizador);
+        if (email !== undefined) req.input('Email', sql.VarChar(255), email);
+        if (passwordHash) req.input('Password', sql.VarChar(255), passwordHash);
+        const updateResult = await req.query(queryUpdate);
  
         if (nomePerfil) {
-            let idPerfil = null;
-            if (nomePerfil === 'Professor') {
-                const result = await transaction.request().query("SELECT TOP 1 id_perfil FROM PERFIL WHERE nome LIKE '%Prof%'");
-                idPerfil = result.recordset[0]?.id_perfil;
-            } else {
-                const result = await transaction.request().query("SELECT TOP 1 id_perfil FROM PERFIL WHERE nome LIKE '%Encarregado%' OR nome LIKE '%Educação%' OR nome = 'EE'");
-                idPerfil = result.recordset[0]?.id_perfil;
-            }
- 
-            if (!idPerfil) throw new Error('Perfil especificado não existe na base de dados.');
+            const idPerfil = await resolverIdPerfil(transaction, nomePerfil);
  
             await transaction.request()
                 .input('IdUtilizador', sql.Int, idUtilizador)
@@ -241,35 +251,92 @@ async function editarUtilizador(idUtilizador, { nome, telefone, nomePerfil }) {
                 `);
 
             if (nomePerfil === 'Professor') {
-                await associarProfessorATodasModalidadesAtivas(transaction, idUtilizador);
+                await sincronizarModalidadesProfessor(transaction, idUtilizador, idsModalidades);
+            } else {
+                await transaction.request()
+                    .input('IdUtilizador', sql.Int, idUtilizador)
+                    .query('DELETE FROM PROFESSOR_MODALIDADE WHERE UTILIZADORid_utilizador = @IdUtilizador;');
+            }
+        } else if (idsModalidades !== null) {
+            const isProfessor = await utilizadorTemPerfilProfessorNaTransacao(transaction, idUtilizador);
+            if (isProfessor) {
+                await sincronizarModalidadesProfessor(transaction, idUtilizador, idsModalidades);
             }
         }
 
         await transaction.commit();
-        return true;
+        return updateResult.rowsAffected[0] > 0;
     } catch (error) {
         await transaction.rollback();
-        console.error('Erro no Modelo Transacional (editarUtilizador):', error);
+        console.error('Erro no Modelo Transacional (atualizarUtilizadorCompleto):', error);
         throw error;
     }
 }
+
+async function editarUtilizador(idUtilizador, { nome, telefone, nomePerfil, idsModalidades = null }) {
+    return atualizarUtilizadorCompleto(idUtilizador, {
+        nome,
+        telefone,
+        nomePerfil,
+        idsModalidades
+    });
+}
  
-async function alterarEstadoUtilizador(idUtilizador, estadoAtivo) {
+async function alterarEstadoUtilizador(idUtilizador, estadoAtivo, idsModalidades = null) {
+    const pool = await poolPromise;
+    const transaction = pool.transaction();
+    await transaction.begin();
     try {
-        const pool = await poolPromise;
+        const isProfessor = await utilizadorTemPerfilProfessorNaTransacao(transaction, idUtilizador);
+        if (estadoAtivo && isProfessor) {
+            await sincronizarModalidadesProfessor(transaction, idUtilizador, idsModalidades);
+        }
+
         const query = `
             UPDATE UTILIZADOR 
             SET ativo = @EstadoAtivo 
             WHERE id_utilizador = @IdUtilizador;
         `;
-        const result = await pool.request()
+        const result = await transaction.request()
             .input('EstadoAtivo', sql.Bit, estadoAtivo ? 1 : 0)
             .input('IdUtilizador', sql.Int, idUtilizador)
             .query(query);
  
+        await transaction.commit();
         return result.rowsAffected[0] > 0;
     } catch (error) {
+        await transaction.rollback();
         console.error('Erro no Modelo (alterarEstadoUtilizador):', error);
+        throw error;
+    }
+}
+
+async function apagarUtilizador(idUtilizador) {
+    const pool = await poolPromise;
+    const transaction = pool.transaction();
+    await transaction.begin();
+    try {
+        await transaction.request()
+            .input('Id', sql.Int, idUtilizador)
+            .query('DELETE FROM PROFESSOR_MODALIDADE WHERE UTILIZADORid_utilizador = @Id;');
+
+        await transaction.request()
+            .input('Id', sql.Int, idUtilizador)
+            .query('DELETE FROM UTILIZADOR_PERFIL WHERE UTILIZADORid_utilizador = @Id;');
+
+        await transaction.request()
+            .input('Id', sql.Int, idUtilizador)
+            .query('DELETE FROM TOKEN_RECUPERACAO WHERE UTILIZADORid_utilizador = @Id;');
+
+        const result = await transaction.request()
+            .input('Id', sql.Int, idUtilizador)
+            .query('DELETE FROM UTILIZADOR WHERE id_utilizador = @Id;');
+
+        await transaction.commit();
+        return result.rowsAffected[0] > 0;
+    } catch (error) {
+        await transaction.rollback();
+        console.error('Erro no Modelo Transacional (apagarUtilizador):', error);
         throw error;
     }
 }
@@ -383,7 +450,9 @@ module.exports = {
     listarTodosUtilizadores,
     criarUtilizador,
     editarUtilizador,
+    atualizarUtilizadorCompleto,
     alterarEstadoUtilizador,
+    apagarUtilizador,
     guardarTokenRecuperacao,
     validarTokenRecuperacao,
     atualizarPassword,

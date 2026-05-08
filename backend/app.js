@@ -1,7 +1,8 @@
 const express = require('express');
 const cors = require('cors');
 const errorHandler = require('./src/middlewares/errorHandler');
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({ path: path.resolve(__dirname, '.env') });
 
 const { pool, poolConnect } = require('./src/config/db');
 const authRoutes = require('./src/routes/authRoutes');
@@ -86,4 +87,5 @@ poolConnect
         console.error('❌ Erro crítico ao ligar à BD:', error.message);
         process.exit(1);
     });
-    export default app;
+
+module.exports = app;

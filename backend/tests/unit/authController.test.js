@@ -1,20 +1,53 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import * as authController from '../../src/controllers/authController.js';
-import * as utilizadorModel from '../../src/models/authModel.js';
-import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
+import { createRequire } from 'module';
 
-// Mock das dependências externas
-vi.mock('../../src/models/authModel.js');
-vi.mock('bcryptjs');
-vi.mock('jsonwebtoken');
+const require = createRequire(import.meta.url);
+const controllerPath = require.resolve('../../src/controllers/authController.js');
+const utilizadorModelPath = require.resolve('../../src/models/utilizadorModel.js');
+const bcryptPath = require.resolve('bcryptjs');
+const jwtPath = require.resolve('jsonwebtoken');
 
 describe('authController - Autenticação (US01)', () => {
-    let req, res, next;
+    let req, res, next, authController, utilizadorModel, bcrypt, jwt;
 
     beforeEach(() => {
         // Reset dos mocks antes de cada teste
-        vi.clearAllMocks();
+        vi.resetAllMocks();
+        delete require.cache[controllerPath];
+        delete require.cache[utilizadorModelPath];
+        delete require.cache[bcryptPath];
+        delete require.cache[jwtPath];
+
+        utilizadorModel = {
+            getUtilizadorByEmail: vi.fn(),
+            getPerfisDoUtilizador: vi.fn()
+        };
+        bcrypt = {
+            compare: vi.fn()
+        };
+        jwt = {
+            sign: vi.fn()
+        };
+
+        require.cache[utilizadorModelPath] = {
+            id: utilizadorModelPath,
+            filename: utilizadorModelPath,
+            loaded: true,
+            exports: utilizadorModel
+        };
+        require.cache[bcryptPath] = {
+            id: bcryptPath,
+            filename: bcryptPath,
+            loaded: true,
+            exports: bcrypt
+        };
+        require.cache[jwtPath] = {
+            id: jwtPath,
+            filename: jwtPath,
+            loaded: true,
+            exports: jwt
+        };
+        authController = require('../../src/controllers/authController.js');
 
         // Simulação dos objetos Express
         req = {
@@ -30,8 +63,8 @@ describe('authController - Autenticação (US01)', () => {
     it('Deve efetuar login com sucesso para um Administrador', async () => {
         // Dados de entrada
         req.body = {
-            email: 'admin@entartes.pt',
-            password: 'password123',
+            email: 'admin@gmail.com',
+            password: 'vivadarte123!',
             tipo: 'ADMIN'
         };
 
@@ -39,7 +72,7 @@ describe('authController - Autenticação (US01)', () => {
         const mockUtilizador = {
             id_utilizador: 1,
             nome: 'Admin Teste',
-            email: 'admin@entartes.pt',
+            email: 'admin@gmail.com',
             password: 'hash_encriptado',
             ativo: 1
         };
@@ -50,16 +83,16 @@ describe('authController - Autenticação (US01)', () => {
         utilizadorModel.getUtilizadorByEmail.mockResolvedValue(mockUtilizador);
         bcrypt.compare.mockResolvedValue(true);
         utilizadorModel.getPerfisDoUtilizador.mockResolvedValue(mockPerfis);
-        jwt.sign.mockReturnValue('token_gerado_123');
+        jwt.sign.mockReturnValue('eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MjcsIm5vbWUiOiJUZXN0ZUNhbGVuZGFyIiwiZW1haWwiOiJUZXN0ZUNhbGVuZGFyQGdtYWlsLmNvbSIsInBlcmZpcyI6WyJQcm9mZXNzb3IiXSwicGVyZmlsIjoiUHJvZmVzc29yIiwiaWRfcGVyZmlsIjpudWxsLCJpYXQiOjE3NzgyMDA3MTMsImV4cCI6MTc3ODIyOTUxM30.Jzc8N66neRKs8qDxE20kWVCT_NUYgKsM_tKWVAROa-8');
 
         // Execução
         await authController.login(req, res, next);
 
         // Verificações
         expect(res.status).toHaveBeenCalledWith(200);
-        expect(res.json).toHaveBeenCalledWith(expect.objectContext({
+        expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
             mensagem: 'Login efetuado',
-            token: 'token_gerado_123'
+            token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MjcsIm5vbWUiOiJUZXN0ZUNhbGVuZGFyIiwiZW1haWwiOiJUZXN0ZUNhbGVuZGFyQGdtYWlsLmNvbSIsInBlcmZpcyI6WyJQcm9mZXNzb3IiXSwicGVyZmlsIjoiUHJvZmVzc29yIiwiaWRfcGVyZmlsIjpudWxsLCJpYXQiOjE3NzgyMDA3MTMsImV4cCI6MTc3ODIyOTUxM30.Jzc8N66neRKs8qDxE20kWVCT_NUYgKsM_tKWVAROa-8'
         }));
     });
 
@@ -75,12 +108,13 @@ describe('authController - Autenticação (US01)', () => {
     });
 
     it('Deve retornar 403 quando a conta do utilizador está desativada', async () => {
-        req.body = { email: 'inativo@entartes.pt', password: '123' };
+        req.body = { email: 'inativo@entartes.pt', password: '123', tipo: 'PROF' };
         
         // Simulação de conta inativa (ativo: 0)[cite: 6]
         utilizadorModel.getUtilizadorByEmail.mockResolvedValue({
             id_utilizador: 2,
             email: 'inativo@entartes.pt',
+            password: 'hash_encriptado',
             ativo: 0 
         });
 
@@ -103,7 +137,7 @@ describe('authController - Autenticação (US01)', () => {
     utilizadorModel.getUtilizadorByEmail.mockResolvedValue({
         id_utilizador: 3,
         email: 'TesteagendaEE@admin.com',
-        password: 'qwerty123!',
+        password: 'hash_encriptado',
         ativo: 1
     });
 

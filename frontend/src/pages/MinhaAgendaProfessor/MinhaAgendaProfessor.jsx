@@ -3,6 +3,14 @@ import './MinhaAgendaProfessor.css';
 import logoImg from '../../assets/logo.png';
 import { apiAuthFetch } from '../../services/api';
 
+const FORMATOS_AULA = ['Solo', 'Dueto', 'Trio', 'Ensemble'];
+const DURACOES_AULA = [30, 60, 90, 120];
+const PARTICIPANTES_FIXOS_POR_FORMATO = {
+  Solo: 1,
+  Dueto: 2,
+  Trio: 3
+};
+
 function traduzErroCoaching(err, fallback) {
   const msg = String(err?.message || '').trim();
   if (!msg) return fallback;
@@ -148,7 +156,7 @@ function normalizeTime(hhmm) {
   return `${hora}:00`;
 }
 
-export default function MinhaAgendaProfessor({ irParaLanding }) {
+export default function MinhaAgendaProfessor({ irParaLanding, modo = 'professor' }) {
   const [agenda, setAgenda] = useState([]);
   const [pedidosPendentesProf, setPedidosPendentesProf] = useState([]);
   const [utilizador, setUtilizador] = useState(null);
@@ -183,6 +191,9 @@ export default function MinhaAgendaProfessor({ irParaLanding }) {
   const [professoresPedido, setProfessoresPedido] = useState([]);
   const [alunosPedido, setAlunosPedido] = useState([]);
   const [isLoadingAlunosPedido, setIsLoadingAlunosPedido] = useState(false);
+  const [novoAlunoNome, setNovoAlunoNome] = useState('');
+  const [novoAlunoDataNascimento, setNovoAlunoDataNascimento] = useState('');
+  const [isSavingAluno, setIsSavingAluno] = useState(false);
   const [pedidoForm, setPedidoForm] = useState({
     idModalidade: '',
     idAnoLetivo: '',
@@ -191,6 +202,8 @@ export default function MinhaAgendaProfessor({ irParaLanding }) {
     idProfessor: ''
   });
   const isPerfilEE = useMemo(() => {
+    const perfil = String(utilizador?.perfil || '').toLowerCase();
+    if (perfil.includes('ee') || perfil.includes('encarregado') || perfil.includes('educação') || perfil.includes('educacao')) return true;
     const perfis = utilizador?.perfis;
     if (!Array.isArray(perfis)) return false;
     return perfis.some((p) => {
@@ -199,6 +212,8 @@ export default function MinhaAgendaProfessor({ irParaLanding }) {
       return nome.includes('ee') || nome.includes('encarregado');
     });
   }, [utilizador]);
+  const isAgendaEE = modo === 'ee' || isPerfilEE;
+  const podePedirAula = isAgendaEE;
   const horas = [
     "08:00", "09:00", "10:00", "11:00", "12:00", "13:00",
     "14:00", "15:00", "16:00", "17:00", "18:00", "19:00", "20:00", "21:00"
@@ -268,6 +283,12 @@ export default function MinhaAgendaProfessor({ irParaLanding }) {
   useEffect(() => {
     let isMounted = true;
     async function carregarDisponibilidades() {
+      if (isAgendaEE) {
+        setDisponibilidades([]);
+        setErroDispo('');
+        setIsLoadingDispo(false);
+        return;
+      }
       setErroDispo('');
       setIsLoadingDispo(true);
       try {
@@ -284,12 +305,19 @@ export default function MinhaAgendaProfessor({ irParaLanding }) {
     }
     carregarDisponibilidades();
     return () => { isMounted = false; };
-  }, []);
+  }, [isAgendaEE]);
 
   useEffect(() => {
     let isMounted = true;
 
     async function carregarAgendaSemana() {
+      if (isAgendaEE) {
+        setAgenda([]);
+        setPedidosPendentesProf([]);
+        setErroAgenda('');
+        setIsLoadingAgenda(false);
+        return;
+      }
       setErroAgenda('');
       setIsLoadingAgenda(true);
       const dataInicio = formatYMD(weekStart);
@@ -316,7 +344,7 @@ export default function MinhaAgendaProfessor({ irParaLanding }) {
     return () => {
       isMounted = false;
     };
-  }, [weekStart]);
+  }, [weekStart, isAgendaEE]);
 
   const resumoMensal = useMemo(() => {
     const total = agenda.reduce((acc, row) => acc + Number(row.valor_final || 0), 0);
@@ -424,7 +452,45 @@ export default function MinhaAgendaProfessor({ irParaLanding }) {
     }
   };
 
+  const carregarPrecoEstimado = async ({
+    dataAula,
+    horaInicio,
+    formatoAula,
+    duracaoMinutos,
+    idModalidade = pedidoForm.idModalidade,
+    idProfessor = pedidoForm.idProfessor
+  }) => {
+    setPrecoInfo((p) => ({ ...p, isLoading: true, erro: '', custoEstimado: null }));
+    try {
+      const params = {
+        dataAula,
+        horaInicio,
+        formatoAula,
+        duracaoMinutos: String(duracaoMinutos)
+      };
+      if (idModalidade) params.idModalidade = String(idModalidade);
+      if (idProfessor) params.idProfessor = String(idProfessor);
+
+      const q = new URLSearchParams(params).toString();
+      const data = await apiAuthFetch(`/api/coaching/preco-estimado?${q}`);
+      setPrecoInfo((p) => ({
+        ...p,
+        isLoading: false,
+        custoEstimado: data?.custoEstimado ?? null,
+        formatoAula: data?.formatoAula || formatoAula,
+        duracaoMinutos: Number(data?.duracaoMinutos || duracaoMinutos)
+      }));
+    } catch (e) {
+      setPrecoInfo((p) => ({
+        ...p,
+        isLoading: false,
+        erro: traduzErroCoaching(e, 'Não foi possível obter o preço estimado.')
+      }));
+    }
+  };
+
   const verPrecoEstimado = async ({ dataAulaYmd, horaInicio }) => {
+    if (!podePedirAula) return;
     setPrecoInfo((p) => ({
       ...p,
       isLoading: true,
@@ -447,34 +513,82 @@ export default function MinhaAgendaProfessor({ irParaLanding }) {
     setProfessoresPedido([]);
     setIsPrecoModalOpen(true);
     try {
-      // Validar conflitos antes de pedir preço (US08)
-      const qLivre = new URLSearchParams({
-        dataAula: dataAulaYmd,
-        horaInicio,
-        duracaoMinutos: '60'
-      }).toString();
-      await apiAuthFetch(`/api/coaching/slot-livre?${qLivre}`);
-
-      const q = new URLSearchParams({
+      await carregarPrecoEstimado({
         dataAula: dataAulaYmd,
         horaInicio,
         formatoAula: 'Solo',
-        duracaoMinutos: '60'
-      }).toString();
-      const data = await apiAuthFetch(`/api/coaching/preco-estimado?${q}`);
-      setPrecoInfo((p) => ({
-        ...p,
-        isLoading: false,
-        custoEstimado: data?.custoEstimado ?? null,
-        formatoAula: data?.formatoAula || 'Solo',
-        duracaoMinutos: Number(data?.duracaoMinutos || 60)
-      }));
+        duracaoMinutos: 60,
+        idModalidade: '',
+        idProfessor: ''
+      });
     } catch (e) {
       setPrecoInfo((p) => ({
         ...p,
         isLoading: false,
         erro: traduzErroCoaching(e, 'Não foi possível obter o preço estimado.')
       }));
+    }
+  };
+
+  const atualizarFormatoAula = (formatoAula) => {
+    setPrecoInfo((p) => ({ ...p, formatoAula }));
+    const participantesFixos = PARTICIPANTES_FIXOS_POR_FORMATO[formatoAula];
+    setPedidoForm((p) => ({
+      ...p,
+      numeroParticipantes: participantesFixos || Math.max(Number(p.numeroParticipantes || 4), 4)
+    }));
+    if (precoInfo.dataAula && precoInfo.horaInicio) {
+      carregarPrecoEstimado({
+        dataAula: precoInfo.dataAula,
+        horaInicio: precoInfo.horaInicio,
+        formatoAula,
+        duracaoMinutos: precoInfo.duracaoMinutos || 60
+      });
+    }
+  };
+
+  const atualizarDuracaoAula = (duracaoMinutos) => {
+    const dur = Number(duracaoMinutos);
+    setPrecoInfo((p) => ({ ...p, duracaoMinutos: dur }));
+    if (precoInfo.dataAula && precoInfo.horaInicio) {
+      carregarPrecoEstimado({
+        dataAula: precoInfo.dataAula,
+        horaInicio: precoInfo.horaInicio,
+        formatoAula: precoInfo.formatoAula || 'Solo',
+        duracaoMinutos: dur
+      });
+    }
+  };
+
+  const adicionarAlunoAoEE = async () => {
+    const nome = novoAlunoNome.trim();
+    if (!nome) {
+      setPedidoErro('Indica o nome do aluno.');
+      return;
+    }
+
+    setIsSavingAluno(true);
+    setPedidoErro('');
+    try {
+      const novoAluno = await apiAuthFetch('/api/utilizadores/me/alunos', {
+        method: 'POST',
+        body: {
+          nome,
+          dataNascimento: novoAlunoDataNascimento || null
+        }
+      });
+
+      setAlunosPedido((prev) => [...prev, novoAluno].sort((a, b) => String(a.nome_aluno).localeCompare(String(b.nome_aluno))));
+      setPedidoForm((prev) => ({
+        ...prev,
+        alunosIds: [...new Set([...(prev.alunosIds || []), novoAluno.id_aluno])]
+      }));
+      setNovoAlunoNome('');
+      setNovoAlunoDataNascimento('');
+    } catch (e) {
+      setPedidoErro(e?.message || 'Não foi possível adicionar o aluno.');
+    } finally {
+      setIsSavingAluno(false);
     }
   };
 
@@ -498,6 +612,10 @@ export default function MinhaAgendaProfessor({ irParaLanding }) {
   };
 
   const submeterPedidoCoachingDireto = async () => {
+    if (!podePedirAula) {
+      setPedidoErro('Apenas o encarregado de educação pode pedir aulas.');
+      return;
+    }
     setPedidoErro('');
     setPedidoSucesso('');
     setPedidoIdCriado(null);
@@ -510,6 +628,17 @@ export default function MinhaAgendaProfessor({ irParaLanding }) {
 
     if (isPerfilEE && alunosIds.length === 0) {
       setPedidoErro('Seleciona pelo menos 1 aluno.');
+      return;
+    }
+
+    const formatoAtual = precoInfo.formatoAula || 'Solo';
+    const participantesFixos = PARTICIPANTES_FIXOS_POR_FORMATO[formatoAtual];
+    if (isPerfilEE && participantesFixos && alunosIds.length !== participantesFixos) {
+      setPedidoErro(`${formatoAtual} exige exatamente ${participantesFixos} aluno(s).`);
+      return;
+    }
+    if (isPerfilEE && formatoAtual === 'Ensemble' && alunosIds.length < 4) {
+      setPedidoErro('Ensemble exige 4 ou mais alunos.');
       return;
     }
 
@@ -532,17 +661,19 @@ export default function MinhaAgendaProfessor({ irParaLanding }) {
       const novoId = res?.idPedido ?? null;
       setPedidoIdCriado(novoId);
       setPedidoSucesso(novoId ? `Pedido #${novoId} enviado para coordenação com sucesso.` : 'Pedido enviado para coordenação com sucesso.');
-      const di = formatYMD(weekStart);
-      const df = formatYMD(addDays(weekStart, 6));
-      try {
-        const [dataAgenda, dataPedidos] = await Promise.all([
-          apiAuthFetch(`/api/coaching/agenda?dataInicio=${di}&dataFim=${df}`),
-          apiAuthFetch(`/api/coaching/pedidos/atribuidos-professor?dataInicio=${di}&dataFim=${df}`).catch(() => [])
-        ]);
-        setAgenda(Array.isArray(dataAgenda) ? dataAgenda : []);
-        setPedidosPendentesProf(Array.isArray(dataPedidos) ? dataPedidos : []);
-      } catch {
-        /* ignore refresh erro */
+      if (!isAgendaEE) {
+        const di = formatYMD(weekStart);
+        const df = formatYMD(addDays(weekStart, 6));
+        try {
+          const [dataAgenda, dataPedidos] = await Promise.all([
+            apiAuthFetch(`/api/coaching/agenda?dataInicio=${di}&dataFim=${df}`),
+            apiAuthFetch(`/api/coaching/pedidos/atribuidos-professor?dataInicio=${di}&dataFim=${df}`).catch(() => [])
+          ]);
+          setAgenda(Array.isArray(dataAgenda) ? dataAgenda : []);
+          setPedidosPendentesProf(Array.isArray(dataPedidos) ? dataPedidos : []);
+        } catch {
+          /* ignore refresh erro */
+        }
       }
     } catch (e) {
       setPedidoErro(traduzErroCoaching(e, 'Não foi possível submeter o pedido.'));
@@ -570,7 +701,7 @@ export default function MinhaAgendaProfessor({ irParaLanding }) {
           <li><a href="#" onClick={(e) => { e.preventDefault(); irParaLanding?.(); }}>Início</a></li>
           <li><span className="nav-separator">|</span></li>
           <li><a href="#agenda" className="special-link active">Minha Agenda</a></li>
-          <li><a href="#disponibilidade" className="special-link">Disponibilidades</a></li>
+          {!isAgendaEE && <li><a href="#disponibilidade" className="special-link">Disponibilidades</a></li>}
         </ul>
         <div className="nav-actions">
           <div className="user-profile">
@@ -600,16 +731,18 @@ export default function MinhaAgendaProfessor({ irParaLanding }) {
                   {dias.map((dia, idx) => (
                     <div
                       key={`${dia}-${idx}`}
-                      className={`slot-cell ${hora > "14:00" ? "is-available" : ""}`}
+                      className={`slot-cell ${podePedirAula && hora > "14:00" ? "is-available" : ""}`}
                       onClick={() => {
+                        if (!podePedirAula) return;
                         const row = agendaPorDiaHora.get(`${dia}|${hora}`);
                         if (row) return;
                         const dataAulaYmd = formatYMD(addDays(weekStart, idx));
                         verPrecoEstimado({ dataAulaYmd, horaInicio: hora });
                       }}
-                      role="button"
-                      tabIndex={0}
+                      role={podePedirAula ? 'button' : undefined}
+                      tabIndex={podePedirAula ? 0 : undefined}
                       onKeyDown={(e) => {
+                        if (!podePedirAula) return;
                         if (e.key !== 'Enter' && e.key !== ' ') return;
                         const row = agendaPorDiaHora.get(`${dia}|${hora}`);
                         if (row) return;
@@ -617,12 +750,14 @@ export default function MinhaAgendaProfessor({ irParaLanding }) {
                         verPrecoEstimado({ dataAulaYmd, horaInicio: hora });
                       }}
                       style={{
-                        cursor: agendaPorDiaHora.get(`${dia}|${hora}`) ? 'default' : 'pointer'
+                        cursor: podePedirAula && !agendaPorDiaHora.get(`${dia}|${hora}`) ? 'pointer' : 'default'
                       }}
                       aria-label={
                         agendaPorDiaHora.get(`${dia}|${hora}`)
                           ? `Aula ou pedido em ${dia} às ${hora}`
-                          : `Ver preço estimado em ${dia} às ${hora}`
+                          : podePedirAula
+                            ? `Pedir aula em ${dia} às ${hora}`
+                            : `Sem aula em ${dia} às ${hora}`
                       }
                     >
                       {(() => {
@@ -680,6 +815,34 @@ export default function MinhaAgendaProfessor({ irParaLanding }) {
               <p style={{ margin: '6px 0 14px', opacity: 0.8 }}>
                 {precoInfo.dataAula} • {precoInfo.horaInicio}
               </p>
+              <div className="modal-grid" style={{ marginBottom: 12 }}>
+                <div className="form-group">
+                  <label>Tipo de aula</label>
+                  <select
+                    value={precoInfo.formatoAula}
+                    onChange={(e) => atualizarFormatoAula(e.target.value)}
+                  >
+                    {FORMATOS_AULA.map((formato) => (
+                      <option key={formato} value={formato}>
+                        {formato}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>Duração</label>
+                  <select
+                    value={precoInfo.duracaoMinutos}
+                    onChange={(e) => atualizarDuracaoAula(e.target.value)}
+                  >
+                    {DURACOES_AULA.map((duracao) => (
+                      <option key={duracao} value={duracao}>
+                        {duracao} min
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
               {precoInfo.isLoading ? (
                 <p style={{ opacity: 0.75 }}>A calcular…</p>
               ) : precoInfo.erro ? (
@@ -716,6 +879,16 @@ export default function MinhaAgendaProfessor({ irParaLanding }) {
                       const id = e.target.value;
                       setPedidoForm((p) => ({ ...p, idModalidade: id }));
                       carregarProfessoresPorModalidade(id);
+                      if (precoInfo.dataAula && precoInfo.horaInicio) {
+                        carregarPrecoEstimado({
+                          dataAula: precoInfo.dataAula,
+                          horaInicio: precoInfo.horaInicio,
+                          formatoAula: precoInfo.formatoAula || 'Solo',
+                          duracaoMinutos: precoInfo.duracaoMinutos || 60,
+                          idModalidade: id,
+                          idProfessor: ''
+                        });
+                      }
                     }}
                   >
                     <option value="">Selecionar modalidade</option>
@@ -744,7 +917,19 @@ export default function MinhaAgendaProfessor({ irParaLanding }) {
                   <label>Professor (opcional)</label>
                   <select
                     value={pedidoForm.idProfessor}
-                    onChange={(e) => setPedidoForm((p) => ({ ...p, idProfessor: e.target.value }))}
+                    onChange={(e) => {
+                      const id = e.target.value;
+                      setPedidoForm((p) => ({ ...p, idProfessor: id }));
+                      if (precoInfo.dataAula && precoInfo.horaInicio) {
+                        carregarPrecoEstimado({
+                          dataAula: precoInfo.dataAula,
+                          horaInicio: precoInfo.horaInicio,
+                          formatoAula: precoInfo.formatoAula || 'Solo',
+                          duracaoMinutos: precoInfo.duracaoMinutos || 60,
+                          idProfessor: id
+                        });
+                      }
+                    }}
                   >
                     <option value="">Sem preferência</option>
                     {professoresPedido.map((prof) => (
@@ -779,6 +964,32 @@ export default function MinhaAgendaProfessor({ irParaLanding }) {
                       ? 'Dica: usa Ctrl/Cmd para selecionar vários alunos.'
                       : 'Sem alunos associados a este utilizador.'}
                 </small>
+              </div>
+
+              <div className="modal-grid" style={{ marginTop: 10 }}>
+                <div className="form-group">
+                  <label>Adicionar aluno</label>
+                  <input
+                    type="text"
+                    value={novoAlunoNome}
+                    onChange={(e) => setNovoAlunoNome(e.target.value)}
+                    placeholder="Nome do aluno"
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Data nasc. (opcional)</label>
+                  <input
+                    type="date"
+                    value={novoAlunoDataNascimento}
+                    onChange={(e) => setNovoAlunoDataNascimento(e.target.value)}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>&nbsp;</label>
+                  <button className="btn-outline" type="button" disabled={isSavingAluno} onClick={adicionarAlunoAoEE}>
+                    {isSavingAluno ? 'A adicionar…' : 'Adicionar aluno'}
+                  </button>
+                </div>
               </div>
 
               {!isPerfilEE && (
@@ -817,38 +1028,42 @@ export default function MinhaAgendaProfessor({ irParaLanding }) {
             ))}
           </div>
 
-          <div className="sidebar-card" id="disponibilidade">
-            <h3>Disponibilidade</h3>
-            <ul className="dispo-mini-list">
-              {isLoadingDispo ? (
-                <li><span>A carregar…</span></li>
-              ) : disponibilidades.length === 0 ? (
-                <li><span>Sem horários</span></li>
-              ) : (
-                disponibilidades.slice(0, 4).map((d) => (
-                  <li key={d.id_disponibilidade}>
-                    <span>{nomeDiaSemana(d.dia_semana)}</span>
-                    {formatHoraCurta(d.hora_inicio)} - {formatHoraCurta(d.hora_fim)}
-                  </li>
-                ))
-              )}
-            </ul>
-            <button className="btn-text" type="button" onClick={() => setIsDispoModalOpen(true)}>
-              Editar Horários
-            </button>
-          </div>
+          {!isAgendaEE && (
+            <>
+              <div className="sidebar-card" id="disponibilidade">
+                <h3>Disponibilidade</h3>
+                <ul className="dispo-mini-list">
+                  {isLoadingDispo ? (
+                    <li><span>A carregar…</span></li>
+                  ) : disponibilidades.length === 0 ? (
+                    <li><span>Sem horários</span></li>
+                  ) : (
+                    disponibilidades.slice(0, 4).map((d) => (
+                      <li key={d.id_disponibilidade}>
+                        <span>{nomeDiaSemana(d.dia_semana)}</span>
+                        {formatHoraCurta(d.hora_inicio)} - {formatHoraCurta(d.hora_fim)}
+                      </li>
+                    ))
+                  )}
+                </ul>
+                <button className="btn-text" type="button" onClick={() => setIsDispoModalOpen(true)}>
+                  Editar Horários
+                </button>
+              </div>
 
-          <div className="sidebar-card resumo-card">
-            <h3>Resumo Mensal</h3>
-            <div className="stat-row">
-              <span>Aulas dadas:</span>
-              <strong>{resumoMensal.aulasDadas}</strong>
-            </div>
-            <div className="stat-row highlight">
-              <span>A receber:</span>
-              <strong>{resumoMensal.aReceber.toFixed(2)}EUR</strong>
-            </div>
-          </div>
+              <div className="sidebar-card resumo-card">
+                <h3>Resumo Mensal</h3>
+                <div className="stat-row">
+                  <span>Aulas dadas:</span>
+                  <strong>{resumoMensal.aulasDadas}</strong>
+                </div>
+                <div className="stat-row highlight">
+                  <span>A receber:</span>
+                  <strong>{resumoMensal.aReceber.toFixed(2)}EUR</strong>
+                </div>
+              </div>
+            </>
+          )}
 
           <div className="sidebar-card">
             <h3>Semana</h3>
@@ -864,7 +1079,7 @@ export default function MinhaAgendaProfessor({ irParaLanding }) {
         </aside>
       </div>
 
-      {isDispoModalOpen && (
+      {!isAgendaEE && isDispoModalOpen && (
         <div className="modal-overlay" onClick={() => setIsDispoModalOpen(false)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <h2>Editar Horários</h2>

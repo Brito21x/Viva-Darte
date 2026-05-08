@@ -5,6 +5,64 @@ const { utilizadorTemPerfil } = require('../middlewares/auth');
 /** Data fixa só para parsear horas (`time`) como instante; a duração depende só da diferença entre horas. */
 const DATA_REF_COMPARACAO_HORAS = '2026-01-01';
 const MSG_SEM_DISPONIBILIDADE = 'O professor não tem horário disponível nesse período.';
+const FORMATOS_AULA_VALIDOS = ['Solo', 'Dueto', 'Trio', 'Ensemble'];
+const DURACOES_AULA_VALIDAS = [30, 60, 90, 120];
+const PARTICIPANTES_FIXOS_POR_FORMATO = { Solo: 1, Dueto: 2, Trio: 3 };
+const ESTADOS_VALIDACAO_VALIDOS = ['Confirmado', 'Nao_Realizado'];
+const ESTADOS_FINAIS_VALIDOS = ['Realizado', 'Nao_Realizado'];
+
+function normalizarHoraSqlTime(valor) {
+    if (valor instanceof Date && !Number.isNaN(valor.getTime())) {
+        const hh = String(valor.getHours()).padStart(2, '0');
+        const mm = String(valor.getMinutes()).padStart(2, '0');
+        const ss = String(valor.getSeconds()).padStart(2, '0');
+        return `${hh}:${mm}:${ss}`;
+    }
+
+    const s = String(valor ?? '').trim();
+    if (!s) return null;
+
+    const m24 = s.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+    if (m24) {
+        const hh = String(m24[1]).padStart(2, '0');
+        const mm = m24[2];
+        const ss = m24[3] ?? '00';
+        return `${hh}:${mm}:${ss}`;
+    }
+
+    const m12 = s.match(/^(\d{1,2}):(\d{2})\s*([AaPp][Mm])$/);
+    if (!m12) return null;
+    let hh = parseInt(m12[1], 10);
+    const mm = m12[2];
+    const ampm = m12[3].toUpperCase();
+    if (ampm === 'PM' && hh < 12) hh += 12;
+    if (ampm === 'AM' && hh === 12) hh = 0;
+    return `${String(hh).padStart(2, '0')}:${mm}:00`;
+}
+
+function validarFormatoAula(formatoAula) {
+    return FORMATOS_AULA_VALIDOS.includes(formatoAula)
+        ? null
+        : `Formato inválido. Valores aceites: ${FORMATOS_AULA_VALIDOS.join(', ')}.`;
+}
+
+function validarDuracaoAula(duracaoMinutos) {
+    return DURACOES_AULA_VALIDAS.includes(Number(duracaoMinutos))
+        ? null
+        : `Duração inválida. Valores aceites: ${DURACOES_AULA_VALIDAS.join(', ')} minutos.`;
+}
+
+function validarParticipantesPorFormato(formatoAula, alunosIds) {
+    const totalAlunos = Array.isArray(alunosIds) ? alunosIds.length : 0;
+    const participantesFixos = PARTICIPANTES_FIXOS_POR_FORMATO[formatoAula];
+    if (participantesFixos && totalAlunos !== participantesFixos) {
+        return `${formatoAula} exige exatamente ${participantesFixos} aluno(s).`;
+    }
+    if (formatoAula === 'Ensemble' && totalAlunos < 4) {
+        return 'Ensemble exige 4 ou mais alunos.';
+    }
+    return null;
+}
 
 /** Evita bugs de timezone com strings `YYYY-MM-DD` (interpretação UTC vs local). */
 function parseDateParts(dataValor) {
@@ -27,26 +85,18 @@ function diaSemanaPrecoFromDateValue(dataValor) {
     return [0, 6].includes(day) ? 2 : 1;
 }
 
+function diaSemanaDisponibilidadeFromDateValue(dataValor) {
+    const dt = parseDateParts(dataValor);
+    if (!dt) return 1;
+    const day = dt.getDay();
+    return [0, 6].includes(day) ? 2 : 1;
+}
+
 function diaSemanaCoachingFromDateValue(dataValor) {
     const dt = parseDateParts(dataValor);
     if (!dt) return 1;
     const day = dt.getDay();
     return day === 0 ? 7 : day;
-}
-
-function mensagemDisponibilidade(mensagemOriginal) {
-    const msg = String(mensagemOriginal || '').toLowerCase();
-    if (
-        msg.includes('fora da disponibilidade') ||
-        msg.includes('não tem disponibilidade') ||
-        msg.includes('nao tem disponibilidade') ||
-        msg.includes('horário indisponível') ||
-        msg.includes('horario indisponivel') ||
-        msg.includes('conflito')
-    ) {
-        return MSG_SEM_DISPONIBILIDADE;
-    }
-    return mensagemOriginal || MSG_SEM_DISPONIBILIDADE;
 }
 
 /** Início da aula no fuso local (data_aula + hora_inicio). */
@@ -88,6 +138,13 @@ function duracaoSlotMinutos(horaInicio, horaFim) {
     return Math.round((t1 - t0) / 60000);
 }
 
+function instanteHoraReferencia(horaValor) {
+    const horaNorm = normalizarHoraSqlTime(horaValor);
+    if (!horaNorm) return null;
+    const t = new Date(`${DATA_REF_COMPARACAO_HORAS}T${horaNorm}`).getTime();
+    return Number.isFinite(t) ? t : null;
+}
+
 // ============================================================================
 // US09 / RF11 — ADICIONAR DISPONIBILIDADE (Professor)
 // POST /api/coaching/disponibilidades
@@ -107,32 +164,13 @@ async function adicionarDisponibilidade(req, res, next) {
             return res.status(400).json({ mensagem: 'diaSemana deve ser 1 (Seg-Qui) ou 2 (Sáb-Dom).' });
         }
 
-        const normalizarHora = (v) => {
-            const s = String(v ?? '').trim();
-            if (!s) return s;
-            // Aceitar HH:mm ou HH:mm:ss
-            const m24 = s.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
-            if (m24) {
-                const hh = String(m24[1]).padStart(2, '0');
-                const mm = m24[2];
-                const ss = m24[3] ?? '00';
-                return `${hh}:${mm}:${ss}`;
-            }
-            // Aceitar "02:00 PM" / "2:00 PM"
-            const m12 = s.match(/^(\d{1,2}):(\d{2})\s*([AaPp][Mm])$/);
-            if (m12) {
-                let hh = parseInt(m12[1], 10);
-                const mm = m12[2];
-                const ampm = m12[3].toUpperCase();
-                if (ampm === 'PM' && hh < 12) hh += 12;
-                if (ampm === 'AM' && hh === 12) hh = 0;
-                return `${String(hh).padStart(2, '0')}:${mm}:00`;
-            }
-            return s;
-        };
-
-        const hIni = normalizarHora(horaInicio);
-        const hFim = normalizarHora(horaFim);
+        const hIni = normalizarHoraSqlTime(horaInicio);
+        const hFim = normalizarHoraSqlTime(horaFim);
+        if (!hIni || !hFim) {
+            return res.status(400).json({
+                mensagem: 'Horas inválidas. Use o formato HH:mm (ex: 14:00) e tente novamente.'
+            });
+        }
 
         await coachingModel.adicionarDisponibilidadeProfessor({
             diaSemana: Number(diaSemana),
@@ -162,7 +200,7 @@ async function adicionarDisponibilidade(req, res, next) {
 
 // ============================================================================
 // GET /api/coaching/preco-estimado?dataAula=&horaInicio=&formatoAula=&duracaoMinutos=
-// (Professor) — devolve preço estimado baseado na tabela de preços
+// (EE) — devolve preço estimado baseado na tabela de preços
 // ============================================================================
 async function getPrecoEstimado(req, res, next) {
     try {
@@ -174,43 +212,19 @@ async function getPrecoEstimado(req, res, next) {
 
         const formato = formatoAula || 'Solo';
         const dur = duracaoMinutos != null && duracaoMinutos !== '' ? parseInt(duracaoMinutos, 10) : 60;
+        const erroFormato = validarFormatoAula(formato);
+        if (erroFormato) return res.status(400).json({ mensagem: erroFormato });
+        const erroDuracao = validarDuracaoAula(dur);
+        if (erroDuracao) return res.status(400).json({ mensagem: erroDuracao });
         if (Number.isNaN(dur) || dur <= 0) {
             return res.status(400).json({ mensagem: 'duracaoMinutos inválida.' });
         }
 
-        // US08/RF10: validar se o slot está livre (COACHING + HORARIO) antes de calcular/preencher preço
-        const normalizarHoraSqlTime = (v) => {
-            const s = String(v ?? '').trim();
-            const m = s.match(/(\d{1,2}):(\d{2})(?::(\d{2}))?/);
-            if (!m) return null;
-            const hh = String(m[1]).padStart(2, '0');
-            const mm = m[2];
-            const ss = m[3] ?? '00';
-            return `${hh}:${mm}:${ss}`;
-        };
-
         const hIni = normalizarHoraSqlTime(horaInicio);
         if (!hIni) return res.status(400).json({ mensagem: 'horaInicio inválida.' });
 
-        const idProf = req.utilizador?.id;
         const dataParts = parseDateParts(dataAula);
         if (!dataParts) return res.status(400).json({ mensagem: 'dataAula inválida.' });
-
-        const diaSemanaCoaching = diaSemanaCoachingFromDateValue(dataAula);
-        const conflito = await coachingModel.verificarSlotLivreProfessor({
-            idProfessor: idProf,
-            dataAula: dataParts,
-            horaInicio: hIni,
-            duracaoMinutos: dur,
-            diaSemanaCoaching
-        });
-
-        if (!conflito?.livre) {
-            return res.status(409).json({
-                mensagem: mensagemDisponibilidade(conflito?.motivo),
-                motivo: conflito?.motivo || null
-            });
-        }
 
         const diaSemanaPreco = diaSemanaPrecoFromDateValue(dataAula);
 
@@ -258,15 +272,6 @@ async function getSlotLivre(req, res, next) {
             return res.status(400).json({ mensagem: 'duracaoMinutos inválida.' });
         }
 
-        const normalizarHoraSqlTime = (v) => {
-            const s = String(v ?? '').trim();
-            const m = s.match(/(\d{1,2}):(\d{2})(?::(\d{2}))?/);
-            if (!m) return null;
-            const hh = String(m[1]).padStart(2, '0');
-            const mm = m[2];
-            const ss = m[3] ?? '00';
-            return `${hh}:${mm}:${ss}`;
-        };
         const hIni = normalizarHoraSqlTime(horaInicio);
         if (!hIni) return res.status(400).json({ mensagem: 'horaInicio inválida.' });
 
@@ -401,6 +406,71 @@ async function getVagasDisponiveis(req, res, next) {
     }
 }
 
+async function getProfessoresDisponiveisAprovacao(req, res, next) {
+    try {
+        const { idModalidade, dataAula, horaInicio, duracaoMinutos, idAnoLetivo } = req.query;
+        if (!idModalidade || !dataAula || !horaInicio || !duracaoMinutos) {
+            return res.status(400).json({
+                mensagem: 'idModalidade, dataAula, horaInicio e duracaoMinutos são obrigatórios.'
+            });
+        }
+
+        const duracao = parseInt(duracaoMinutos, 10);
+        if (Number.isNaN(duracao) || duracao <= 0) {
+            return res.status(400).json({ mensagem: 'duracaoMinutos inválida.' });
+        }
+
+        const inicioPedido = instanteHoraReferencia(horaInicio);
+        if (inicioPedido == null) {
+            return res.status(400).json({ mensagem: 'horaInicio inválida.' });
+        }
+        const fimPedido = inicioPedido + duracao * 60000;
+
+        const idAnoParsed =
+            idAnoLetivo !== undefined && idAnoLetivo !== '' && idAnoLetivo != null
+                ? parseInt(idAnoLetivo, 10)
+                : null;
+        if (idAnoLetivo !== undefined && idAnoLetivo !== '' && Number.isNaN(idAnoParsed)) {
+            return res.status(400).json({ mensagem: 'idAnoLetivo inválido.' });
+        }
+
+        const disponibilidade = await coachingModel.getDisponibilidadeEfetiva(
+            parseInt(idModalidade, 10),
+            diaSemanaDisponibilidadeFromDateValue(dataAula),
+            dataAula,
+            null,
+            idAnoParsed
+        );
+
+        const professores = new Map();
+        for (const disp of disponibilidade.disponibilidades || []) {
+            const inicioDisp = instanteHoraReferencia(disp.hora_inicio);
+            const fimDisp = instanteHoraReferencia(disp.hora_fim);
+            if (inicioDisp == null || fimDisp == null) continue;
+            if (inicioDisp > inicioPedido || fimDisp < fimPedido) continue;
+
+            const ocupado = (disponibilidade.ocupacoes || []).some((ocupacao) => {
+                if (Number(ocupacao.id_professor) !== Number(disp.id_professor)) return false;
+                const inicioOcup = instanteHoraReferencia(ocupacao.hora_inicio);
+                if (inicioOcup == null) return false;
+                const durOcup = Number(ocupacao.duracao_minutos);
+                const fimOcup = inicioOcup + (Number.isFinite(durOcup) && durOcup > 0 ? durOcup : 60) * 60000;
+                return inicioOcup < fimPedido && fimOcup > inicioPedido;
+            });
+            if (!ocupado) {
+                professores.set(Number(disp.id_professor), {
+                    id_professor: disp.id_professor,
+                    nome_professor: disp.nome_professor
+                });
+            }
+        }
+
+        return res.status(200).json([...professores.values()]);
+    } catch (error) {
+        next(error);
+    }
+}
+
 // ============================================================================
 // US10 / RF12 — AGENDA DO PROFESSOR AUTENTICADO
 // GET /api/coaching/agenda?dataInicio=2025-10-01&dataFim=2025-10-31
@@ -429,7 +499,6 @@ async function criarPedidoCoaching(req, res, next) {
         const idEncarregado = req.utilizador.id;
         const perfis = req.utilizador.perfis || [];
         const isEE = utilizadorTemPerfil(perfis, 'EE');
-        const isProfessor = utilizadorTemPerfil(perfis, 'Professor');
         const {
             idModalidade,
             idProfessor,
@@ -438,8 +507,7 @@ async function criarPedidoCoaching(req, res, next) {
             dataAula,
             horaInicio,
             idAnoLetivo,
-            alunosIds,
-            numeroParticipantes
+            alunosIds
         } = req.body;
 
         // Validações de campos obrigatórios
@@ -449,34 +517,22 @@ async function criarPedidoCoaching(req, res, next) {
             });
         }
 
-        if (!isEE && !isProfessor) {
-            return res.status(403).json({ mensagem: 'Perfil sem permissão para criar pedidos de coaching.' });
+        if (!isEE) {
+            return res.status(403).json({ mensagem: 'Apenas o encarregado de educação pode pedir aulas de coaching.' });
         }
 
-        if (isEE && (!Array.isArray(alunosIds) || alunosIds.length === 0)) {
+        if (!Array.isArray(alunosIds) || alunosIds.length === 0) {
             return res.status(400).json({ mensagem: 'É necessário indicar pelo menos um aluno participante.' });
         }
 
-        if (isProfessor) {
-            const num = Number(numeroParticipantes || 1);
-            if (!Number.isFinite(num) || num < 1) {
-                return res.status(400).json({ mensagem: 'numeroParticipantes inválido.' });
-            }
-        }
+        const erroFormato = validarFormatoAula(formatoAula);
+        if (erroFormato) return res.status(400).json({ mensagem: erroFormato });
 
-        const formatosValidos = ['Solo', 'Dueto', 'Trio', 'Ensemble'];
-        if (!formatosValidos.includes(formatoAula)) {
-            return res.status(400).json({
-                mensagem: `Formato inválido. Valores aceites: ${formatosValidos.join(', ')}.`
-            });
-        }
+        const erroParticipantes = validarParticipantesPorFormato(formatoAula, alunosIds);
+        if (erroParticipantes) return res.status(400).json({ mensagem: erroParticipantes });
 
-        const duracoesValidas = [30, 60, 90, 120];
-        if (!duracoesValidas.includes(Number(duracaoMinutos))) {
-            return res.status(400).json({
-                mensagem: `Duração inválida. Valores aceites: ${duracoesValidas.join(', ')} minutos.`
-            });
-        }
+        const erroDuracao = validarDuracaoAula(duracaoMinutos);
+        if (erroDuracao) return res.status(400).json({ mensagem: erroDuracao });
 
         if (idProfessor) {
             const diaSemanaCoaching = diaSemanaCoachingFromDateValue(dataAula);
@@ -525,8 +581,8 @@ async function criarPedidoCoaching(req, res, next) {
             },
             Array.isArray(alunosIds) ? alunosIds.map(Number) : [],
             {
-                skipAlunoValidation: isProfessor,
-                numeroParticipantesOverride: isProfessor ? Number(numeroParticipantes || 1) : null
+                skipAlunoValidation: false,
+                numeroParticipantesOverride: null
             }
         );
 
@@ -860,10 +916,9 @@ async function registarValidacao(req, res, next) {
             return res.status(400).json({ mensagem: 'ID de coaching inválido.' });
         }
 
-        const estadosValidos = ['Confirmado', 'Nao_Realizado'];
-        if (!estadosValidos.includes(estadoValidacao)) {
+        if (!ESTADOS_VALIDACAO_VALIDOS.includes(estadoValidacao)) {
             return res.status(400).json({
-                mensagem: `Estado inválido. Valores aceites: ${estadosValidos.join(', ')}.`
+                mensagem: `Estado inválido. Valores aceites: ${ESTADOS_VALIDACAO_VALIDOS.join(', ')}.`
             });
         }
 
@@ -958,10 +1013,9 @@ async function concluirCoaching(req, res, next) {
         const idCoaching = parseInt(req.params.id, 10);
         const { estadoFinal, observacoes } = req.body;
 
-        const estadosValidos = ['Realizado', 'Nao_Realizado'];
-        if (!estadosValidos.includes(estadoFinal)) {
+        if (!ESTADOS_FINAIS_VALIDOS.includes(estadoFinal)) {
             return res.status(400).json({
-                mensagem: `Estado final inválido. Valores aceites: ${estadosValidos.join(', ')}.`
+                mensagem: `Estado final inválido. Valores aceites: ${ESTADOS_FINAIS_VALIDOS.join(', ')}.`
             });
         }
 
@@ -988,6 +1042,7 @@ module.exports = {
     getDisponibilidades,
     removerDisponibilidade,
     getVagasDisponiveis,
+    getProfessoresDisponiveisAprovacao,
     getAgenda,
     criarPedidoCoaching,
     getPedidoCoaching,

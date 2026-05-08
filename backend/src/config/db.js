@@ -1,5 +1,6 @@
 const sql = require('mssql');
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
 
 const [dbServer, dbInstanceName] = (process.env.DB_SERVER || '').split('\\');
 const hasExplicitPort = !!process.env.DB_PORT;

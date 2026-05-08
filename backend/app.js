@@ -86,3 +86,4 @@ poolConnect
         console.error('❌ Erro crítico ao ligar à BD:', error.message);
         process.exit(1);
     });
+    export default app;

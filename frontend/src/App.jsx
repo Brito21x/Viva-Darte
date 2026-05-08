@@ -32,6 +32,7 @@ function App() {
     venda_figurinos: () => setPaginaAtual('venda_figurinos'),
     emprestimos_pecas: () => setPaginaAtual('emprestimos_pecas'),
     minha_agenda_professor: () => setPaginaAtual('minha_agenda_professor'),
+    minha_agenda_ee: () => setPaginaAtual('minha_agenda_ee'),
   };
 
   return (
@@ -45,6 +46,7 @@ function App() {
           irParaVendaFigurinos={nav.venda_figurinos} 
           irParaEmprestimos={nav.emprestimos_pecas}
           irParaMinhaAgendaProfessor={nav.minha_agenda_professor}
+          irParaMinhaAgendaEE={nav.minha_agenda_ee}
         />
       )}
       
@@ -54,6 +56,8 @@ function App() {
           irParaRegisto={nav.registo} 
           irParaLanding={nav.landing} 
           irParaRecuperar={nav.recuperar} 
+          irParaMinhaAgendaProfessor={nav.minha_agenda_professor}
+          irParaMinhaAgendaEE={nav.minha_agenda_ee}
         />
       )}
       
@@ -91,7 +95,12 @@ function App() {
 
       {/* MINHA AGENDA PROFESSOR */}
       {paginaAtual === 'minha_agenda_professor' && (
-        <MinhaAgendaProfessor irParaLanding={nav.landing} />
+        <MinhaAgendaProfessor irParaLanding={nav.landing} modo="professor" />
+      )}
+
+      {/* MINHA AGENDA EE */}
+      {paginaAtual === 'minha_agenda_ee' && (
+        <MinhaAgendaProfessor irParaLanding={nav.landing} modo="ee" />
       )}
 
       {/* ADMIN DASHBOARD */}

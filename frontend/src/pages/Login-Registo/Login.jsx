@@ -1,7 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import './LoginRegisto.css'; 
 
-export default function Login({ irParaRegisto, irParaLanding, irParaRecuperar }) {
+export default function Login({
+  irParaRegisto,
+  irParaLanding,
+  irParaRecuperar,
+  irParaMinhaAgendaProfessor,
+  irParaMinhaAgendaEE
+}) {
   const [tipo, setTipo] = useState('EE'); 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -37,7 +43,11 @@ export default function Login({ irParaRegisto, irParaLanding, irParaRecuperar })
         // Grava o objeto que o backend envia (inclui o perfil ativo validado)
         localStorage.setItem('viva_user', JSON.stringify(resultado.utilizador));
         localStorage.setItem('viva_token', resultado.token);
-        irParaLanding(); 
+        if (tipo === 'PROF') {
+          irParaMinhaAgendaProfessor?.();
+        } else {
+          irParaMinhaAgendaEE?.();
+        }
       } else {
         mostrarAlerta(resultado.mensagem || "Dados de acesso incorretos.");
       }

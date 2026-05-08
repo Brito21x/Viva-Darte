@@ -86,6 +86,18 @@ function formatHoraCurta(valor) {
   return '—';
 }
 
+function formatDataApi(valor) {
+  if (!valor) return '';
+  const iso = String(valor).split('T')[0];
+  if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso;
+  const d = new Date(valor);
+  if (Number.isNaN(d.getTime())) return '';
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
 export default function AdminDashboard({ irParaLanding }) {
   const [isAuthorized, setIsAuthorized] = useState(false);
   const [email, setEmail] = useState('');
@@ -352,21 +364,38 @@ export default function AdminDashboard({ irParaLanding }) {
 
   async function handleAprovarPedido(pedido) {
     try {
-      const profs = await apiFetchChecked(`/api/escola/modalidades/${pedido.id_modalidade}/professores`, token);
-      const salas = await apiFetchChecked(`/api/escola/modalidades/${pedido.id_modalidade}/salas`, token);
-      const profSug = pedido.id_professor_desejado || profs?.[0]?.id_professor || '';
+      const dataAula = formatDataApi(pedido.data_aula_pretendida);
+      const horaInicio = formatHoraCurta(pedido.hora_inicio_pretendida);
+      if (!dataAula || horaInicio === '—') {
+        throw new Error('Data/hora do pedido inválida.');
+      }
+      const params = new URLSearchParams({
+        idModalidade: String(pedido.id_modalidade),
+        dataAula,
+        horaInicio,
+        duracaoMinutos: String(pedido.duracao_minutos)
+      }).toString();
+      const [profsDisponiveis, salas] = await Promise.all([
+        apiFetchChecked(`/api/coaching/professores-disponiveis?${params}`, token),
+        apiFetchChecked(`/api/escola/modalidades/${pedido.id_modalidade}/salas`, token)
+      ]);
+      const profs = Array.isArray(profsDisponiveis) ? profsDisponiveis : [];
+      const profDesejadoDisponivel = pedido.id_professor_desejado
+        ? profs.some((p) => String(p.id_professor) === String(pedido.id_professor_desejado))
+        : false;
+      const profSug = profDesejadoDisponivel ? pedido.id_professor_desejado : profs?.[0]?.id_professor || '';
       const salaSug = salas?.[0]?.id_sala || '';
       const valorSug = Number(pedido.custo_estimado || 0).toFixed(2);
       setModalAprovacao({
         isOpen: true,
         pedido,
-        professores: Array.isArray(profs) ? profs : [],
+        professores: profs,
         salas: Array.isArray(salas) ? salas : [],
         idProfessor: String(profSug || ''),
         idSala: String(salaSug || ''),
         valorFinal: String(valorSug),
         isSaving: false,
-        erro: ''
+        erro: profs.length === 0 ? 'Não há professores com disponibilidade nesse horário.' : ''
       });
     } catch (e) {
       mostrarMsg(e.message || 'Erro ao aprovar pedido.', 'erro');
@@ -613,6 +642,9 @@ export default function AdminDashboard({ irParaLanding }) {
                     <option key={p.id_professor} value={p.id_professor}>{p.nome_professor}</option>
                   ))}
                 </select>
+                <small style={{ display: 'block', marginTop: 6, opacity: 0.7 }}>
+                  Só aparecem professores disponíveis para a data/hora do pedido.
+                </small>
               </div>
               <div className="field">
                 <label>Sala</label>

@@ -1,11 +1,11 @@
 {
   "name": "vivadarte-backend",
   "version": "1.0.0",
+  "type": "commonjs",
   "main": "app.js",
   "scripts": {
     "start": "node app.js",
-    "dev": "nodemon --exec \"node scripts/free-port.js 3000 && node app.js\"",
-    "test": "vitest"
+    "dev": "nodemon --exec \"node scripts/free-port.js 3000 && node app.js\""
   },
   "dependencies": {
     "bcrypt": "^6.0.0",
@@ -19,6 +19,7 @@
   },
   "devDependencies": {
     "nodemon": "^3.1.0",
+    "supertest": "^7.2.2",
     "vitest": "^4.1.5"
   }
 }

@@ -5,7 +5,6 @@ require('dotenv').config();
 
 const { pool, poolConnect } = require('./src/config/db');
 const authRoutes = require('./src/routes/authRoutes');
-const utilizadorRoutes = require('./src/routes/utilizadorRoutes');
 const escolaRoutes = require('./src/routes/escolaRoutes');
 const coachingRoutes = require('./src/routes/coachingRoutes');
 const inventarioRoutes = require('./src/routes/inventarioRoutes');
@@ -47,7 +46,6 @@ app.get('/api/health', async (req, res) => {
 });
 
 app.use('/api/auth', authRoutes);
-app.use('/api/utilizadores', utilizadorRoutes);
 app.use('/api/escola', escolaRoutes);
 app.use('/api/coaching', coachingRoutes);
 app.use('/api/inventario', inventarioRoutes);

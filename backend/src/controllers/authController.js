@@ -325,6 +325,29 @@ async function getMeusAlunos(req, res, next) {
     }
 }
 
+async function criarMeuAluno(req, res, next) {
+    try {
+        const idEncarregado = req.utilizador?.id;
+        const { nome, dataNascimento } = req.body;
+
+        if (idEncarregado == null) {
+            return res.status(401).json({ mensagem: 'Sessão inválida.' });
+        }
+        if (!nome || !String(nome).trim()) {
+            return res.status(400).json({ mensagem: 'Nome do aluno é obrigatório.' });
+        }
+
+        const aluno = await utilizadorModel.criarAlunoParaEncarregado(idEncarregado, {
+            nome: String(nome).trim(),
+            dataNascimento: dataNascimento || null
+        });
+
+        return res.status(201).json(aluno);
+    } catch (error) {
+        next(error);
+    }
+}
+
 module.exports = {
     login,
     logout,
@@ -340,5 +363,6 @@ module.exports = {
     adminCriarUtilizador,
     editarUtilizadorCompleto,
     eliminarUtilizador,
-    getMeusAlunos
+    getMeusAlunos,
+    criarMeuAluno
 };

@@ -20,6 +20,9 @@ router.delete('/disponibilidades/:id', autorizar('Professor'), coachingControlle
 // GET  /api/coaching/vagas?idModalidade=&diaSemana=&data=
 router.get('/vagas', autorizar('EE'), coachingController.getVagasDisponiveis);
 
+// ── PROFESSORES DISPONÍVEIS PARA APROVAÇÃO (Admin) ────────────────────────────
+router.get('/professores-disponiveis', autorizar('Admin'), coachingController.getProfessoresDisponiveisAprovacao);
+
 // ── AGENDA DO PROFESSOR ───────────────────────────────────────────────────────
 // GET  /api/coaching/agenda?dataInicio=&dataFim=
 router.get('/agenda', autorizar('Professor'), coachingController.getAgenda);

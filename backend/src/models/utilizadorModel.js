@@ -443,6 +443,39 @@ async function getAlunosPorEncarregado(idEncarregado) {
         throw error;
     }
 }
+
+async function criarAlunoParaEncarregado(idEncarregado, { nome, dataNascimento = null }) {
+    const pool = await poolPromise;
+    const transaction = pool.transaction();
+    await transaction.begin();
+
+    try {
+        const alunoResult = await transaction.request()
+            .input('Nome', sql.VarChar(255), nome)
+            .input('DataNascimento', sql.Date, dataNascimento || null)
+            .query(`
+                INSERT INTO ALUNO (nome, data_nascimento, ativo, data_criacao)
+                OUTPUT INSERTED.id_aluno, INSERTED.nome AS nome_aluno, INSERTED.data_nascimento
+                VALUES (@Nome, @DataNascimento, 1, CAST(GETDATE() AS date));
+            `);
+
+        const aluno = alunoResult.recordset[0];
+        await transaction.request()
+            .input('IdEncarregado', sql.Int, idEncarregado)
+            .input('IdAluno', sql.Int, aluno.id_aluno)
+            .query(`
+                INSERT INTO ENCARREGADO_ALUNO (UTILIZADORid_utilizador, ALUNOid_aluno)
+                VALUES (@IdEncarregado, @IdAluno);
+            `);
+
+        await transaction.commit();
+        return aluno;
+    } catch (error) {
+        await transaction.rollback();
+        console.error('Erro no Modelo Transacional (criarAlunoParaEncarregado):', error);
+        throw error;
+    }
+}
  
 module.exports = {
     getUtilizadorByEmail,
@@ -456,5 +489,6 @@ module.exports = {
     guardarTokenRecuperacao,
     validarTokenRecuperacao,
     atualizarPassword,
-    getAlunosPorEncarregado
+    getAlunosPorEncarregado,
+    criarAlunoParaEncarregado
 };

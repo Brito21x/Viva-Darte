@@ -9,6 +9,9 @@ router.use(autenticar);
 // GET /api/utilizadores/me/alunos — alunos do EE autenticado (antes de /:id)
 router.get('/me/alunos', authController.getMeusAlunos);
 
+// POST /api/utilizadores/me/alunos — criar aluno ligado ao EE autenticado
+router.post('/me/alunos', autorizar('EE'), authController.criarMeuAluno);
+
 // GET /api/utilizadores — lista (Admin)
 router.get('/', autorizar('Admin'), authController.listarUtilizadores);
 

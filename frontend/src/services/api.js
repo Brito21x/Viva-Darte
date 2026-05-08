@@ -1,11 +1,9 @@
-/** Base URL do backend — usar sempre isto no login/registo para coincidir com `apiAuthFetch`. */
 export const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
 export function getAuthToken() {
   return localStorage.getItem('viva_token');
 }
 
-/** Pedido autenticado (usa `viva_token` do localStorage). */
 export function apiAuthFetch(path, options = {}) {
   const token = getAuthToken();
   return apiFetch(path, { ...options, token });

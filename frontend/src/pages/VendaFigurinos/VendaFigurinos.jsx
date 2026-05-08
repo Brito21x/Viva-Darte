@@ -11,10 +11,9 @@ export default function VendaFigurinos({
   const [figurinos, setFigurinos] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   
-  // --- NOVOS ESTADOS PARA OS FILTROS ---
   const [pesquisa, setPesquisa] = useState('');
   const [filtroEstado, setFiltroEstado] = useState('Todos');
-  const [ordenacao, setOrdenacao] = useState('recentes'); // recentes, preco_asc, preco_desc
+  const [ordenacao, setOrdenacao] = useState('recentes');
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isCompraModalOpen, setIsCompraModalOpen] = useState(false);

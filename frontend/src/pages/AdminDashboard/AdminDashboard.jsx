@@ -97,7 +97,7 @@ export default function AdminDashboard({ irParaLanding }) {
   const [token, setToken] = useState('');
   const [activeTab, setActiveTab] = useState('overview');
 
-  const [usuarios, setUsuarios] = useState([]); 
+  const [utilizadores, setUtilizadores] = useState([]); 
   const [pedidosPendentes, setPedidosPendentes] = useState([]);
   const [msg, setMsg] = useState('');
 
@@ -157,7 +157,7 @@ export default function AdminDashboard({ irParaLanding }) {
   async function carregarDados() {
     try {
       const usersData = await apiFetch('/api/auth/utilizadores', token).catch(() => []);
-      if (Array.isArray(usersData)) setUsuarios(usersData);
+      if (Array.isArray(usersData)) setUtilizadores(usersData);
       const pedidos = await apiFetch('/api/coaching/pedidos/pendentes', token).catch(() => []);
       if (Array.isArray(pedidos)) setPedidosPendentes(pedidos);
     } catch (e) { mostrarMsg('Erro ao carregar dados.', 'erro'); }
@@ -168,7 +168,7 @@ export default function AdminDashboard({ irParaLanding }) {
     setTimeout(() => setMsg(''), 3500);
   }
 
-  async function handleAceitarUsuario(id) {
+  async function handleAceitarUtilizador(id) {
       if(!window.confirm("Aprovar entrada deste utilizador?")) return;
       try {
           const res = await fetch(`${API_URL}/api/auth/utilizadores/${id}/ativar`, {
@@ -179,7 +179,7 @@ export default function AdminDashboard({ irParaLanding }) {
       } catch (err) { mostrarMsg("Erro de rede.", 'erro'); }
   }
 
-  async function handleRevogarUsuario(id) {
+  async function handleRevogarUtilizador(id) {
       if(!window.confirm("Tens a certeza que queres REVOGAR o acesso deste utilizador?")) return;
       try {
           const res = await fetch(`${API_URL}/api/auth/utilizadores/${id}/desativar`, {
@@ -190,8 +190,7 @@ export default function AdminDashboard({ irParaLanding }) {
       } catch (err) { mostrarMsg("Erro de rede.", 'erro'); }
   }
 
-  // NOVA FUNÇÃO: ELIMINAR
-  async function handleEliminarUsuario(id) {
+  async function handleEliminarUtilizador(id) {
       if(!window.confirm("Tens a certeza ABSOLUTA que queres ELIMINAR PERMANENTEMENTE este pedido?")) return;
       try {
           const res = await fetch(`${API_URL}/api/auth/utilizadores/${id}`, {
@@ -292,14 +291,14 @@ export default function AdminDashboard({ irParaLanding }) {
       );
   }
 
-  const pendentes = usuarios.filter(u => u.ativo === false || u.ativo === 0);
-  const aceites = usuarios.filter(u => u.ativo === true || u.ativo === 1);
+  const pendentes = utilizadores.filter(u => u.ativo === false || u.ativo === 0);
+  const aceites = utilizadores.filter(u => u.ativo === true || u.ativo === 1);
 
   const profs = aceites.filter(u => u.perfis && u.perfis.toLowerCase().includes('prof'));
   const encarregados = aceites.filter(u => u.perfis && (u.perfis.toLowerCase().includes('encarregado') || u.perfis.toLowerCase().includes('educação') || u.perfis === 'EE'));
   const adminsEOutros = aceites.filter(u => u.perfis && !u.perfis.toLowerCase().includes('prof') && !u.perfis.toLowerCase().includes('encarregado') && !u.perfis.toLowerCase().includes('educação') && u.perfis !== 'EE');
 
-  const renderTabelaUsuarios = (listaUsuarios) => (
+  const renderTabelaUtilizadores = (listaUtilizadores) => (
     <table className="admin-table">
       <thead>
         <tr>
@@ -308,7 +307,7 @@ export default function AdminDashboard({ irParaLanding }) {
         </tr>
       </thead>
       <tbody>
-        {listaUsuarios.map(u => {
+        {listaUtilizadores.map(u => {
           const isAtivo = u.ativo === true || u.ativo === 1;
           return (
               <tr key={u.id_utilizador} style={{ backgroundColor: !isAtivo ? '#fffbf0' : 'transparent' }}>
@@ -320,18 +319,18 @@ export default function AdminDashboard({ irParaLanding }) {
                 <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
                     {!isAtivo ? (
                         <>
-                            <button className="btn-sm btn-sm--green" style={{ backgroundColor: 'var(--green)', color: 'white', marginRight: '8px' }} onClick={() => handleAceitarUsuario(u.id_utilizador)}>Aceitar</button>
-                            <button className="btn-sm btn-sm--danger" style={{ backgroundColor: '#e74c3c', color: 'white', marginRight: '8px' }} onClick={() => handleEliminarUsuario(u.id_utilizador)}>Eliminar</button>
+                            <button className="btn-sm btn-sm--green" style={{ backgroundColor: 'var(--green)', color: 'white', marginRight: '8px' }} onClick={() => handleAceitarUtilizador(u.id_utilizador)}>Aceitar</button>
+                            <button className="btn-sm btn-sm--danger" style={{ backgroundColor: '#e74c3c', color: 'white', marginRight: '8px' }} onClick={() => handleEliminarUtilizador(u.id_utilizador)}>Eliminar</button>
                         </>
                     ) : (
-                        <button className="btn-sm btn-sm--danger" style={{ marginRight: '8px' }} onClick={() => handleRevogarUsuario(u.id_utilizador)}>Suspender</button>
+                        <button className="btn-sm btn-sm--danger" style={{ marginRight: '8px' }} onClick={() => handleRevogarUtilizador(u.id_utilizador)}>Suspender</button>
                     )}
                     <button className="btn-sm btn-sm--primary" onClick={() => abrirModalEditar(u)}>Editar</button>
                 </td>
               </tr>
           );
         })}
-        {listaUsuarios.length === 0 && ( <tr><td colSpan={7} className="empty-row" style={{ textAlign: 'center', padding: '20px' }}>Vazio.</td></tr> )}
+        {listaUtilizadores.length === 0 && ( <tr><td colSpan={7} className="empty-row" style={{ textAlign: 'center', padding: '20px' }}>Vazio.</td></tr> )}
       </tbody>
     </table>
   );
@@ -453,7 +452,7 @@ export default function AdminDashboard({ irParaLanding }) {
 
   const tabs = [
     { id: 'overview', label: '🏠 Visão Geral' },
-    { id: 'usuarios', label: '👥 Usuários' },
+    { id: 'utilizadores', label: '👥 Utilizadores' },
     { id: 'coaching', label: '🗓️ Pedidos Coaching' }
   ];
   const labelStyle = { display: 'block', fontSize: '0.75rem', fontWeight: '700', color: '#555', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.5px', fontFamily: "'Poppins', sans-serif" };
@@ -470,7 +469,7 @@ export default function AdminDashboard({ irParaLanding }) {
           {tabs.map(t => (
             <button key={t.id} className={`nav-item ${activeTab === t.id ? 'nav-item--active' : ''}`} onClick={() => setActiveTab(t.id)}>
               {t.label}
-              {t.id === 'usuarios' && pendentes.length > 0 && (<span style={{ marginLeft: '8px', background: 'var(--red)', color: 'white', padding: '2px 6px', borderRadius: '10px', fontSize: '0.7rem' }}>{pendentes.length}</span>)}
+              {t.id === 'utilizadores' && pendentes.length > 0 && (<span style={{ marginLeft: '8px', background: 'var(--red)', color: 'white', padding: '2px 6px', borderRadius: '10px', fontSize: '0.7rem' }}>{pendentes.length}</span>)}
               {t.id === 'coaching' && pedidosPendentes.length > 0 && (<span style={{ marginLeft: '8px', background: 'var(--teal)', color: 'white', padding: '2px 6px', borderRadius: '10px', fontSize: '0.7rem' }}>{pedidosPendentes.length}</span>)}
             </button>
           ))}
@@ -487,19 +486,19 @@ export default function AdminDashboard({ irParaLanding }) {
             <h1 className="page-title">Olá, {utilizador?.nome?.split(' ')[0]} 👋</h1>
             <p className="page-subtitle">Resumo do sistema</p>
             <div className="stats-grid">
-              <StatCard icon="👥" label="Total Utilizadores" value={usuarios.length} accent="blue" />
+              <StatCard icon="👥" label="Total Utilizadores" value={utilizadores.length} accent="blue" />
               <StatCard icon="⏳" label="Por Aprovar" value={pendentes.length} accent="orange" />
               <StatCard icon="🗓️" label="Pedidos Coaching" value={pedidosPendentes.length} accent="teal" />
             </div>
           </div>
         )}
 
-        {activeTab === 'usuarios' && (
+        {activeTab === 'utilizadores' && (
           <div className="tab-content">
-            <h1 className="page-title">👥 Gestão de Usuários</h1>
+            <h1 className="page-title">👥 Gestão de Utilizadores</h1>
 
             <Section title={`⏳ Pendentes (${pendentes.length})`} icon="🚨" defaultOpen={true}>
-              {renderTabelaUsuarios(pendentes)}
+              {renderTabelaUtilizadores(pendentes)}
             </Section>
 
             <Section 
@@ -507,7 +506,7 @@ export default function AdminDashboard({ irParaLanding }) {
               icon="👪" defaultOpen={true}
               actionButton={<button className="btn-sm btn-sm--primary" onClick={(e) => { e.stopPropagation(); abrirModalCriar('EE'); }}>+ Novo</button>}
             >
-              {renderTabelaUsuarios(encarregados)}
+              {renderTabelaUtilizadores(encarregados)}
             </Section>
 
             <Section 
@@ -515,7 +514,7 @@ export default function AdminDashboard({ irParaLanding }) {
               icon="🎭" defaultOpen={true}
               actionButton={<button className="btn-sm btn-sm--primary" onClick={(e) => { e.stopPropagation(); abrirModalCriar('PROF'); }}>+ Novo</button>}
             >
-              {renderTabelaUsuarios(profs)}
+              {renderTabelaUtilizadores(profs)}
             </Section>
 
             <Section 
@@ -523,7 +522,7 @@ export default function AdminDashboard({ irParaLanding }) {
               icon="⚙️" defaultOpen={true}
               actionButton={<button className="btn-sm btn-sm--primary" onClick={(e) => { e.stopPropagation(); abrirModalCriar('ADMIN'); }}>+ Novo</button>}
             >
-              {renderTabelaUsuarios(adminsEOutros)}
+              {renderTabelaUtilizadores(adminsEOutros)}
             </Section>
 
           </div>

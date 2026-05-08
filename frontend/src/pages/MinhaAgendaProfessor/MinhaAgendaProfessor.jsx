@@ -51,9 +51,28 @@ function formatYMD(date) {
   return `${yyyy}-${mm}-${dd}`;
 }
 
-function diaSemanaAbrev(dataAula) {
-  const d = new Date(dataAula);
+/** Data de calendário local — evita desvio do dia da semana com strings `YYYY-MM-DD` em UTC. */
+function parseDataCalendario(valor) {
+  if (valor == null) return null;
+  if (valor instanceof Date && !Number.isNaN(valor.getTime())) {
+    return new Date(valor.getFullYear(), valor.getMonth(), valor.getDate());
+  }
+  const s = String(valor).split('T')[0];
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) {
+    const y = Number(m[1]);
+    const mo = Number(m[2]);
+    const d = Number(m[3]);
+    if (y && mo && d) return new Date(y, mo - 1, d);
+  }
+  const d = new Date(valor);
   if (Number.isNaN(d.getTime())) return null;
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
+function diaSemanaAbrev(dataAula) {
+  const d = parseDataCalendario(dataAula);
+  if (!d) return null;
   const js = d.getDay();
   const map = { 1: 'Seg', 2: 'Ter', 3: 'Qua', 4: 'Qui', 5: 'Sex', 6: 'Sáb', 0: 'Dom' };
   return map[js] || null;
@@ -89,12 +108,15 @@ function formatIntervalo(horaInicio, duracaoMinutos) {
 }
 
 function coachingJaTerminou(dataAula, horaInicio, duracaoMinutos) {
-  const d = new Date(dataAula);
-  if (Number.isNaN(d.getTime())) return false;
+  const dia = parseDataCalendario(dataAula);
+  if (!dia) return false;
   const mins = parseTimeToMinutes(horaInicio);
   if (mins == null) return false;
-  d.setHours(0, 0, 0, 0);
-  const fim = new Date(d.getTime() + (mins + Number(duracaoMinutos || 0)) * 60000);
+  const h = Math.floor(mins / 60);
+  const mm = mins % 60;
+  const inicio = new Date(dia.getFullYear(), dia.getMonth(), dia.getDate(), h, mm, 0, 0);
+  const dur = Number(duracaoMinutos || 0);
+  const fim = new Date(inicio.getTime() + dur * 60000);
   return fim.getTime() <= Date.now();
 }
 
@@ -128,6 +150,7 @@ function normalizeTime(hhmm) {
 
 export default function MinhaAgendaProfessor({ irParaLanding }) {
   const [agenda, setAgenda] = useState([]);
+  const [pedidosPendentesProf, setPedidosPendentesProf] = useState([]);
   const [utilizador, setUtilizador] = useState(null);
   const [isLoadingAgenda, setIsLoadingAgenda] = useState(false);
   const [erroAgenda, setErroAgenda] = useState('');
@@ -269,16 +292,20 @@ export default function MinhaAgendaProfessor({ irParaLanding }) {
     async function carregarAgendaSemana() {
       setErroAgenda('');
       setIsLoadingAgenda(true);
+      const dataInicio = formatYMD(weekStart);
+      const dataFim = formatYMD(addDays(weekStart, 6));
       try {
-        const dataInicio = formatYMD(weekStart);
-        const dataFim = formatYMD(addDays(weekStart, 6)); // Seg..Dom
-
-        const data = await apiAuthFetch(`/api/coaching/agenda?dataInicio=${dataInicio}&dataFim=${dataFim}`);
+        const [dataAgenda, dataPedidos] = await Promise.all([
+          apiAuthFetch(`/api/coaching/agenda?dataInicio=${dataInicio}&dataFim=${dataFim}`),
+          apiAuthFetch(`/api/coaching/pedidos/atribuidos-professor?dataInicio=${dataInicio}&dataFim=${dataFim}`).catch(() => [])
+        ]);
         if (!isMounted) return;
-        setAgenda(Array.isArray(data) ? data : []);
+        setAgenda(Array.isArray(dataAgenda) ? dataAgenda : []);
+        setPedidosPendentesProf(Array.isArray(dataPedidos) ? dataPedidos : []);
       } catch (e) {
         if (!isMounted) return;
         setAgenda([]);
+        setPedidosPendentesProf([]);
         setErroAgenda(e?.message || 'Erro ao carregar agenda');
       } finally {
         if (isMounted) setIsLoadingAgenda(false);
@@ -286,7 +313,9 @@ export default function MinhaAgendaProfessor({ irParaLanding }) {
     }
 
     carregarAgendaSemana();
-    return () => { isMounted = false; };
+    return () => {
+      isMounted = false;
+    };
   }, [weekStart]);
 
   const resumoMensal = useMemo(() => {
@@ -298,16 +327,39 @@ export default function MinhaAgendaProfessor({ irParaLanding }) {
   }, [agenda]);
 
   const agendaPorDiaHora = useMemo(() => {
-    /** key: `${DIA}|${HORA}` */
+    /** key: `${DIA}|${HORA}` — coachings confirmados têm prioridade; pedidos só Pendente preenchem slot livre */
     const map = new Map();
     for (const row of agenda) {
       const diaKey = diaSemanaAbrev(row.data_aula);
       const horaSlot = horaParaSlot(row.hora_inicio);
       if (!diaKey || !horaSlot) continue;
-      map.set(`${diaKey}|${horaSlot}`, row);
+      map.set(`${diaKey}|${horaSlot}`, { ...row, origem: 'coaching' });
+    }
+    for (const p of pedidosPendentesProf) {
+      const est = String(p.estado || '').toLowerCase();
+      if (est !== 'pendente') continue;
+      const diaKey = diaSemanaAbrev(p.data_aula_pretendida);
+      const horaSlot = horaParaSlot(p.hora_inicio_pretendida);
+      if (!diaKey || !horaSlot) continue;
+      const k = `${diaKey}|${horaSlot}`;
+      if (!map.has(k)) {
+        map.set(k, {
+          origem: 'pedido_pendente',
+          id_pedido_coaching: p.id_pedido_coaching,
+          data_aula: p.data_aula_pretendida,
+          hora_inicio: p.hora_inicio_pretendida,
+          duracao_minutos: p.duracao_minutos,
+          formato_aula: p.formato_aula,
+          modalidade: p.modalidade,
+          encarregado: p.encarregado,
+          estado: p.estado,
+          sala: null,
+          id_coaching: null
+        });
+      }
     }
     return map;
-  }, [agenda]);
+  }, [agenda, pedidosPendentesProf]);
 
   const irParaHoje = () => setWeekStart(getMonday(new Date()));
   const irParaSemanaAnterior = () => setWeekStart((d) => addDays(d, -7));
@@ -359,11 +411,14 @@ export default function MinhaAgendaProfessor({ irParaLanding }) {
         body: { estadoValidacao: 'Confirmado', observacoes: null }
       });
 
-      // refresh
       const dataInicio = formatYMD(weekStart);
       const dataFim = formatYMD(addDays(weekStart, 6));
-      const data = await apiAuthFetch(`/api/coaching/agenda?dataInicio=${dataInicio}&dataFim=${dataFim}`);
-      setAgenda(Array.isArray(data) ? data : []);
+      const [dataAgenda, dataPedidos] = await Promise.all([
+        apiAuthFetch(`/api/coaching/agenda?dataInicio=${dataInicio}&dataFim=${dataFim}`),
+        apiAuthFetch(`/api/coaching/pedidos/atribuidos-professor?dataInicio=${dataInicio}&dataFim=${dataFim}`).catch(() => [])
+      ]);
+      setAgenda(Array.isArray(dataAgenda) ? dataAgenda : []);
+      setPedidosPendentesProf(Array.isArray(dataPedidos) ? dataPedidos : []);
     } catch (e) {
       alert(e?.message || 'Não foi possível validar esta aula.');
     }
@@ -477,6 +532,18 @@ export default function MinhaAgendaProfessor({ irParaLanding }) {
       const novoId = res?.idPedido ?? null;
       setPedidoIdCriado(novoId);
       setPedidoSucesso(novoId ? `Pedido #${novoId} enviado para coordenação com sucesso.` : 'Pedido enviado para coordenação com sucesso.');
+      const di = formatYMD(weekStart);
+      const df = formatYMD(addDays(weekStart, 6));
+      try {
+        const [dataAgenda, dataPedidos] = await Promise.all([
+          apiAuthFetch(`/api/coaching/agenda?dataInicio=${di}&dataFim=${df}`),
+          apiAuthFetch(`/api/coaching/pedidos/atribuidos-professor?dataInicio=${di}&dataFim=${df}`).catch(() => [])
+        ]);
+        setAgenda(Array.isArray(dataAgenda) ? dataAgenda : []);
+        setPedidosPendentesProf(Array.isArray(dataPedidos) ? dataPedidos : []);
+      } catch {
+        /* ignore refresh erro */
+      }
     } catch (e) {
       setPedidoErro(traduzErroCoaching(e, 'Não foi possível submeter o pedido.'));
     } finally {
@@ -549,14 +616,35 @@ export default function MinhaAgendaProfessor({ irParaLanding }) {
                         const dataAulaYmd = formatYMD(addDays(weekStart, idx));
                         verPrecoEstimado({ dataAulaYmd, horaInicio: hora });
                       }}
-                      style={{ cursor: 'pointer' }}
-                      aria-label={`Ver preço estimado em ${dia} às ${hora}`}
+                      style={{
+                        cursor: agendaPorDiaHora.get(`${dia}|${hora}`) ? 'default' : 'pointer'
+                      }}
+                      aria-label={
+                        agendaPorDiaHora.get(`${dia}|${hora}`)
+                          ? `Aula ou pedido em ${dia} às ${hora}`
+                          : `Ver preço estimado em ${dia} às ${hora}`
+                      }
                     >
                       {(() => {
                         const row = agendaPorDiaHora.get(`${dia}|${hora}`);
                         if (!row) return null;
 
                         const classeModalidade = modalidadeParaClasse(row.modalidade);
+                        if (row.origem === 'pedido_pendente') {
+                          return (
+                            <div className={`event-block ${classeModalidade} pendente-coordenacao`}>
+                              <div className="event-info">
+                                <span className="event-time">
+                                  {formatIntervalo(row.hora_inicio, row.duracao_minutos)}
+                                </span>
+                                <span className="event-label">À espera da coordenação</span>
+                                <h4 className="event-title">{row.modalidade} ({row.formato_aula})</h4>
+                                <p className="event-student">EE: {row.encarregado}</p>
+                              </div>
+                            </div>
+                          );
+                        }
+
                         const ended = coachingJaTerminou(row.data_aula, row.hora_inicio, row.duracao_minutos);
                         const pendente = ended && (row.estado === 'Agendado' || row.estado === 'Confirmado');
 
@@ -570,7 +658,7 @@ export default function MinhaAgendaProfessor({ irParaLanding }) {
                               <p className="event-student">Sala: {row.sala} • EE: {row.encarregado}</p>
                             </div>
                             {pendente && (
-                              <button className="btn-validar-mini" onClick={() => validarRealizacao(row)}>
+                              <button type="button" className="btn-validar-mini" onClick={(ev) => { ev.stopPropagation(); validarRealizacao(row); }}>
                                 Validar Realização
                               </button>
                             )}

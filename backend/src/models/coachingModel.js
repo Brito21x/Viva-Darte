@@ -517,6 +517,7 @@ async function getPedidosAtribuidosAoProfessor(idProfessor) {
                     pc.data_aula_pretendida,
                     pc.hora_inicio_pretendida,
                     pc.formato_aula,
+                    pc.duracao_minutos,
                     pc.estado,
                     pc.custo_estimado,
                     m.nome AS modalidade,
@@ -532,6 +533,46 @@ async function getPedidosAtribuidosAoProfessor(idProfessor) {
         return result.recordset;
     } catch (error) {
         console.error('Erro no Modelo (getPedidosAtribuidosAoProfessor):', error);
+        throw error;
+    }
+}
+
+/**
+ * Pedidos onde o professor está indicado, no intervalo de datas (ex.: vista semanal).
+ * Por defeito só estados úteis para agenda do professor: Pendente (aguarda coordenação).
+ */
+async function getPedidosAtribuidosAoProfessorNoPeriodo(idProfessor, dataInicio, dataFim) {
+    try {
+        const pool = await poolPromise;
+        const result = await pool
+            .request()
+            .input('IdProf', sql.Int, idProfessor)
+            .input('DataInicio', sql.Date, dataInicio)
+            .input('DataFim', sql.Date, dataFim)
+            .query(`
+                SELECT 
+                    pc.id_pedido_coaching,
+                    pc.data_aula_pretendida,
+                    pc.hora_inicio_pretendida,
+                    pc.formato_aula,
+                    pc.duracao_minutos,
+                    pc.estado,
+                    pc.custo_estimado,
+                    m.nome AS modalidade,
+                    ee.nome AS encarregado,
+                    ee.email AS email_encarregado
+                FROM PEDIDO_COACHING pc
+                JOIN UTILIZADOR ee ON pc.UTILIZADORid_utilizador = ee.id_utilizador
+                JOIN MODALIDADE m ON pc.MODALIDADEid_modalidade = m.id_modalidade
+                WHERE pc.UTILIZADORid_utilizador2 = @IdProf
+                  AND pc.estado = N'Pendente'
+                  AND pc.data_aula_pretendida BETWEEN @DataInicio AND @DataFim
+                ORDER BY pc.data_aula_pretendida ASC, pc.hora_inicio_pretendida ASC;
+            `);
+
+        return result.recordset;
+    } catch (error) {
+        console.error('Erro no Modelo (getPedidosAtribuidosAoProfessorNoPeriodo):', error);
         throw error;
     }
 }
@@ -1216,6 +1257,7 @@ module.exports = {
     getPedidosPorEncarregado,
     cancelarPedidoPendenteEncarregado,
     getPedidosAtribuidosAoProfessor,
+    getPedidosAtribuidosAoProfessorNoPeriodo,
     coachingPertenceAProfessorAtivo,
     coachingPertenceAEncarregado,
     getCoachingCabecalhoCancelamento,

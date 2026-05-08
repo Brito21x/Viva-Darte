@@ -630,6 +630,24 @@ async function getPedidosPendentes(req, res, next) {
     }
 }
 
+// GET /api/coaching/pedidos/atribuidos-professor?dataInicio=&dataFim=
+async function getPedidosAtribuidosProfessor(req, res, next) {
+    try {
+        const { dataInicio, dataFim } = req.query;
+        if (!dataInicio || !dataFim) {
+            return res.status(400).json({ mensagem: 'dataInicio e dataFim são obrigatórios (YYYY-MM-DD).' });
+        }
+        const pedidos = await coachingModel.getPedidosAtribuidosAoProfessorNoPeriodo(
+            req.utilizador.id,
+            dataInicio,
+            dataFim
+        );
+        return res.status(200).json(pedidos);
+    } catch (error) {
+        next(error);
+    }
+}
+
 // ============================================================================
 // US07, US08 / RF08, RF09, RF10 — APROVAR PEDIDO E AGENDAR COACHING (Coordenação)
 // POST /api/coaching/pedidos/:id/aprovar
@@ -976,6 +994,7 @@ module.exports = {
     listarMeusPedidosCoaching,
     cancelarMeuPedidoPendente,
     getPedidosPendentes,
+    getPedidosAtribuidosProfessor,
     aprovarPedido,
     rejeitarPedido,
     cancelarCoaching,

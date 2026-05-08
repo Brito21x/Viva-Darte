@@ -39,8 +39,10 @@ router.post('/pedidos', autorizar('EE', 'Professor'), coachingController.criarPe
 // GET  /api/coaching/pedidos/pendentes — pedidos para tratar (Coordenação)
 router.get('/pedidos/pendentes', autorizar('Admin'), coachingController.getPedidosPendentes);
 
-// US05 / RF06 — os meus pedidos (EE) — antes de /pedidos/:id
-router.get('/pedidos/meus', autorizar('EE'), coachingController.listarMeusPedidosCoaching);
+// US05 — pedidos onde sou professor indicado (à espera da coordenação), por período
+router.get('/pedidos/atribuidos-professor', autorizar('Professor'), coachingController.getPedidosAtribuidosProfessor);
+
+// GET /api/coaching/pedidos/meus — EE
 
 // Cancelar pedido pendente (EE)
 router.delete('/pedidos/:id/pendente', autorizar('EE'), coachingController.cancelarMeuPedidoPendente);

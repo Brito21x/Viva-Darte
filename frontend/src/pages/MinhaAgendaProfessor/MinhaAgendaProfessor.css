@@ -45,6 +45,16 @@
 .event-block.jazz { background-color: var(--color-jazz); }
 .event-block.acrodance { background-color: var(--color-acrodance); }
 .event-block.acrobatica { background-color: var(--color-acrobatica); }
+.event-block.pendente-coordenacao {
+  background: linear-gradient(135deg, rgba(90, 84, 78, 0.92) 0%, rgba(120, 108, 96, 0.95) 100%);
+  border-left-style: dashed;
+  border-left-width: 4px;
+  border-left-color: rgba(255, 255, 255, 0.45);
+  opacity: 0.98;
+}
+.event-block.pendente-coordenacao .event-label {
+  margin-bottom: 4px;
+}
 .event-block.status-pending { outline: 2px solid var(--accent-gold); animation: pulse-alert 2s infinite; }
 .event-time { font-weight: 800; opacity: 0.8; display: block; margin-bottom: 3px; }
 .event-title { font-weight: 700; margin: 0; }

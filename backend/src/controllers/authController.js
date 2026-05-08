@@ -21,6 +21,8 @@ async function login(req, res, next) {
         if (!email || !password) return res.status(400).json({ mensagem: 'Email e palavra-passe são obrigatórios.' });
 
         const tipoFornecido = tipo || perfil || 'PROF';
+        /** Normaliza para comparações (ex.: Postman com `"tipo": "admin"`). */
+        const tipoUp = String(tipoFornecido).trim().toUpperCase();
         const utilizador = await utilizadorModel.getUtilizadorByEmail(email);
 
         // 2. Verificação de existência do utilizador
@@ -38,20 +40,20 @@ async function login(req, res, next) {
         let temPerfil = false;
         
         // Verifica se o perfil fornecido corresponde aos perfis associados ao utilizador na base de dados
-        if (tipoFornecido === 'ADMIN' || tipoFornecido === 'Admin') temPerfil = perfis.some(p => p.toLowerCase().includes('admin') || p.toLowerCase().includes('coord'));
-        else if (tipoFornecido === 'PROF') temPerfil = perfis.some(p => p.toLowerCase().includes('prof'));
-        else temPerfil = perfis.some(p => p.toLowerCase().includes('encarregado') || p.toLowerCase().includes('educação') || p.toLowerCase() === 'ee');
+        if (tipoUp === 'ADMIN') temPerfil = perfis.some(p => p.toLowerCase().includes('admin') || p.toLowerCase().includes('coord'));
+        else if (tipoUp === 'PROF' || tipoUp === 'PROFESSOR') temPerfil = perfis.some(p => p.toLowerCase().includes('prof'));
+        else temPerfil = perfis.some(p => p.toLowerCase().includes('encarregado') || p.toLowerCase().includes('educação') || p.toLowerCase().includes('educacao') || p.toLowerCase() === 'ee');
 
         if (!temPerfil) return res.status(403).json({ mensagem: `Acesso negado.` });
 
         // Normalização do nome do perfil para envio no token
         let perfilFinal = 'Encarregado de Educação';
-        if (tipoFornecido === 'PROF') perfilFinal = 'Professor';
-        if (tipoFornecido === 'ADMIN' || tipoFornecido === 'Admin') perfilFinal = 'Admin';
+        if (tipoUp === 'PROF' || tipoUp === 'PROFESSOR') perfilFinal = 'Professor';
+        if (tipoUp === 'ADMIN') perfilFinal = 'Admin';
 
         // 6. Geração do JSON Web Token (JWT) com os dados de sessão do utilizador
         const token = jwt.sign(
-            { id: utilizador.id_utilizador, nome: utilizador.nome, email: utilizador.email, perfis, perfil: perfilFinal, id_perfil: tipoFornecido === 'ADMIN' ? 1 : null },
+            { id: utilizador.id_utilizador, nome: utilizador.nome, email: utilizador.email, perfis, perfil: perfilFinal, id_perfil: tipoUp === 'ADMIN' ? 1 : null },
             process.env.JWT_SECRET || 'segredo_super_seguro_123',
             { expiresIn: '8h' } // O token expira em 8 horas
         );

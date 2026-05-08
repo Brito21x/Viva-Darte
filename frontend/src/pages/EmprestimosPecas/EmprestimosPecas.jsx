@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import './EmprestimosPecas.css';
 import logoImg from '../../assets/logo.png';
+import { API_URL, getAuthToken } from '../../services/api';
 
 export default function EmprestimosPecas({ irParaLanding, irParaVendaFigurinos }) {
   const [utilizador, setUtilizador]   = useState(null);
@@ -44,7 +45,7 @@ export default function EmprestimosPecas({ irParaLanding, irParaVendaFigurinos }
 
   const API_URL = 'http://localhost:3000/api/inventario';
 
-  const getToken  = () => localStorage.getItem('token') || '';
+  const getToken = () => getAuthToken() || '';
   const mostrarAlerta = (msg) => setCustomAlert({ show: true, message: msg, type: 'alert', onConfirm: null });
   const fecharAlerta  = ()    => setCustomAlert({ show: false, message: '', type: 'alert', onConfirm: null });
 

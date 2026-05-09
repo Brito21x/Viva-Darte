@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: controllers/escolaController.js</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: controllers/escolaController.js</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>/**
+ * @fileoverview Controlador da Escola.
+ * Responsável por gerir e fornecer dados base estruturais da escola, tais como 
+ * Anos Letivos, Modalidades, Salas, Professores e as respetivas associações e horários.
+ */
+
+const escolaModel = require('../models/escolaModel');
+
+// ============================================================================
+// ANOS LETIVOS
+// ============================================================================
+
+/**
+ * Obtém a lista de todos os anos letivos configurados no sistema.
+ * GET /api/escola/anos-letivos
+ */
+async function getAnosLetivos(req, res, next) {
+    try {
+        const anos = await escolaModel.getAnosLetivos();
+        return res.status(200).json(anos);
+    } catch (error) {
+        next(error);
+    }
+}
+
+// ============================================================================
+// MODALIDADES
+// ============================================================================
+
+/**
+ * Obtém a lista de modalidades (disciplinas/instrumentos) atualmente ativas.
+ * GET /api/escola/modalidades
+ */
+async function getModalidades(req, res, next) {
+    try {
+        const modalidades = await escolaModel.getModalidadesAtivas();
+        return res.status(200).json(modalidades);
+    } catch (error) {
+        next(error);
+    }
+}
+
+// ============================================================================
+// SALAS E COMPATIBILIDADES
+// ============================================================================
+
+/**
+ * Obtém a lista de todas as salas da escola (com as suas capacidades).
+ * GET /api/escola/salas
+ */
+async function getSalas(req, res, next) {
+    try {
+        const salas = await escolaModel.getSalas();
+        return res.status(200).json(salas);
+    } catch (error) {
+        next(error);
+    }
+}
+
+/**
+ * Obtém a matriz completa de compatibilidade entre as salas e as modalidades.
+ * Útil para saber globalmente que salas estão equipadas para que aulas.
+ * GET /api/escola/compatibilidade
+ */
+async function getCompatibilidade(req, res, next) {
+    try {
+        const compatibilidade = await escolaModel.getCompatibilidadeSalasModalidades();
+        return res.status(200).json(compatibilidade);
+    } catch (error) {
+        next(error);
+    }
+}
+
+/**
+ * Obtém apenas as salas adequadas/compatíveis para lecionar uma modalidade específica.
+ * Usado habitualmente no formulário de aprovação de aulas pela Coordenação.
+ * GET /api/escola/modalidades/:id/salas
+ */
+async function getSalasPorModalidade(req, res, next) {
+    try {
+        const idModalidade = parseInt(req.params.id);
+
+        if (isNaN(idModalidade)) {
+            return res.status(400).json({ mensagem: 'ID de modalidade inválido.' });
+        }
+
+        const salas = await escolaModel.getSalasPorModalidade(idModalidade);
+        return res.status(200).json(salas);
+    } catch (error) {
+        next(error);
+    }
+}
+
+// ============================================================================
+// GESTÃO DE PROFESSORES E ASSOCIAÇÕES
+// ============================================================================
+
+/**
+ * US11 — Obtém a lista de todos os professores com estado ativo no sistema.
+ * Útil para o painel de Administração ou Coordenação.
+ * GET /api/escola/professores
+ */
+async function getProfessoresAtivos(req, res, next) {
+    try {
+        const lista = await escolaModel.getProfessoresAtivos();
+        return res.status(200).json(lista);
+    } catch (error) {
+        next(error);
+    }
+}
+
+/**
+ * US05 — Obtém os professores habilitados a lecionar uma determinada modalidade.
+ * Muito utilizado para popular as dropdowns aquando da submissão de um pedido de coaching pelo EE.
+ * GET /api/escola/modalidades/:id/professores
+ */
+async function getProfessoresPorModalidade(req, res, next) {
+    try {
+        const idModalidade = parseInt(req.params.id);
+
+        if (isNaN(idModalidade)) {
+            return res.status(400).json({ mensagem: 'ID de modalidade inválido.' });
+        }
+
+        const professores = await escolaModel.getProfessoresPorModalidade(idModalidade);
+        return res.status(200).json(professores);
+    } catch (error) {
+        next(error);
+    }
+}
+
+/**
+ * Obtém as modalidades que um professor específico está apto a lecionar.
+ * GET /api/escola/professores/:id/modalidades
+ */
+async function getModalidadesPorProfessor(req, res, next) {
+    try {
+        const idProfessor = parseInt(req.params.id);
+
+        if (isNaN(idProfessor)) {
+            return res.status(400).json({ mensagem: 'ID de professor inválido.' });
+        }
+
+        const modalidades = await escolaModel.getModalidadesPorProfessor(idProfessor);
+        return res.status(200).json(modalidades);
+    } catch (error) {
+        next(error);
+    }
+}
+
+/**
+ * US11 / RF13 — Associa uma nova modalidade a um professor (Coordenação).
+ * Permite definir que o professor tem competência para dar aulas a essa disciplina.
+ * POST /api/escola/professores/:id/modalidades
+ * Body: { idModalidade }
+ */
+async function associarProfessorModalidade(req, res, next) {
+    try {
+        const idProfessor = parseInt(req.params.id);
+        const { idModalidade } = req.body;
+
+        // Validação de dados de entrada
+        if (isNaN(idProfessor) || !idModalidade) {
+            return res.status(400).json({ mensagem: 'ID de professor e idModalidade são obrigatórios.' });
+        }
+
+        await escolaModel.associarProfessorModalidade(idProfessor, parseInt(idModalidade));
+
+        return res.status(201).json({ mensagem: 'Modalidade associada ao professor com sucesso.' });
+    } catch (error) {
+        // Trata conflitos caso a associação já exista na base de dados
+        if (error.message.includes('já existe') || error.message.includes('já está associado')) {
+            return res.status(409).json({ mensagem: error.message });
+        }
+        next(error);
+    }
+}
+
+/**
+ * Remove a associação entre um professor e uma modalidade (Coordenação).
+ * O professor deixa de estar disponível para lecionar essa disciplina.
+ * DELETE /api/escola/professores/:id/modalidades/:idModalidade
+ */
+async function removerProfessorModalidade(req, res, next) {
+    try {
+        const idProfessor = parseInt(req.params.id);
+        const idModalidade = parseInt(req.params.idModalidade);
+
+        // Validação de IDs passados nos parâmetros da rota
+        if (isNaN(idProfessor) || isNaN(idModalidade)) {
+            return res.status(400).json({ mensagem: 'IDs inválidos.' });
+        }
+
+        const sucesso = await escolaModel.removerProfessorModalidade(idProfessor, idModalidade);
+
+        // Se a base de dados não afetar nenhuma linha, significa que o vínculo não existia
+        if (!sucesso) {
+            return res.status(404).json({ mensagem: 'Associação não encontrada.' });
+        }
+
+        return res.status(200).json({ mensagem: 'Associação removida com sucesso.' });
+    } catch (error) {
+        next(error);
+    }
+}
+
+// ============================================================================
+// HORÁRIOS REGULARES
+// ============================================================================
+
+/**
+ * Obtém os horários regulares de aulas (turmas fixas) da escola.
+ * Permite filtrar por um Ano Letivo específico via query string.
+ * GET /api/escola/horarios?idAnoLetivo=
+ */
+async function getHorarios(req, res, next) {
+    try {
+        const { idAnoLetivo } = req.query;
+        
+        // Parsing flexível para lidar com parâmetros nulos, vazios ou indefinidos
+        const id =
+            idAnoLetivo !== undefined &amp;&amp; idAnoLetivo !== '' &amp;&amp; idAnoLetivo != null
+                ? parseInt(idAnoLetivo, 10)
+                : null;
+                
+        // Se foi enviado um valor mas não é numérico, devolve erro
+        if (idAnoLetivo !== undefined &amp;&amp; idAnoLetivo !== '' &amp;&amp; Number.isNaN(id)) {
+            return res.status(400).json({ mensagem: 'idAnoLetivo inválido.' });
+        }
+
+        const horarios = await escolaModel.getHorariosPorAnoLetivo(id);
+        return res.status(200).json(horarios);
+    } catch (error) {
+        next(error);
+    }
+}
+
+// Exportação das funções do controlador
+module.exports = {
+    getAnosLetivos,
+    getModalidades,
+    getSalas,
+    getCompatibilidade,
+    getSalasPorModalidade,
+    getProfessoresAtivos,
+    getProfessoresPorModalidade,
+    getModalidadesPorProfessor,
+    associarProfessorModalidade,
+    removerProfessorModalidade,
+    getHorarios
+};</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Global</h3><ul><li><a href="global.html#DATA_REF_COMPARACAO_HORAS">DATA_REF_COMPARACAO_HORAS</a></li><li><a href="global.html#adicionarDisponibilidade">adicionarDisponibilidade</a></li><li><a href="global.html#adicionarDisponibilidadeProfessor">adicionarDisponibilidadeProfessor</a></li><li><a href="global.html#adminCriarUtilizador">adminCriarUtilizador</a></li><li><a href="global.html#alterarEstado">alterarEstado</a></li><li><a href="global.html#alterarEstadoUtilizador">alterarEstadoUtilizador</a></li><li><a href="global.html#apagarPeca">apagarPeca</a></li><li><a href="global.html#apagarUtilizador">apagarUtilizador</a></li><li><a href="global.html#aprovarEAgendarCoaching">aprovarEAgendarCoaching</a></li><li><a href="global.html#aprovarPedido">aprovarPedido</a></li><li><a href="global.html#assertAlunosPertencemAoEncarregado">assertAlunosPertencemAoEncarregado</a></li><li><a href="global.html#associarProfessorModalidade">associarProfessorModalidade</a></li><li><a href="global.html#ativarUtilizador">ativarUtilizador</a></li><li><a href="global.html#atualizarDadosCompletosPeca">atualizarDadosCompletosPeca</a></li><li><a href="global.html#atualizarDadosVenda">atualizarDadosVenda</a></li><li><a href="global.html#atualizarEstadoPeca">atualizarEstadoPeca</a></li><li><a href="global.html#atualizarFotosPeca">atualizarFotosPeca</a></li><li><a href="global.html#atualizarPagamentoEmprestimo">atualizarPagamentoEmprestimo</a></li><li><a href="global.html#atualizarPassword">atualizarPassword</a></li><li><a href="global.html#atualizarUtilizadorCompleto">atualizarUtilizadorCompleto</a></li><li><a href="global.html#autenticar">autenticar</a></li><li><a href="global.html#autorizar">autorizar</a></li><li><a href="global.html#calcularCustoAutomatico">calcularCustoAutomatico</a></li><li><a href="global.html#cancelarCoaching">cancelarCoaching</a></li><li><a href="global.html#cancelarMeuPedidoPendente">cancelarMeuPedidoPendente</a></li><li><a href="global.html#cancelarPedidoPendenteEncarregado">cancelarPedidoPendenteEncarregado</a></li><li><a href="global.html#coachingPertenceAEncarregado">coachingPertenceAEncarregado</a></li><li><a href="global.html#coachingPertenceAProfessorAtivo">coachingPertenceAProfessorAtivo</a></li><li><a href="global.html#colocarPecaAVenda">colocarPecaAVenda</a></li><li><a href="global.html#colunasTabelaPrecoCache">colunasTabelaPrecoCache</a></li><li><a href="global.html#concluirCoaching">concluirCoaching</a></li><li><a href="global.html#concluirCoachingPelaCoordenacao">concluirCoachingPelaCoordenacao</a></li><li><a href="global.html#criarMeuAluno">criarMeuAluno</a></li><li><a href="global.html#criarPedidoCoaching">criarPedidoCoaching</a></li><li><a href="global.html#criarRequest">criarRequest</a></li><li><a href="global.html#criarUtilizador">criarUtilizador</a></li><li><a href="global.html#criarUtilizadorAdmin">criarUtilizadorAdmin</a></li><li><a href="global.html#desativarUtilizador">desativarUtilizador</a></li><li><a href="global.html#diaSemanaCoachingFromDateValue">diaSemanaCoachingFromDateValue</a></li><li><a href="global.html#diaSemanaDisponibilidadeDeDiaReal">diaSemanaDisponibilidadeDeDiaReal</a></li><li><a href="global.html#diaSemanaDisponibilidadeFromDateValue">diaSemanaDisponibilidadeFromDateValue</a></li><li><a href="global.html#diaSemanaHorarioDeData">diaSemanaHorarioDeData</a></li><li><a href="global.html#diaSemanaPrecoFromDateValue">diaSemanaPrecoFromDateValue</a></li><li><a href="global.html#duracaoSlotMinutos">duracaoSlotMinutos</a></li><li><a href="global.html#editarPeca">editarPeca</a></li><li><a href="global.html#editarUtilizador">editarUtilizador</a></li><li><a href="global.html#editarUtilizadorCompleto">editarUtilizadorCompleto</a></li><li><a href="global.html#eliminarPecaCompleta">eliminarPecaCompleta</a></li><li><a href="global.html#eliminarUtilizador">eliminarUtilizador</a></li><li><a href="global.html#existeConflitoCoachingProfessor">existeConflitoCoachingProfessor</a></li><li><a href="global.html#existeConflitoCoachingSala">existeConflitoCoachingSala</a></li><li><a href="global.html#existeConflitoHorarioProfessor">existeConflitoHorarioProfessor</a></li><li><a href="global.html#existeConflitoHorarioSala">existeConflitoHorarioSala</a></li><li><a href="global.html#getAgenda">getAgenda</a></li><li><a href="global.html#getAgendaProfessor">getAgendaProfessor</a></li><li><a href="global.html#getAnosLetivos">getAnosLetivos</a></li><li><a href="global.html#getCatalogo">getCatalogo</a></li><li><a href="global.html#getCatalogoPecas">getCatalogoPecas</a></li><li><a href="global.html#getCoachingCabecalhoCancelamento">getCoachingCabecalhoCancelamento</a></li><li><a href="global.html#getCompatibilidade">getCompatibilidade</a></li><li><a href="global.html#getCompatibilidadeSalasModalidades">getCompatibilidadeSalasModalidades</a></li><li><a href="global.html#getDisponibilidadeEfetiva">getDisponibilidadeEfetiva</a></li><li><a href="global.html#getDisponibilidades">getDisponibilidades</a></li><li><a href="global.html#getDisponibilidadesProfessor">getDisponibilidadesProfessor</a></li><li><a href="global.html#getHorarios">getHorarios</a></li><li><a href="global.html#getHorariosPorAnoLetivo">getHorariosPorAnoLetivo</a></li><li><a href="global.html#getMeusAlunos">getMeusAlunos</a></li><li><a href="global.html#getModalidades">getModalidades</a></li><li><a href="global.html#getModalidadesAtivas">getModalidadesAtivas</a></li><li><a href="global.html#getModalidadesPorProfessor">getModalidadesPorProfessor</a></li><li><a href="global.html#getPecaDetalhes">getPecaDetalhes</a></li><li><a href="global.html#getPecasAVenda">getPecasAVenda</a></li><li><a href="global.html#getPedidoCoaching">getPedidoCoaching</a></li><li><a href="global.html#getPedidoCoachingPorId">getPedidoCoachingPorId</a></li><li><a href="global.html#getPedidosAtribuidosAoProfessor">getPedidosAtribuidosAoProfessor</a></li><li><a href="global.html#getPedidosAtribuidosAoProfessorNoPeriodo">getPedidosAtribuidosAoProfessorNoPeriodo</a></li><li><a href="global.html#getPedidosAtribuidosProfessor">getPedidosAtribuidosProfessor</a></li><li><a href="global.html#getPedidosPendentes">getPedidosPendentes</a></li><li><a href="global.html#getPedidosPorEncarregado">getPedidosPorEncarregado</a></li><li><a href="global.html#getPendentesConclusaoCoordenacao">getPendentesConclusaoCoordenacao</a></li><li><a href="global.html#getPerfisDoUtilizador">getPerfisDoUtilizador</a></li><li><a href="global.html#getPrecoEstimado">getPrecoEstimado</a></li><li><a href="global.html#getProfessoresAtivos">getProfessoresAtivos</a></li><li><a href="global.html#getProfessoresDisponiveisAprovacao">getProfessoresDisponiveisAprovacao</a></li><li><a href="global.html#getProfessoresPorModalidade">getProfessoresPorModalidade</a></li><li><a href="global.html#getSalas">getSalas</a></li><li><a href="global.html#getSalasPorModalidade">getSalasPorModalidade</a></li><li><a href="global.html#getSlotLivre">getSlotLivre</a></li><li><a href="global.html#getUtilizadorByEmail">getUtilizadorByEmail</a></li><li><a href="global.html#getVagasDisponiveis">getVagasDisponiveis</a></li><li><a href="global.html#guardarTokenRecuperacao">guardarTokenRecuperacao</a></li><li><a href="global.html#instanteFimCoaching">instanteFimCoaching</a></li><li><a href="global.html#instanteHoraReferencia">instanteHoraReferencia</a></li><li><a href="global.html#instanteInicioCoaching">instanteInicioCoaching</a></li><li><a href="global.html#listarCoachingsAbertosParaCoordenacao">listarCoachingsAbertosParaCoordenacao</a></li><li><a href="global.html#listarMeusPedidosCoaching">listarMeusPedidosCoaching</a></li><li><a href="global.html#listarTodosUtilizadores">listarTodosUtilizadores</a></li><li><a href="global.html#listarUtilizadores">listarUtilizadores</a></li><li><a href="global.html#login">login</a></li><li><a href="global.html#logout">logout</a></li><li><a href="global.html#minutosDaHora">minutosDaHora</a></li><li><a href="global.html#normalizarHoraSql">normalizarHoraSql</a></li><li><a href="global.html#normalizarHoraSqlTime">normalizarHoraSqlTime</a></li><li><a href="global.html#obterColunasTabelaPreco">obterColunasTabelaPreco</a></li><li><a href="global.html#parseDateParts">parseDateParts</a></li><li><a href="global.html#professorTemDisponibilidadeNoSlot">professorTemDisponibilidadeNoSlot</a></li><li><a href="global.html#redefinirPassword">redefinirPassword</a></li><li><a href="global.html#registarConclusaoVenda">registarConclusaoVenda</a></li><li><a href="global.html#registarDevolucao">registarDevolucao</a></li><li><a href="global.html#registarDevolucaoEmprestimo">registarDevolucaoEmprestimo</a></li><li><a href="global.html#registarFotosPeca">registarFotosPeca</a></li><li><a href="global.html#registarNovaPeca">registarNovaPeca</a></li><li><a href="global.html#registarPagamentoEmprestimo">registarPagamentoEmprestimo</a></li><li><a href="global.html#registarPeca">registarPeca</a></li><li><a href="global.html#registarPenalizacao">registarPenalizacao</a></li><li><a href="global.html#registarValidacao">registarValidacao</a></li><li><a href="global.html#registarValidacaoAula">registarValidacaoAula</a></li><li><a href="global.html#register">register</a></li><li><a href="global.html#rejeitarPedido">rejeitarPedido</a></li><li><a href="global.html#rejeitarPedidoCoaching">rejeitarPedidoCoaching</a></li><li><a href="global.html#removerDisponibilidade">removerDisponibilidade</a></li><li><a href="global.html#removerDisponibilidadeProfessor">removerDisponibilidadeProfessor</a></li><li><a href="global.html#removerProfessorModalidade">removerProfessorModalidade</a></li><li><a href="global.html#requisitarEmprestimo">requisitarEmprestimo</a></li><li><a href="global.html#solicitarRecuperacaoPassword">solicitarRecuperacaoPassword</a></li><li><a href="global.html#utilizadorTemPerfil">utilizadorTemPerfil</a></li><li><a href="global.html#validarDuracaoAula">validarDuracaoAula</a></li><li><a href="global.html#validarFormatoAula">validarFormatoAula</a></li><li><a href="global.html#validarParticipantesPorFormato">validarParticipantesPorFormato</a></li><li><a href="global.html#validarTokenRecuperacao">validarTokenRecuperacao</a></li><li><a href="global.html#verificarSlotLivreProfessor">verificarSlotLivreProfessor</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.5</a> on Sat May 09 2026 23:10:52 GMT+0100 (Hora de verão da Europa Ocidental)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

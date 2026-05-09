@@ -369,3 +369,35 @@ body {
   .section-header h2 { font-size: 2.2rem; }
   .sobre-layout h2 { font-size: 2.2rem; }
 }
+
+/* ========================================= */
+/* --- EFEITO DANÇA SIMPLES (FLUIDO) ---     */
+/* ========================================= */
+.texto-viva-simples {
+  display: inline-flex;
+  font-weight: 900;
+  font-size: 1.5rem;
+  color: #2a2724; /* A cor principal do teu projeto */
+  letter-spacing: -0.5px;
+}
+
+.letra-ritmo {
+  display: inline-block;
+  /* Uma animação suave de 2.5 segundos que se repete infinitamente */
+  animation: balancoSuave 2.5s ease-in-out infinite;
+}
+
+/* Quando passas o rato, as letras ganham um pouco mais de vida */
+.texto-viva-simples:hover .letra-ritmo {
+  color: #b38b59; /* Muda para o dourado do tema no hover */
+  transition: color 0.3s ease;
+}
+
+@keyframes balancoSuave {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px); /* Sobe suavemente */
+  }
+}

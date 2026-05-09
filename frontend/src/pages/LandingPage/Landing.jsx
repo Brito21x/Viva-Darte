@@ -12,7 +12,7 @@ export default function Landing({
   irParaMinhaAgendaEE
 }) {
   const [utilizador, setUtilizador] = useState(null);
-  const [modoPortal, setModoPortal] = useState(false);
+  const [modoPortal, setModoPortal] = useState(false); 
 
   const modalidadesRef = useRef(null);
   const professoresRef = useRef(null);
@@ -21,6 +21,7 @@ export default function Landing({
     const userGuardado = localStorage.getItem('viva_user');
     if (userGuardado) {
       setUtilizador(JSON.parse(userGuardado));
+      // Assim que entra, vai direto para o modo portal (links de gestão)
       setModoPortal(true);
     }
     document.title = "Viva D'arte | Escola de Dança";
@@ -31,11 +32,13 @@ export default function Landing({
     localStorage.removeItem('viva_token');
     localStorage.removeItem('token');
     setUtilizador(null);
+    setModoPortal(false);
     window.location.reload();
   };
 
   const handleIrParaInicio = (e) => {
     if (e) e.preventDefault();
+    // Ao clicar em Início, sai do modo portal para ver o conteúdo da landing page
     setModoPortal(false); 
     
     window.history.replaceState(null, '', window.location.pathname);
@@ -58,13 +61,44 @@ export default function Landing({
     }
   };
 
+  useEffect(() => {
+    const autoScroll = setInterval(() => {
+      if (professoresRef.current) {
+        const container = professoresRef.current;
+        
+        const isAtEnd = container.scrollLeft + container.clientWidth >= container.scrollWidth - 10;
+
+        if (isAtEnd) {
+          container.scrollTo({ left: 0, behavior: 'smooth' });
+        } else {
+          container.scrollBy({ left: container.clientWidth, behavior: 'smooth' });
+        }
+      }
+    }, 6000);
+
+    return () => clearInterval(autoScroll);
+  }, []);
+
   return (
     <div className="landing-container">
       {/* --- NAVBAR --- */}
       <nav className="navbar">
         <div className="nav-brand">
-          <img src={logoImg} alt="Logo" className="nav-logo-img" />
-          <span>VIVA D'ARTE</span>
+        <img src={logoImg} alt="Logo" className="nav-logo-img" />
+        <span className="texto-viva-simples">
+          {"VIVA D'ARTE".split('').map((letra, index) => (
+            <span 
+              key={index} 
+              className="letra-ritmo"
+              style={{ 
+                animationDelay: `${index * 0.1}s`, 
+                whiteSpace: 'pre' 
+              }}
+            >
+              {letra}
+            </span>
+          ))}
+        </span>
         </div>
         
         <ul className="nav-menu">
@@ -79,6 +113,7 @@ export default function Landing({
               <li><a href="#professores">Professores</a></li>
             </>
           ) : !modoPortal ? (
+            // VISTA LOGADO MAS NO "INÍCIO" (Mostra conteúdo geral + Botão de Atalho para o Portal)
             <>
               <li><a href="#sobre">Sobre Nós</a></li>
               <li><a href="#modalidades">Modalidades</a></li>
@@ -87,73 +122,17 @@ export default function Landing({
               <li className="nav-separator">|</li>
               {isProfessorUtilizador(utilizador) ? (
                 <>
-                  <li>
-                    <a
-                      href="#dashboard-professor"
-                      className="special-link"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        irParaMinhaAgendaProfessor?.();
-                      }}
-                    >
-                      Minha Agenda
-                    </a>
-                  </li>
-                  <li>
-                    <a
-                      href="#emprestimos"
-                      className="special-link"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        irParaEmprestimos();
-                      }}
-                    >
-                      Empréstimos de peças
-                    </a>
-                  </li>
-                  <li>
-                    <a
-                      href="#figurinos"
-                      className="special-link"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        irParaVendaFigurinos();
-                      }}
-                    >
-                      Venda de figurinos
-                    </a>
-                  </li>
-                  <li className="student-menu-group" onClick={(e) => {
-                    e.preventDefault();
-                    setModoPortal(true);
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                  }}>
+                  <li className="student-menu-group" onClick={() => setModoPortal(true)}>
                     <div className="student-menu-bg" style={{ cursor: 'pointer', padding: '8px 20px' }}>
                       <a href="#portal" className="student-link" onClick={(e) => e.preventDefault()}>
-                        Atalhos do portal
+                        Portal do Professor
                       </a>
                     </div>
                   </li>
                 </>
               ) : (
                 <>
-                  <li>
-                    <a
-                      href="#minha-agenda-ee"
-                      className="special-link"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        irParaMinhaAgendaEE?.();
-                      }}
-                    >
-                      Minha Agenda
-                    </a>
-                  </li>
-                  <li className="student-menu-group" onClick={(e) => {
-                    e.preventDefault();
-                    setModoPortal(true);
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                  }}>
+                  <li className="student-menu-group" onClick={() => setModoPortal(true)}>
                     <div className="student-menu-bg" style={{ cursor: 'pointer', padding: '8px 20px' }}>
                       <a href="#portal" className="student-link" onClick={(e) => e.preventDefault()}>
                         Portal do EE
@@ -164,12 +143,12 @@ export default function Landing({
               )}
             </>
           ) : (
+            // VISTA "MODO PORTAL" (Entrada direta após login com as ferramentas de gestão)
             <>
               <li className="nav-separator">|</li>
               {isProfessorUtilizador(utilizador) ? (
                 <>
                   <li><a href="#minha-agenda-professor" className="special-link" onClick={(e) => { e.preventDefault(); irParaMinhaAgendaProfessor?.(); }}>Minha Agenda</a></li>
-                  {/* Atualizado com a navegação para empréstimos */}
                   <li><a href="#emprestimos" className="special-link" onClick={(e) => { e.preventDefault(); irParaEmprestimos(); }}>Empréstimos de peças</a></li>
                   <li><a href="#figurinos" className="special-link" onClick={(e) => { e.preventDefault(); irParaVendaFigurinos(); }}>Venda de figurinos</a></li>
                 </>
@@ -203,7 +182,7 @@ export default function Landing({
       <header id="inicio" className="hero">
         <div className="hero-content">
           <h1>A Arte de Dançar <br/> <span className="text-highlight">Começa Aqui.</span></h1>
-          <p>Explora o teu talento na escola de dança mais vibrante. Acompanha o teu percurso de forma simples.</p>
+          <p>Mais do que uma escola, somos o teu palco. Explora as nossas modalidades e gere a tua vida artística num só lugar.</p>
         </div>
       </header>
 
@@ -213,9 +192,7 @@ export default function Landing({
           <h2>A Nossa Escola</h2>
           <div className="sobre-texto">
             <p>
-              A <strong>Viva D'arte</strong> nasceu do sonho de criar um espaço onde a dança é celebrada em todas as suas formas. 
-              Mais do que uma escola, somos uma comunidade dedicada ao crescimento artístico e pessoal. 
-              Com instalações modernas e um ambiente acolhedor, preparamos os nossos alunos para brilharem no palco e na vida.
+              A <strong>Viva D'arte</strong> nasceu da visão de criar um ecossistema onde a dança é celebrada em todas as suas vertentes. Mais do que uma instituição de ensino, somos uma comunidade vibrante focada no desenvolvimento técnico, artístico e humano de cada aluno. Aliamos uma infraestrutura moderna a um ambiente de suporte e acolhimento, garantindo que os nossos bailarinos tenham as ferramentas necessárias para atingirem o seu potencial máximo. Na Viva D'arte, preparamos talentos para brilharem com confiança, tanto no palco como nos desafios da vida.
             </p>
           </div>
         </div>
@@ -279,7 +256,7 @@ export default function Landing({
           <div className="carousel-container single-item" ref={professoresRef}>
             <div className="horizontal-card">
               <div className="card-left">
-                 <div className="prof-avatar" style={{ backgroundImage: "url('https://images.unsplash.com/photo-1547152382-1611bc086830?q=80&w=200')" }}></div>
+                 <div className="prof-avatar" style={{ backgroundImage: "url('')" }}></div>
               </div>
               <div className="card-right">
                 <h3>Ana Silva</h3>
@@ -290,12 +267,23 @@ export default function Landing({
 
             <div className="horizontal-card">
               <div className="card-left">
-                 <div className="prof-avatar" style={{ backgroundImage: "url('https://images.unsplash.com/photo-1506803682981-6e718a9dd3ee?q=80&w=200')" }}></div>
+                 <div className="prof-avatar" style={{ backgroundImage: "url('')" }}></div>
               </div>
               <div className="card-right">
                 <h3>Carlos Mendes</h3>
                 <span className="subtitle">Hip Hop & Dança Urbana</span>
                 <p>Com atuações nos maiores palcos da Europa, o Carlos transmite a sua energia contagiante e técnica apurada a todos os que entram na sua aula.</p>
+              </div>
+            </div>
+
+            <div className="horizontal-card">
+              <div className="card-left">
+                 <div className="prof-avatar" style={{ backgroundImage: "url('')" }}></div>
+              </div>
+              <div className="card-right">
+                <h3>Joana Ferreira</h3>
+                <span className="subtitle">Dança Acrobática</span>
+                <p>Especialista em artes aéreas e acrobacia, a nossa professora combina força e graciosidade, guiando os alunos na superação de limites com total segurança e domínio técnico.</p>
               </div>
             </div>
           </div>
@@ -328,24 +316,14 @@ export default function Landing({
           <div className="footer-column">
             <h3>Redes Sociais</h3>
             <div className="social-icons-only">
-              <a 
-                href="https://www.instagram.com/" 
-                target="_blank" 
-                rel="noopener noreferrer" 
-                aria-label="Instagram"
-              >
+              <a href="https://www.instagram.com/" target="_blank" rel="noopener noreferrer" aria-label="Instagram">
                 <svg viewBox="0 0 24 24" className="social-svg" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round">
                   <rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect>
                   <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path>
                   <line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line>
                 </svg>
               </a>
-              <a 
-                href="https://www.facebook.com/" 
-                target="_blank" 
-                rel="noopener noreferrer" 
-                aria-label="Facebook"
-              >
+              <a href="https://www.facebook.com/" target="_blank" rel="noopener noreferrer" aria-label="Facebook">
                 <svg viewBox="0 0 24 24" className="social-svg" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"></path>
                 </svg>

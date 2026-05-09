@@ -10,11 +10,11 @@ html {
 
 :root {
   --bg-creme: #dfdbd2;     
-  --bg-section: #e0dcd2;   /* Ajustado para um creme mais parecido com a imagem 2 */
+  --bg-section: #e0dcd2;   
   --primary-dark: #2a2724; 
-  --accent-gold: #b38b59;  /* Dourado da imagem 2 */
+  --accent-gold: #b38b59;  
   --text-main: #3a3632;    
-  --white: #f3f0e9;        /* Fundo direito dos cartões mais soft */
+  --white: #f3f0e9;       
   --shadow-soft: 0 8px 30px rgba(42, 39, 36, 0.15); 
 }
 
@@ -191,8 +191,8 @@ body {
 }
 
 .modalidade-left {
-  flex: 1.1; /* Metade da largura aprox */
-  background-color: #d1ccbf; /* Fundo acinzentado do ícone */
+  flex: 1.1; 
+  background-color: #d1ccbf; 
   display: flex;
   align-items: center;
   justify-content: center;
@@ -208,7 +208,7 @@ body {
 }
 
 .modalidade-right {
-  flex: 1; /* Outra metade */
+  flex: 1;
   padding: 30px 25px;
   display: flex;
   flex-direction: column;
@@ -233,7 +233,7 @@ body {
   opacity: 0.85;
 }
 
-/* --- CARTÕES DE PROFESSORES (Mantidos como estavam) --- */
+/* --- CARTÕES DE PROFESSORES --- */
 .horizontal-card {
   display: flex; 
   background-color: var(--white); 
@@ -267,13 +267,13 @@ body {
 .card-right p { margin: 0; color: var(--text-main); font-size: 0.95rem; line-height: 1.6; opacity: 0.85; }
 
 
-/* --- BOTÕES DO CARROSSEL (Estilo escuro da Imagem 2) --- */
+/* --- BOTÕES DO CARROSSEL  --- */
 .carousel-btn {
   position: absolute;
   top: 50%;
   transform: translateY(-50%);
   z-index: 10;
-  background-color: #262422; /* Fundo quase preto */
+  background-color: #262422;
   color: #fff;
   border: none;
   width: 40px;
@@ -377,19 +377,16 @@ body {
   display: inline-flex;
   font-weight: 900;
   font-size: 1.5rem;
-  color: #2a2724; /* A cor principal do teu projeto */
+  color: #2a2724; 
   letter-spacing: -0.5px;
 }
 
 .letra-ritmo {
-  display: inline-block;
-  /* Uma animação suave de 2.5 segundos que se repete infinitamente */
   animation: balancoSuave 2.5s ease-in-out infinite;
 }
 
-/* Quando passas o rato, as letras ganham um pouco mais de vida */
 .texto-viva-simples:hover .letra-ritmo {
-  color: #b38b59; /* Muda para o dourado do tema no hover */
+  color: #b38b59; 
   transition: color 0.3s ease;
 }
 
@@ -398,6 +395,6 @@ body {
     transform: translateY(0);
   }
   50% {
-    transform: translateY(-6px); /* Sobe suavemente */
+    transform: translateY(-6px); 
   }
 }

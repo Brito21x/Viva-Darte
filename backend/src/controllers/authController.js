@@ -72,7 +72,7 @@ async function login(req, res, next) {
                 id_perfil: tipoUp === 'ADMIN' ? 1 : null 
             },
             process.env.JWT_SECRET || 'segredo_super_seguro_123',
-            { expiresIn: '2h' }
+            { expiresIn: '8h' }
         );
 
         return res.status(200).json({

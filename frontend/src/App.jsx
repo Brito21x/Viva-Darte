@@ -9,20 +9,16 @@ import EmprestimosPecas from './pages/EmprestimosPecas/EmprestimosPecas';
 import AdminDashboard from './pages/AdminDashboard/AdminDashboard';
 import MinhaAgendaProfessor from './pages/MinhaAgendaProfessor/MinhaAgendaProfessor';
 
-// Componente auxiliar para gerir a lógica de navegação antiga (compatibilidade)
 function AppRoutes() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Mantém a proteção de rota que tinhas para o admin
   useEffect(() => {
     if (location.pathname === '/admin') {
-      // Podes adicionar aqui lógica de verificação de admin se necessário
     }
   }, [location]);
 
   // Objeto de navegação que passas para os teus componentes
-  // Agora em vez de mudar um estado, eles mudam o URL do browser
   const nav = {
     landing: () => navigate('/'),
     login: () => navigate('/login'),

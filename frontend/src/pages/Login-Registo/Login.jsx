@@ -33,14 +33,12 @@ export default function Login({
       const response = await fetch('http://localhost:3000/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        // AGORA ENVIAMOS O "tipo" PARA O BACKEND VALIDAR
         body: JSON.stringify({ email, password, tipo }) 
       });
 
       const resultado = await response.json();
 
       if (response.ok) {
-        // Grava o objeto que o backend envia (inclui o perfil ativo validado)
         localStorage.setItem('viva_user', JSON.stringify(resultado.utilizador));
         localStorage.setItem('viva_token', resultado.token);
         

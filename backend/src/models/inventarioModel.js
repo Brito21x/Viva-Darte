@@ -10,7 +10,7 @@ const sql = require('mssql');
 // ============================================================================
 // 1. CATÁLOGO E GESTÃO DE PEÇAS
 // ============================================================================
- 
+
 /**
  * Obtém a lista completa do catálogo de peças.
  * Utiliza junções complexas (JOIN e OUTER APPLY) para trazer os dados da peça, 

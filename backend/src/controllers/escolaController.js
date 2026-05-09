@@ -1,9 +1,19 @@
+/**
+ * @fileoverview Controlador da Escola.
+ * Responsável por gerir e fornecer dados base estruturais da escola, tais como 
+ * Anos Letivos, Modalidades, Salas, Professores e as respetivas associações e horários.
+ */
+
 const escolaModel = require('../models/escolaModel');
 
 // ============================================================================
 // ANOS LETIVOS
-// GET /api/escola/anos-letivos
 // ============================================================================
+
+/**
+ * Obtém a lista de todos os anos letivos configurados no sistema.
+ * GET /api/escola/anos-letivos
+ */
 async function getAnosLetivos(req, res, next) {
     try {
         const anos = await escolaModel.getAnosLetivos();
@@ -15,8 +25,12 @@ async function getAnosLetivos(req, res, next) {
 
 // ============================================================================
 // MODALIDADES
-// GET /api/escola/modalidades
 // ============================================================================
+
+/**
+ * Obtém a lista de modalidades (disciplinas/instrumentos) atualmente ativas.
+ * GET /api/escola/modalidades
+ */
 async function getModalidades(req, res, next) {
     try {
         const modalidades = await escolaModel.getModalidadesAtivas();
@@ -27,9 +41,13 @@ async function getModalidades(req, res, next) {
 }
 
 // ============================================================================
-// SALAS
-// GET /api/escola/salas
+// SALAS E COMPATIBILIDADES
 // ============================================================================
+
+/**
+ * Obtém a lista de todas as salas da escola (com as suas capacidades).
+ * GET /api/escola/salas
+ */
 async function getSalas(req, res, next) {
     try {
         const salas = await escolaModel.getSalas();
@@ -39,10 +57,11 @@ async function getSalas(req, res, next) {
     }
 }
 
-// ============================================================================
-// COMPATIBILIDADE SALAS ↔ MODALIDADES (matriz completa)
-// GET /api/escola/compatibilidade
-// ============================================================================
+/**
+ * Obtém a matriz completa de compatibilidade entre as salas e as modalidades.
+ * Útil para saber globalmente que salas estão equipadas para que aulas.
+ * GET /api/escola/compatibilidade
+ */
 async function getCompatibilidade(req, res, next) {
     try {
         const compatibilidade = await escolaModel.getCompatibilidadeSalasModalidades();
@@ -52,10 +71,11 @@ async function getCompatibilidade(req, res, next) {
     }
 }
 
-// ============================================================================
-// SALAS POR MODALIDADE (para formulário de aprovação)
-// GET /api/escola/modalidades/:id/salas
-// ============================================================================
+/**
+ * Obtém apenas as salas adequadas/compatíveis para lecionar uma modalidade específica.
+ * Usado habitualmente no formulário de aprovação de aulas pela Coordenação.
+ * GET /api/escola/modalidades/:id/salas
+ */
 async function getSalasPorModalidade(req, res, next) {
     try {
         const idModalidade = parseInt(req.params.id);
@@ -72,9 +92,14 @@ async function getSalasPorModalidade(req, res, next) {
 }
 
 // ============================================================================
-// LISTA DE PROFESSORES (US11 — painel Admin / Coordenação)
-// GET /api/escola/professores
+// GESTÃO DE PROFESSORES E ASSOCIAÇÕES
 // ============================================================================
+
+/**
+ * US11 — Obtém a lista de todos os professores com estado ativo no sistema.
+ * Útil para o painel de Administração ou Coordenação.
+ * GET /api/escola/professores
+ */
 async function getProfessoresAtivos(req, res, next) {
     try {
         const lista = await escolaModel.getProfessoresAtivos();
@@ -84,10 +109,11 @@ async function getProfessoresAtivos(req, res, next) {
     }
 }
 
-// ============================================================================
-// PROFESSORES POR MODALIDADE (US05 — dropdown no pedido de coaching)
-// GET /api/escola/modalidades/:id/professores
-// ============================================================================
+/**
+ * US05 — Obtém os professores habilitados a lecionar uma determinada modalidade.
+ * Muito utilizado para popular as dropdowns aquando da submissão de um pedido de coaching pelo EE.
+ * GET /api/escola/modalidades/:id/professores
+ */
 async function getProfessoresPorModalidade(req, res, next) {
     try {
         const idModalidade = parseInt(req.params.id);
@@ -103,10 +129,10 @@ async function getProfessoresPorModalidade(req, res, next) {
     }
 }
 
-// ============================================================================
-// MODALIDADES POR PROFESSOR
-// GET /api/escola/professores/:id/modalidades
-// ============================================================================
+/**
+ * Obtém as modalidades que um professor específico está apto a lecionar.
+ * GET /api/escola/professores/:id/modalidades
+ */
 async function getModalidadesPorProfessor(req, res, next) {
     try {
         const idProfessor = parseInt(req.params.id);
@@ -122,16 +148,18 @@ async function getModalidadesPorProfessor(req, res, next) {
     }
 }
 
-// ============================================================================
-// US11 / RF13 — ASSOCIAR PROFESSOR A MODALIDADE (Coordenação)
-// POST /api/escola/professores/:id/modalidades
-// Body: { idModalidade }
-// ============================================================================
+/**
+ * US11 / RF13 — Associa uma nova modalidade a um professor (Coordenação).
+ * Permite definir que o professor tem competência para dar aulas a essa disciplina.
+ * POST /api/escola/professores/:id/modalidades
+ * Body: { idModalidade }
+ */
 async function associarProfessorModalidade(req, res, next) {
     try {
         const idProfessor = parseInt(req.params.id);
         const { idModalidade } = req.body;
 
+        // Validação de dados de entrada
         if (isNaN(idProfessor) || !idModalidade) {
             return res.status(400).json({ mensagem: 'ID de professor e idModalidade são obrigatórios.' });
         }
@@ -140,6 +168,7 @@ async function associarProfessorModalidade(req, res, next) {
 
         return res.status(201).json({ mensagem: 'Modalidade associada ao professor com sucesso.' });
     } catch (error) {
+        // Trata conflitos caso a associação já exista na base de dados
         if (error.message.includes('já existe') || error.message.includes('já está associado')) {
             return res.status(409).json({ mensagem: error.message });
         }
@@ -147,21 +176,24 @@ async function associarProfessorModalidade(req, res, next) {
     }
 }
 
-// ============================================================================
-// REMOVER ASSOCIAÇÃO PROFESSOR ↔ MODALIDADE (Coordenação)
-// DELETE /api/escola/professores/:id/modalidades/:idModalidade
-// ============================================================================
+/**
+ * Remove a associação entre um professor e uma modalidade (Coordenação).
+ * O professor deixa de estar disponível para lecionar essa disciplina.
+ * DELETE /api/escola/professores/:id/modalidades/:idModalidade
+ */
 async function removerProfessorModalidade(req, res, next) {
     try {
         const idProfessor = parseInt(req.params.id);
         const idModalidade = parseInt(req.params.idModalidade);
 
+        // Validação de IDs passados nos parâmetros da rota
         if (isNaN(idProfessor) || isNaN(idModalidade)) {
             return res.status(400).json({ mensagem: 'IDs inválidos.' });
         }
 
         const sucesso = await escolaModel.removerProfessorModalidade(idProfessor, idModalidade);
 
+        // Se a base de dados não afetar nenhuma linha, significa que o vínculo não existia
         if (!sucesso) {
             return res.status(404).json({ mensagem: 'Associação não encontrada.' });
         }
@@ -173,16 +205,25 @@ async function removerProfessorModalidade(req, res, next) {
 }
 
 // ============================================================================
-// HORÁRIOS REGULARES (HORARIO) — leitura
-// GET /api/escola/horarios?idAnoLetivo=
+// HORÁRIOS REGULARES
 // ============================================================================
+
+/**
+ * Obtém os horários regulares de aulas (turmas fixas) da escola.
+ * Permite filtrar por um Ano Letivo específico via query string.
+ * GET /api/escola/horarios?idAnoLetivo=
+ */
 async function getHorarios(req, res, next) {
     try {
         const { idAnoLetivo } = req.query;
+        
+        // Parsing flexível para lidar com parâmetros nulos, vazios ou indefinidos
         const id =
             idAnoLetivo !== undefined && idAnoLetivo !== '' && idAnoLetivo != null
                 ? parseInt(idAnoLetivo, 10)
                 : null;
+                
+        // Se foi enviado um valor mas não é numérico, devolve erro
         if (idAnoLetivo !== undefined && idAnoLetivo !== '' && Number.isNaN(id)) {
             return res.status(400).json({ mensagem: 'idAnoLetivo inválido.' });
         }
@@ -194,6 +235,7 @@ async function getHorarios(req, res, next) {
     }
 }
 
+// Exportação das funções do controlador
 module.exports = {
     getAnosLetivos,
     getModalidades,

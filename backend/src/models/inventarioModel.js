@@ -1,5 +1,5 @@
 /**
- * Modelo de Dados do Inventário
+ * @fileoverview Modelo de Dados do Inventário
  * Este ficheiro centraliza a comunicação com a base de dados SQL Server para gerir
  * peças, fotografias, empréstimos, multas e transações do mercado de segunda mão.
  */

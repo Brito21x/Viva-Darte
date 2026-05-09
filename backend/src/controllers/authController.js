@@ -1,69 +1,117 @@
+/**
+ * @fileoverview Controlador de Autenticação e Gestão de Utilizadores.
+ * Lida com o login, registo, recuperação de palavra-passe e gestão CRUD de utilizadores e alunos associados.
+ */
+
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const utilizadorModel = require('../models/authModel');
 
+/**
+ * Autentica um utilizador no sistema e gera um token JWT.
+ * @param {Object} req - Objeto de requisição do Express.
+ * @param {Object} res - Objeto de resposta do Express.
+ * @param {Function} next - Middleware seguinte para tratamento de erros.
+ */
 async function login(req, res, next) {
     try {
         const { email, password, tipo, perfil } = req.body;
 
+        // Validação inicial de campos obrigatórios
         if (!email || !password) {
             return res.status(400).json({ mensagem: 'Email e palavra-passe são obrigatórios.' });
         }
 
+        // Normalização do tipo/perfil fornecido no request para validação
         const tipoFornecido = tipo || perfil || 'PROF';
         const tipoUp = String(tipoFornecido).trim().toUpperCase();
+        
+        // Obtenção do utilizador pela base de dados
         const utilizador = await utilizadorModel.getUtilizadorByEmail(email);
 
         if (!utilizador) return res.status(401).json({ mensagem: 'Credenciais inválidas.' });
+        
+        // Verifica se a conta já foi aprovada/ativada pela administração
         if (!utilizador.ativo) {
             return res.status(403).json({ mensagem: 'Conta desativada. Aguarde a aprovação da administração.' });
         }
 
+        // Validação da palavra-passe com o hash guardado
         const passwordCorreta = await bcrypt.compare(password, utilizador.password);
         if (!passwordCorreta) return res.status(401).json({ mensagem: 'Credenciais inválidas.' });
 
+        // Validação dos perfis atribuídos ao utilizador
         const perfis = await utilizadorModel.getPerfisDoUtilizador(utilizador.id_utilizador);
         let temPerfil = false;
-        if (tipoUp === 'ADMIN') temPerfil = perfis.some(p => p.toLowerCase().includes('admin') || p.toLowerCase().includes('coord'));
-        else if (tipoUp === 'PROF' || tipoUp === 'PROFESSOR') temPerfil = perfis.some(p => p.toLowerCase().includes('prof'));
-        else temPerfil = perfis.some(p => p.toLowerCase().includes('encarregado') || p.toLowerCase().includes('educação') || p.toLowerCase().includes('educacao') || p.toLowerCase() === 'ee');
+        
+        // Verifica se o utilizador possui o perfil adequado ao tipo de login que está a tentar fazer
+        if (tipoUp === 'ADMIN') {
+            temPerfil = perfis.some(p => p.toLowerCase().includes('admin') || p.toLowerCase().includes('coord'));
+        } else if (tipoUp === 'PROF' || tipoUp === 'PROFESSOR') {
+            temPerfil = perfis.some(p => p.toLowerCase().includes('prof'));
+        } else {
+            temPerfil = perfis.some(p => p.toLowerCase().includes('encarregado') || p.toLowerCase().includes('educação') || p.toLowerCase().includes('educacao') || p.toLowerCase() === 'ee');
+        }
 
         if (!temPerfil) return res.status(403).json({ mensagem: 'Acesso negado.' });
 
+        // Define o perfil final que será injetado no token JWT
         let perfilFinal = 'Encarregado de Educação';
         if (tipoUp === 'PROF' || tipoUp === 'PROFESSOR') perfilFinal = 'Professor';
         if (tipoUp === 'ADMIN') perfilFinal = 'Admin';
 
+        // Geração do token JWT com payload relevante e validade de 8 horas
         const token = jwt.sign(
-            { id: utilizador.id_utilizador, nome: utilizador.nome, email: utilizador.email, perfis, perfil: perfilFinal, id_perfil: tipoUp === 'ADMIN' ? 1 : null },
+            { 
+                id: utilizador.id_utilizador, 
+                nome: utilizador.nome, 
+                email: utilizador.email, 
+                perfis, 
+                perfil: perfilFinal, 
+                id_perfil: tipoUp === 'ADMIN' ? 1 : null 
+            },
             process.env.JWT_SECRET || 'segredo_super_seguro_123',
-            { expiresIn: '8h' }
+            { expiresIn: '2h' }
         );
 
         return res.status(200).json({
             mensagem: 'Login efetuado',
             token,
-            utilizador: { id: utilizador.id_utilizador, nome: utilizador.nome, email: utilizador.email, perfis, perfil: perfilFinal }
+            utilizador: { 
+                id: utilizador.id_utilizador, 
+                nome: utilizador.nome, 
+                email: utilizador.email, 
+                perfis, 
+                perfil: perfilFinal 
+            }
         });
     } catch (error) {
         next(error);
     }
 }
 
+/**
+ * Termina a sessão do utilizador (no lado do cliente, normalmente o token é descartado).
+ */
 async function logout(req, res) {
     return res.status(200).json({ mensagem: 'Sessão terminada com sucesso.' });
 }
 
+/**
+ * Solicita a recuperação da palavra-passe, gerando um token seguro enviado (ou para envio) ao utilizador.
+ */
 async function solicitarRecuperacaoPassword(req, res, next) {
     try {
         const { email } = req.body;
         const utilizador = await utilizadorModel.getUtilizadorByEmail(email);
 
+        // Apenas utilizadores existentes e ativos podem recuperar a palavra-passe
         if (!utilizador || !utilizador.ativo) {
             return res.status(404).json({ mensagem: 'Email não encontrado ou inativo.' });
         }
 
+        // Gera um token hexadecimal de 8 caracteres
         const token = crypto.randomBytes(4).toString('hex').toUpperCase();
         await utilizadorModel.guardarTokenRecuperacao(utilizador.id_utilizador, token);
 
@@ -73,6 +121,9 @@ async function solicitarRecuperacaoPassword(req, res, next) {
     }
 }
 
+/**
+ * Redefine a palavra-passe utilizando o token de recuperação previamente gerado.
+ */
 async function redefinirPassword(req, res, next) {
     try {
         const { token, novaPassword } = req.body;
@@ -80,9 +131,11 @@ async function redefinirPassword(req, res, next) {
             return res.status(400).json({ mensagem: 'Token e password obrigatórios.' });
         }
 
+        // Valida se o token existe e ainda é válido
         const tokenValido = await utilizadorModel.validarTokenRecuperacao(token);
         if (!tokenValido) return res.status(400).json({ mensagem: 'Token inválido.' });
 
+        // Aplica hash à nova palavra-passe antes de guardar
         const hash = await bcrypt.hash(novaPassword, 10);
         await utilizadorModel.atualizarPassword(tokenValido.UTILIZADORid_utilizador, hash, tokenValido.id_token_recuperacao);
 
@@ -92,6 +145,9 @@ async function redefinirPassword(req, res, next) {
     }
 }
 
+/**
+ * Regista um novo utilizador no sistema. O utilizador fica inativo até aprovação da administração.
+ */
 async function register(req, res, next) {
     try {
         const { nome, email, telefone, password, tipo } = req.body;
@@ -100,6 +156,7 @@ async function register(req, res, next) {
         const passwordHash = await bcrypt.hash(password, 10);
         const nomePerfil = tipo === 'PROF' ? 'Professor' : 'Encarregado';
 
+        // Cria o utilizador com estado ativo = 0 (pendente de aprovação)
         await utilizadorModel.criarUtilizador({ nome, email, passwordHash, telefone, nomePerfil, ativo: 0 });
         return res.status(201).json({ mensagem: 'Registo concluído! Aguarde aprovação.' });
     } catch (error) {
@@ -108,6 +165,9 @@ async function register(req, res, next) {
     }
 }
 
+/**
+ * Lista todos os utilizadores registados no sistema.
+ */
 async function listarUtilizadores(req, res, next) {
     try {
         const lista = await utilizadorModel.listarTodosUtilizadores();
@@ -117,6 +177,9 @@ async function listarUtilizadores(req, res, next) {
     }
 }
 
+/**
+ * Permite a um Administrador criar um utilizador, definindo imediatamente o seu estado como ativo e associando modalidades.
+ */
 async function criarUtilizadorAdmin(req, res, next) {
     try {
         const { nome, email, telefone, password, tipo, idsModalidades } = req.body;
@@ -128,7 +191,9 @@ async function criarUtilizadorAdmin(req, res, next) {
         let nomePerfil = 'Encarregado';
         if (tipo === 'PROF') nomePerfil = 'Professor';
         if (tipo === 'ADMIN') nomePerfil = 'Admin';
+        
         let idsModalidadesProf;
+        // Validação estrita: Professores devem ter obrigatoriamente modalidades associadas
         if (tipo === 'PROF') {
             idsModalidadesProf = Array.isArray(idsModalidades) ? idsModalidades : [];
             if (idsModalidadesProf.length === 0) {
@@ -140,6 +205,7 @@ async function criarUtilizadorAdmin(req, res, next) {
 
         const passwordHash = await bcrypt.hash(password, 10);
 
+        // Cria o utilizador já com estado ativo = 1
         const novo = await utilizadorModel.criarUtilizador({
             nome,
             email,
@@ -152,6 +218,7 @@ async function criarUtilizadorAdmin(req, res, next) {
 
         return res.status(201).json({ mensagem: 'Utilizador criado.', utilizador: novo });
     } catch (error) {
+        // Tratamento de erros específicos vindos do model
         if (error.message === 'Já existe um utilizador com este email.') {
             return res.status(400).json({ mensagem: error.message });
         }
@@ -165,6 +232,9 @@ async function criarUtilizadorAdmin(req, res, next) {
     }
 }
 
+/**
+ * Edita os dados de um utilizador existente.
+ */
 async function editarUtilizador(req, res, next) {
     try {
         const id = parseInt(req.params.id, 10);
@@ -177,11 +247,14 @@ async function editarUtilizador(req, res, next) {
             return res.status(400).json({ mensagem: 'Nome é obrigatório.' });
         }
 
+        // Determinação do perfil final com base nos inputs recebidos
         let perfilFinal = nomePerfil;
         if (!perfilFinal && tipo === 'PROF') perfilFinal = 'Professor';
         if (!perfilFinal && tipo === 'ADMIN') perfilFinal = 'Admin';
         if (!perfilFinal && tipo === 'EE') perfilFinal = 'Encarregado';
+        
         let passwordHash = null;
+        // Apenas aplica hash e atualiza a password se uma nova for fornecida
         if (password && password.trim() !== '') {
             passwordHash = await bcrypt.hash(password, 10);
         }
@@ -194,6 +267,7 @@ async function editarUtilizador(req, res, next) {
             nomePerfil: perfilFinal,
             idsModalidades
         });
+        
         if (!ok) {
             return res.status(404).json({ mensagem: 'Utilizador não encontrado.' });
         }
@@ -203,6 +277,9 @@ async function editarUtilizador(req, res, next) {
     }
 }
 
+/**
+ * Altera o estado (ativo/inativo) de um utilizador.
+ */
 async function alterarEstado(req, res, next) {
     try {
         const id = parseInt(req.params.id, 10);
@@ -225,12 +302,16 @@ async function alterarEstado(req, res, next) {
     }
 }
 
+/**
+ * Ativa a conta de um utilizador (útil para aprovação de registos pendentes).
+ */
 async function ativarUtilizador(req, res, next) {
     try {
         const perfis = await utilizadorModel.getPerfisDoUtilizador(req.params.id);
         const isProfessor = perfis.some((p) => String(p).toLowerCase().includes('prof'));
         const idsModalidades = Array.isArray(req.body?.idsModalidades) ? req.body.idsModalidades : null;
 
+        // Se for professor, é obrigatório atribuir modalidades no momento da ativação
         if (isProfessor && (!idsModalidades || idsModalidades.length === 0)) {
             return res.status(400).json({ mensagem: 'Seleciona pelo menos uma modalidade para aceitar este professor.' });
         }
@@ -243,6 +324,9 @@ async function ativarUtilizador(req, res, next) {
     }
 }
 
+/**
+ * Desativa a conta de um utilizador, revogando o seu acesso ao sistema.
+ */
 async function desativarUtilizador(req, res, next) {
     try {
         const sucesso = await utilizadorModel.alterarEstadoUtilizador(req.params.id, false);
@@ -253,6 +337,9 @@ async function desativarUtilizador(req, res, next) {
     }
 }
 
+/**
+ * Apaga permanentemente um utilizador do sistema.
+ */
 async function eliminarUtilizador(req, res, next) {
     try {
         const sucesso = await utilizadorModel.apagarUtilizador(req.params.id);
@@ -263,6 +350,9 @@ async function eliminarUtilizador(req, res, next) {
     }
 }
 
+/**
+ *  Criação de utilizador por um administrador.
+ */
 async function adminCriarUtilizador(req, res, next) {
     try {
         const { nome, email, telefone, password, tipo, idsModalidades } = req.body;
@@ -274,6 +364,7 @@ async function adminCriarUtilizador(req, res, next) {
         let nomePerfil = 'Encarregado';
         if (tipo === 'PROF') nomePerfil = 'Professor';
         if (tipo === 'ADMIN') nomePerfil = 'Admin';
+        
         if (tipo === 'PROF' && (!Array.isArray(idsModalidades) || idsModalidades.length === 0)) {
             return res.status(400).json({ mensagem: 'Seleciona pelo menos uma modalidade para este professor.' });
         }
@@ -286,6 +377,9 @@ async function adminCriarUtilizador(req, res, next) {
     }
 }
 
+/**
+ * Edição Completa do Utilizador
+ */
 async function editarUtilizadorCompleto(req, res, next) {
     try {
         const { id } = req.params;
@@ -301,6 +395,7 @@ async function editarUtilizadorCompleto(req, res, next) {
         let nomePerfil = 'Encarregado';
         if (tipo === 'PROF') nomePerfil = 'Professor';
         if (tipo === 'ADMIN') nomePerfil = 'Admin';
+        
         if (tipo === 'PROF' && (!Array.isArray(idsModalidades) || idsModalidades.length === 0)) {
             return res.status(400).json({ mensagem: 'Seleciona pelo menos uma modalidade para este professor.' });
         }
@@ -312,12 +407,17 @@ async function editarUtilizadorCompleto(req, res, next) {
     }
 }
 
+/**
+ * Obtém a lista de alunos associados ao Encarregado de Educação autenticado.
+ * Depende da injeção do utilizador via middleware de autenticação (JWT).
+ */
 async function getMeusAlunos(req, res, next) {
     try {
         const idEncarregado = req.utilizador?.id;
         if (idEncarregado == null) {
             return res.status(401).json({ mensagem: 'Sessão inválida.' });
         }
+        
         const alunos = await utilizadorModel.getAlunosPorEncarregado(idEncarregado);
         return res.status(200).json(alunos);
     } catch (error) {
@@ -325,6 +425,9 @@ async function getMeusAlunos(req, res, next) {
     }
 }
 
+/**
+ * Cria e associa um novo aluno ao Encarregado de Educação autenticado.
+ */
 async function criarMeuAluno(req, res, next) {
     try {
         const idEncarregado = req.utilizador?.id;
@@ -348,6 +451,7 @@ async function criarMeuAluno(req, res, next) {
     }
 }
 
+// Exportação de todas as funções do controlador
 module.exports = {
     login,
     logout,

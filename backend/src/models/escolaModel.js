@@ -1,3 +1,10 @@
+/**
+ * @fileoverview Modelo de Dados para a Estrutura da Escola.
+ * Responsável por todas as interações com a base de dados SQL Server referentes 
+ * ao catálogo de recursos fixos da escola: Anos Letivos, Modalidades (disciplinas), 
+ * Salas, Professores, respetivas compatibilidades/associações e horários regulares.
+ */
+
 const { poolPromise } = require('../config/db');
 const sql = require('mssql');
  
@@ -5,6 +12,11 @@ const sql = require('mssql');
 // 1. GESTÃO DO CALENDÁRIO LETIVO
 // ============================================================================
  
+/**
+ * Obtém a lista de anos letivos registados na base de dados.
+ * A listagem é devolvida por ordem decrescente (do mais recente para o mais antigo).
+ * @returns {Promise<Array>} Array de objetos com os anos letivos.
+ */
 async function getAnosLetivos() {
     try {
         const pool = await poolPromise;
@@ -27,6 +39,10 @@ async function getAnosLetivos() {
 // 2. CATÁLOGO DE RECURSOS (SALAS E MODALIDADES)
 // ============================================================================
  
+/**
+ * Obtém a lista de todas as modalidades (disciplinas ou instrumentos) ativas no sistema.
+ * @returns {Promise<Array>} Array de modalidades ordenadas alfabeticamente.
+ */
 async function getModalidadesAtivas() {
     try {
         const pool = await poolPromise;
@@ -46,6 +62,10 @@ async function getModalidadesAtivas() {
     }
 }
  
+/**
+ * Obtém o catálogo de salas físicas disponíveis na escola e as respetivas capacidades máximas.
+ * @returns {Promise<Array>} Array de salas ordenadas alfabeticamente.
+ */
 async function getSalas() {
     try {
         const pool = await poolPromise;
@@ -70,8 +90,9 @@ async function getSalas() {
 // ============================================================================
  
 /**
- * Retorna quais salas são compatíveis com cada modalidade.
- * Usado para filtrar salas disponíveis ao aprovar um coaching.
+ * Retorna o mapa geral de quais salas estão equipadas e são compatíveis com quais modalidades.
+ * Essencial para o sistema validar se uma aula pode ou não decorrer num determinado espaço físico.
+ * @returns {Promise<Array>} Array detalhado das compatibilidades Sala ↔ Modalidade.
  */
 async function getCompatibilidadeSalasModalidades() {
     try {
@@ -98,8 +119,9 @@ async function getCompatibilidadeSalasModalidades() {
 }
  
 /**
- * Retorna as salas compatíveis com uma modalidade específica.
- * Usado ao aprovar um pedido para apresentar apenas salas válidas para aquela modalidade.
+ * Retorna especificamente as salas compatíveis com uma dada modalidade.
+ * Usado para popular a dropdown de salas na interface de aprovação de pedidos de Coaching.
+ * @param {number} idModalidade - O ID da modalidade a verificar.
  */
 async function getSalasPorModalidade(idModalidade) {
     try {
@@ -125,7 +147,8 @@ async function getSalasPorModalidade(idModalidade) {
 }
  
 /**
- * Retorna as modalidades que um professor específico leciona.
+ * Retorna as modalidades que um professor específico está apto e autorizado a lecionar.
+ * @param {number} idProfessor - O ID do utilizador (professor).
  */
 async function getModalidadesPorProfessor(idProfessor) {
     try {
@@ -153,7 +176,8 @@ async function getModalidadesPorProfessor(idProfessor) {
 }
  
 /**
- * Professores com perfil ativo (para US11 — painel de associação modalidades).
+ * Lista todos os utilizadores ativos no sistema que possuem o perfil de "Professor".
+ * Utilizado para os painéis de administração e associação de modalidades (US11).
  */
 async function getProfessoresAtivos() {
     try {
@@ -178,8 +202,9 @@ async function getProfessoresAtivos() {
 }
 
 /**
- * US05 + US11/RF13: só professores explicitamente associados à modalidade em PROFESSOR_MODALIDADE.
- * (Removido o fallback que listava todos os professores quando a modalidade ainda não tinha associações.)
+ * Retorna exclusivamente os professores explicitamente associados e aptos a lecionar uma modalidade.
+ * (US05 + US11/RF13). Não apresenta professores sem vínculo direto à disciplina requerida.
+ * @param {number} idModalidade - A modalidade escolhida (ex: pelo Encarregado de Educação).
  */
 async function getProfessoresPorModalidade(idModalidade) {
     try {
@@ -209,7 +234,8 @@ async function getProfessoresPorModalidade(idModalidade) {
 }
  
 /**
- * Associa um professor a uma modalidade. (US11 / RF13)
+ * Associa oficialmente um professor a uma modalidade, permitindo que ele passe a lecioná-la. (US11 / RF13)
+ * Utiliza o comando 'MERGE' (Upsert) para garantir de forma segura que não há inserção de duplicados na BD.
  */
 async function associarProfessorModalidade(idProfessor, idModalidade) {
     try {
@@ -219,6 +245,7 @@ async function associarProfessorModalidade(idProfessor, idModalidade) {
             .input('IdProfessor', sql.Int, idProfessor)
             .input('IdModalidade', sql.Int, idModalidade)
             .query(`
+                /* O MERGE verifica se a associação já existe. Se não existir, faz o INSERT. */
                 MERGE PROFESSOR_MODALIDADE AS t
                 USING (SELECT @IdProfessor AS id_p, @IdModalidade AS id_m) AS s
                 ON t.UTILIZADORid_utilizador = s.id_p AND t.MODALIDADEid_modalidade = s.id_m
@@ -227,11 +254,14 @@ async function associarProfessorModalidade(idProfessor, idModalidade) {
                     VALUES (s.id_p, s.id_m);
             `);
 
+        // Extrai o número de linhas afetadas de forma segura (lidando com diferentes respostas do driver mssql)
         const ra = result.rowsAffected || [];
         const totalAfetadas = (Array.isArray(ra) ? ra : [ra]).reduce(
             (acc, n) => acc + (Number(n) || 0),
             0
         );
+        
+        // Se 0 linhas foram afetadas, a regra WHEN NOT MATCHED falhou (o registo já lá estava)
         if (totalAfetadas < 1) {
             throw new Error('Este professor já está associado a esta modalidade.');
         }
@@ -244,7 +274,7 @@ async function associarProfessorModalidade(idProfessor, idModalidade) {
 }
  
 /**
- * Remove a associação de um professor a uma modalidade.
+ * Remove a autorização de lecionação de uma modalidade para um determinado professor.
  */
 async function removerProfessorModalidade(idProfessor, idModalidade) {
     try {
@@ -266,7 +296,9 @@ async function removerProfessorModalidade(idProfessor, idModalidade) {
 }
  
 /**
- * Lista horários de aulas regulares (HORARIO), opcionalmente filtrados por ano letivo.
+ * Extrai a grelha de horários de aulas regulares (turmas fixas da escola).
+ * Pode ser filtrada opcionalmente por um ano letivo específico.
+ * @param {number|null} idAnoLetivo - O ID do ano letivo (opcional).
  */
 async function getHorariosPorAnoLetivo(idAnoLetivo = null) {
     try {
@@ -274,6 +306,8 @@ async function getHorariosPorAnoLetivo(idAnoLetivo = null) {
         const request = pool.request();
 
         let filtroAno = '';
+        
+        // Constrói dinamicamente a query consoante a presença do parâmetro
         if (idAnoLetivo != null && !Number.isNaN(Number(idAnoLetivo))) {
             filtroAno = 'AND h.ANO_LETIVOid_ano_letivo = @IdAnoLetivo';
             request.input('IdAnoLetivo', sql.Int, parseInt(idAnoLetivo, 10));
@@ -312,6 +346,7 @@ async function getHorariosPorAnoLetivo(idAnoLetivo = null) {
     }
 }
 
+// Exportação dos métodos
 module.exports = {
     getAnosLetivos,
     getModalidadesAtivas,

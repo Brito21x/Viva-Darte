@@ -1,8 +1,15 @@
+/**
+ * @fileoverview Controlador de Gestão de Coaching.
+ * Responsável por gerir disponibilidades de professores, cálculo de preços, 
+ * submissão de pedidos por Encarregados de Educação, aprovação pela Coordenação 
+ * e validação de aulas realizadas.
+ */
+
 const coachingModel = require('../models/coachingModel');
 const precoCoachingModel = require('../models/precoCoachingModel');
 const { utilizadorTemPerfil } = require('../middlewares/auth');
 
-/** Data fixa só para parsear horas (`time`) como instante; a duração depende só da diferença entre horas. */
+/** Data fixa utilizada apenas para garantir que a comparação de horas é feita no mesmo dia-base. */
 const DATA_REF_COMPARACAO_HORAS = '2026-01-01';
 const MSG_SEM_DISPONIBILIDADE = 'O professor não tem horário disponível nesse período.';
 const FORMATOS_AULA_VALIDOS = ['Solo', 'Dueto', 'Trio', 'Ensemble'];
@@ -11,6 +18,16 @@ const PARTICIPANTES_FIXOS_POR_FORMATO = { Solo: 1, Dueto: 2, Trio: 3 };
 const ESTADOS_VALIDACAO_VALIDOS = ['Confirmado', 'Nao_Realizado'];
 const ESTADOS_FINAIS_VALIDOS = ['Realizado', 'Nao_Realizado'];
 
+// ============================================================================
+// FUNÇÕES AUXILIARES (HELPERS)
+// ============================================================================
+
+/**
+ * Normaliza qualquer formato de hora de entrada para o formato SQL standard (HH:mm:ss).
+ * Lida com objetos Date, strings 24h e strings 12h (AM/PM).
+ * @param {Date|string} valor - A hora a normalizar.
+ * @returns {string|null} - Retorna a hora no formato 'HH:mm:ss' ou null em caso de erro.
+ */
 function normalizarHoraSqlTime(valor) {
     if (valor instanceof Date && !Number.isNaN(valor.getTime())) {
         const hh = String(valor.getHours()).padStart(2, '0');
@@ -22,6 +39,7 @@ function normalizarHoraSqlTime(valor) {
     const s = String(valor ?? '').trim();
     if (!s) return null;
 
+    // Tenta formato 24h (ex: 14:30 ou 14:30:00)
     const m24 = s.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
     if (m24) {
         const hh = String(m24[1]).padStart(2, '0');
@@ -30,6 +48,7 @@ function normalizarHoraSqlTime(valor) {
         return `${hh}:${mm}:${ss}`;
     }
 
+    // Tenta formato 12h (ex: 02:30 PM)
     const m12 = s.match(/^(\d{1,2}):(\d{2})\s*([AaPp][Mm])$/);
     if (!m12) return null;
     let hh = parseInt(m12[1], 10);
@@ -40,21 +59,31 @@ function normalizarHoraSqlTime(valor) {
     return `${String(hh).padStart(2, '0')}:${mm}:00`;
 }
 
+/**
+ * Valida se o formato da aula submetido se encontra na lista de formatos permitidos.
+ */
 function validarFormatoAula(formatoAula) {
     return FORMATOS_AULA_VALIDOS.includes(formatoAula)
         ? null
         : `Formato inválido. Valores aceites: ${FORMATOS_AULA_VALIDOS.join(', ')}.`;
 }
 
+/**
+ * Valida se a duração da aula submetida se encontra na lista de durações permitidas.
+ */
 function validarDuracaoAula(duracaoMinutos) {
     return DURACOES_AULA_VALIDAS.includes(Number(duracaoMinutos))
         ? null
         : `Duração inválida. Valores aceites: ${DURACOES_AULA_VALIDAS.join(', ')} minutos.`;
 }
 
+/**
+ * Valida se o número de alunos submetidos corresponde à exigência do formato da aula (ex: Solo exige 1 aluno).
+ */
 function validarParticipantesPorFormato(formatoAula, alunosIds) {
     const totalAlunos = Array.isArray(alunosIds) ? alunosIds.length : 0;
     const participantesFixos = PARTICIPANTES_FIXOS_POR_FORMATO[formatoAula];
+    
     if (participantesFixos && totalAlunos !== participantesFixos) {
         return `${formatoAula} exige exatamente ${participantesFixos} aluno(s).`;
     }
@@ -64,7 +93,9 @@ function validarParticipantesPorFormato(formatoAula, alunosIds) {
     return null;
 }
 
-/** Evita bugs de timezone com strings `YYYY-MM-DD` (interpretação UTC vs local). */
+/** * Converte valores de data num objeto Date puro (ano, mês, dia).
+ * Evita bugs de fuso horário (timezone) ao interpretar strings `YYYY-MM-DD` em UTC vs Local. 
+ */
 function parseDateParts(dataValor) {
     if (!dataValor) return null;
     const s =
@@ -78,13 +109,15 @@ function parseDateParts(dataValor) {
     return new Date(y, m - 1, d);
 }
 
+/** Extrai o dia da semana normalizado para a tabela de Preços (1 = Dias Úteis, 2 = Fim de semana). */
 function diaSemanaPrecoFromDateValue(dataValor) {
     const dt = parseDateParts(dataValor);
     if (!dt) return 1;
-    const day = dt.getDay();
+    const day = dt.getDay(); // 0 = Domingo, 6 = Sábado
     return [0, 6].includes(day) ? 2 : 1;
 }
 
+/** Extrai o dia da semana normalizado para a tabela de Disponibilidades (1 = Dias Úteis, 2 = Fim de semana). */
 function diaSemanaDisponibilidadeFromDateValue(dataValor) {
     const dt = parseDateParts(dataValor);
     if (!dt) return 1;
@@ -92,6 +125,7 @@ function diaSemanaDisponibilidadeFromDateValue(dataValor) {
     return [0, 6].includes(day) ? 2 : 1;
 }
 
+/** Extrai o dia da semana normalizado para agendamentos (1 = 2ª Feira ... 7 = Domingo). */
 function diaSemanaCoachingFromDateValue(dataValor) {
     const dt = parseDateParts(dataValor);
     if (!dt) return 1;
@@ -99,13 +133,14 @@ function diaSemanaCoachingFromDateValue(dataValor) {
     return day === 0 ? 7 : day;
 }
 
-/** Início da aula no fuso local (data_aula + hora_inicio). */
+/** * Constrói o instante exato de início de uma aula no fuso horário local.
+ * Combina a data base com a hora de início.
+ */
 function instanteInicioCoaching({ data_aula, hora_inicio }) {
     const d = data_aula instanceof Date ? new Date(data_aula) : parseDateParts(data_aula);
     if (!d) return null;
-    let hh = 0;
-    let mm = 0;
-    let ss = 0;
+    let hh = 0, mm = 0, ss = 0;
+    
     if (hora_inicio instanceof Date) {
         hh = hora_inicio.getHours();
         mm = hora_inicio.getMinutes();
@@ -121,7 +156,9 @@ function instanteInicioCoaching({ data_aula, hora_inicio }) {
     return new Date(d.getFullYear(), d.getMonth(), d.getDate(), hh, mm, ss);
 }
 
-/** Fim previsto da aula (início + duração; fallback 60 min). */
+/** * Calcula o fim previsto da aula (instante de início + duração em minutos).
+ * Se a duração falhar, aplica um fallback de segurança de 60 minutos.
+ */
 function instanteFimCoaching(cab) {
     const inicio = instanteInicioCoaching(cab);
     if (!inicio) return null;
@@ -130,7 +167,8 @@ function instanteFimCoaching(cab) {
     return new Date(inicio.getTime() + minutos * 60000);
 }
 
-/** Duração em minutos de um intervalo hora_inicio → hora_fim (mesmo dia). */
+/** * Retorna a duração em minutos entre duas horas dentro do mesmo dia.
+ */
 function duracaoSlotMinutos(horaInicio, horaFim) {
     const t0 = new Date(`${DATA_REF_COMPARACAO_HORAS}T${horaInicio}`).getTime();
     const t1 = new Date(`${DATA_REF_COMPARACAO_HORAS}T${horaFim}`).getTime();
@@ -138,6 +176,10 @@ function duracaoSlotMinutos(horaInicio, horaFim) {
     return Math.round((t1 - t0) / 60000);
 }
 
+/**
+ * Converte uma hora em formato string para timestamp numérico baseado num dia padrão.
+ * Útil para comparar facilmente interceções de horários.
+ */
 function instanteHoraReferencia(horaValor) {
     const horaNorm = normalizarHoraSqlTime(horaValor);
     if (!horaNorm) return null;
@@ -146,16 +188,19 @@ function instanteHoraReferencia(horaValor) {
 }
 
 // ============================================================================
-// US09 / RF11 — ADICIONAR DISPONIBILIDADE (Professor)
-// POST /api/coaching/disponibilidades
-// Body: { diaSemana, horaInicio, horaFim }
-// diaSemana: 1 = Seg-Sex | 2 = Sáb-Dom
+// CONTROLADORES / ROTAS
 // ============================================================================
+
+/**
+ * US09 / RF11 — ADICIONAR DISPONIBILIDADE (Professor)
+ * Permite que um professor registe os horários em que está disponível para aulas.
+ */
 async function adicionarDisponibilidade(req, res, next) {
     try {
         const idProfessor = req.utilizador.id;
         const { diaSemana, horaInicio, horaFim } = req.body;
 
+        // Validação de inputs obrigatórios
         if (!diaSemana || !horaInicio || !horaFim) {
             return res.status(400).json({ mensagem: 'diaSemana, horaInicio e horaFim são obrigatórios.' });
         }
@@ -181,6 +226,7 @@ async function adicionarDisponibilidade(req, res, next) {
 
         return res.status(201).json({ mensagem: 'Disponibilidade registada com sucesso.' });
     } catch (error) {
+        // Tratamento detalhado de erros comuns de submissão (sobreposições ou formatos inválidos na BD)
         if (error.message.includes('sobrepõe') || error.message.includes('posterior')) {
             return res.status(409).json({ mensagem: error.message });
         }
@@ -189,8 +235,6 @@ async function adicionarDisponibilidade(req, res, next) {
                 mensagem: 'Horas inválidas. Use o formato HH:mm (ex: 14:00) e tente novamente.'
             });
         }
-        // Para esta operação (editar horários), preferimos devolver a mensagem para o frontend
-        // em vez de cair no erro genérico "interno do servidor".
         if (error?.message) {
             return res.status(400).json({ mensagem: error.message });
         }
@@ -198,10 +242,10 @@ async function adicionarDisponibilidade(req, res, next) {
     }
 }
 
-// ============================================================================
-// GET /api/coaching/preco-estimado?dataAula=&horaInicio=&formatoAula=&duracaoMinutos=
-// (EE) — devolve preço estimado baseado na tabela de preços
-// ============================================================================
+/**
+ * Devolve uma simulação do preço do coaching consoante as variáveis submetidas.
+ * Utilizado pelo Encarregado de Educação para saber quanto vai custar antes de pedir.
+ */
 async function getPrecoEstimado(req, res, next) {
     try {
         const { dataAula, horaInicio, formatoAula, duracaoMinutos, idModalidade, idProfessor } = req.query;
@@ -212,10 +256,13 @@ async function getPrecoEstimado(req, res, next) {
 
         const formato = formatoAula || 'Solo';
         const dur = duracaoMinutos != null && duracaoMinutos !== '' ? parseInt(duracaoMinutos, 10) : 60;
+        
         const erroFormato = validarFormatoAula(formato);
         if (erroFormato) return res.status(400).json({ mensagem: erroFormato });
+        
         const erroDuracao = validarDuracaoAula(dur);
         if (erroDuracao) return res.status(400).json({ mensagem: erroDuracao });
+        
         if (Number.isNaN(dur) || dur <= 0) {
             return res.status(400).json({ mensagem: 'duracaoMinutos inválida.' });
         }
@@ -228,6 +275,7 @@ async function getPrecoEstimado(req, res, next) {
 
         const diaSemanaPreco = diaSemanaPrecoFromDateValue(dataAula);
 
+        // O model fará a pesquisa na base de dados pelos preços configurados
         const custoEstimado = await precoCoachingModel.calcularCustoAutomatico(
             formato,
             dur,
@@ -251,22 +299,21 @@ async function getPrecoEstimado(req, res, next) {
             custoEstimado
         });
     } catch (error) {
-        // Dev-friendly: não esconder a causa nestas rotas novas
         console.error('[preco-estimado] erro:', error);
         return res.status(500).json({ mensagem: error?.message || 'Ocorreu um erro interno no servidor.' });
     }
 }
 
-// ============================================================================
-// GET /api/coaching/slot-livre?dataAula=&horaInicio=&duracaoMinutos=
-// (Professor) — valida conflitos (COACHING + HORARIO)
-// ============================================================================
+/**
+ * Verifica se um professor não tem conflitos de horário com turmas normais ou outros coachings num slot específico.
+ */
 async function getSlotLivre(req, res, next) {
     try {
         const { dataAula, horaInicio, duracaoMinutos } = req.query;
         if (!dataAula || !horaInicio) {
             return res.status(400).json({ mensagem: 'dataAula e horaInicio são obrigatórios.' });
         }
+        
         const dur = duracaoMinutos != null && duracaoMinutos !== '' ? parseInt(duracaoMinutos, 10) : 60;
         if (Number.isNaN(dur) || dur <= 0) {
             return res.status(400).json({ mensagem: 'duracaoMinutos inválida.' });
@@ -294,10 +341,9 @@ async function getSlotLivre(req, res, next) {
     }
 }
 
-// ============================================================================
-// US09 / RF11 — LISTAR DISPONIBILIDADES DO PROFESSOR AUTENTICADO
-// GET /api/coaching/disponibilidades
-// ============================================================================
+/**
+ * US09 / RF11 — LISTAR DISPONIBILIDADES DO PROFESSOR AUTENTICADO
+ */
 async function getDisponibilidades(req, res, next) {
     try {
         const idProfessor = req.utilizador.id;
@@ -308,10 +354,10 @@ async function getDisponibilidades(req, res, next) {
     }
 }
 
-// ============================================================================
-// US09 / RF11 — REMOVER DISPONIBILIDADE (Professor — apenas as suas próprias)
-// DELETE /api/coaching/disponibilidades/:id
-// ============================================================================
+/**
+ * US09 / RF11 — REMOVER DISPONIBILIDADE
+ * O professor pode remover as suas próprias disponibilidades do calendário.
+ */
 async function removerDisponibilidade(req, res, next) {
     try {
         const idProfessor = req.utilizador.id;
@@ -333,10 +379,10 @@ async function removerDisponibilidade(req, res, next) {
     }
 }
 
-// ============================================================================
-// US04 / RF04 — CONSULTAR VAGAS DISPONÍVEIS (EE)
-// GET /api/coaching/vagas?idModalidade=&diaSemana=&data=&idProfessor=&duracaoMinutos=
-// ============================================================================
+/**
+ * US04 / RF04 — CONSULTAR VAGAS DISPONÍVEIS (EE)
+ * Devolve os horários que ainda estão livres, excluindo as ocupações já marcadas do professor.
+ */
 async function getVagasDisponiveis(req, res, next) {
     try {
         const { idModalidade, diaSemana, data, idProfessor, duracaoMinutos, idAnoLetivo } = req.query;
@@ -369,9 +415,9 @@ async function getVagasDisponiveis(req, res, next) {
             idAnoParsed
         );
 
-        // Calcular slots livres: disponibilidades sem ocupação sobreposta
         const { disponibilidades, ocupacoes } = resultado;
 
+        // Deduzir os horários ocupados dentro dos blocos de disponibilidade
         let vagasLivres = disponibilidades.map(d => {
             const horaInicioMs = new Date(`${DATA_REF_COMPARACAO_HORAS}T${d.hora_inicio}`).getTime();
             const horaFimMs = new Date(`${DATA_REF_COMPARACAO_HORAS}T${d.hora_fim}`).getTime();
@@ -381,6 +427,7 @@ async function getVagasDisponiveis(req, res, next) {
                 const oInicio = new Date(`${DATA_REF_COMPARACAO_HORAS}T${o.hora_inicio}`).getTime();
                 const durMin = Number(o.duracao_minutos);
                 const oFim = oInicio + (Number.isFinite(durMin) && durMin > 0 ? durMin * 60000 : 60000);
+                // Verifica a interceção matemática dos tempos
                 return oInicio < horaFimMs && oFim > horaInicioMs;
             });
 
@@ -391,6 +438,8 @@ async function getVagasDisponiveis(req, res, next) {
             duracaoMinutos !== undefined && duracaoMinutos !== '' && duracaoMinutos != null
                 ? parseInt(duracaoMinutos, 10)
                 : null;
+        
+        // Filtra vagas que não têm tempo suficiente para acomodar a duração requerida
         if (durReq != null) {
             if (Number.isNaN(durReq) || durReq < 1) {
                 return res.status(400).json({ mensagem: 'duracaoMinutos inválido.' });
@@ -406,6 +455,10 @@ async function getVagasDisponiveis(req, res, next) {
     }
 }
 
+/**
+ * Retorna os professores de uma determinada modalidade que se encontram livres 
+ * para serem aprovados ou atribuídos pela Coordenação naquele slot de hora.
+ */
 async function getProfessoresDisponiveisAprovacao(req, res, next) {
     try {
         const { idModalidade, dataAula, horaInicio, duracaoMinutos, idAnoLetivo } = req.query;
@@ -443,10 +496,13 @@ async function getProfessoresDisponiveisAprovacao(req, res, next) {
         );
 
         const professores = new Map();
+        
         for (const disp of disponibilidade.disponibilidades || []) {
             const inicioDisp = instanteHoraReferencia(disp.hora_inicio);
             const fimDisp = instanteHoraReferencia(disp.hora_fim);
+            
             if (inicioDisp == null || fimDisp == null) continue;
+            // Descarta se o pedido cai fora da hora global de disponibilidade do professor
             if (inicioDisp > inicioPedido || fimDisp < fimPedido) continue;
 
             const ocupado = (disponibilidade.ocupacoes || []).some((ocupacao) => {
@@ -457,6 +513,7 @@ async function getProfessoresDisponiveisAprovacao(req, res, next) {
                 const fimOcup = inicioOcup + (Number.isFinite(durOcup) && durOcup > 0 ? durOcup : 60) * 60000;
                 return inicioOcup < fimPedido && fimOcup > inicioPedido;
             });
+            
             if (!ocupado) {
                 professores.set(Number(disp.id_professor), {
                     id_professor: disp.id_professor,
@@ -471,10 +528,10 @@ async function getProfessoresDisponiveisAprovacao(req, res, next) {
     }
 }
 
-// ============================================================================
-// US10 / RF12 — AGENDA DO PROFESSOR AUTENTICADO
-// GET /api/coaching/agenda?dataInicio=2025-10-01&dataFim=2025-10-31
-// ============================================================================
+/**
+ * US10 / RF12 — AGENDA DO PROFESSOR AUTENTICADO
+ * Retorna as aulas agendadas do professor para preenchimento do calendário.
+ */
 async function getAgenda(req, res, next) {
     try {
         const idProfessor = req.utilizador.id;
@@ -487,13 +544,10 @@ async function getAgenda(req, res, next) {
     }
 }
 
-// ============================================================================
-// US05 / RF05, RF06 — SUBMETER PEDIDO DE COACHING (EE)
-// POST /api/coaching/pedidos
-// Body: { idModalidade, idProfessor, formatoAula, duracaoMinutos, dataAula,
-//         horaInicio, idAnoLetivo, alunosIds: [] }
-// idProfessor pode ser null = "qualquer disponível"
-// ============================================================================
+/**
+ * US05 / RF05, RF06 — SUBMETER PEDIDO DE COACHING (EE)
+ * Um Encarregado de Educação efetua um pedido de aula para os seus educandos.
+ */
 async function criarPedidoCoaching(req, res, next) {
     try {
         const idEncarregado = req.utilizador.id;
@@ -510,7 +564,7 @@ async function criarPedidoCoaching(req, res, next) {
             alunosIds
         } = req.body;
 
-        // Validações de campos obrigatórios
+        // Validações Base
         if (!idModalidade || !formatoAula || !duracaoMinutos || !dataAula || !horaInicio || !idAnoLetivo) {
             return res.status(400).json({
                 mensagem: 'idModalidade, formatoAula, duracaoMinutos, dataAula, horaInicio e idAnoLetivo são obrigatórios.'
@@ -534,6 +588,7 @@ async function criarPedidoCoaching(req, res, next) {
         const erroDuracao = validarDuracaoAula(duracaoMinutos);
         if (erroDuracao) return res.status(400).json({ mensagem: erroDuracao });
 
+        // Validação da disponibilidade se o EE escolheu um professor específico
         if (idProfessor) {
             const diaSemanaCoaching = diaSemanaCoachingFromDateValue(dataAula);
             const temDisponibilidade = await coachingModel.professorTemDisponibilidadeNoSlot({
@@ -550,9 +605,8 @@ async function criarPedidoCoaching(req, res, next) {
             }
         }
 
-        // Calcular custo estimado automaticamente (US16 / RF18)
+        // Cálculo do orçamento/preço final de submissão
         const diaSemanaPreco = diaSemanaPrecoFromDateValue(dataAula);
-
         const custoEstimado = await precoCoachingModel.calcularCustoAutomatico(
             formatoAula,
             Number(duracaoMinutos),
@@ -567,6 +621,7 @@ async function criarPedidoCoaching(req, res, next) {
             });
         }
 
+        // Registo na base de dados (Criação do Pedido e vínculo com alunos)
         const idPedido = await coachingModel.criarPedidoCoaching(
             {
                 formatoAula,
@@ -600,9 +655,10 @@ async function criarPedidoCoaching(req, res, next) {
     }
 }
 
-// ============================================================================
-// GET /api/coaching/pedidos/:id — detalhe de um pedido (Coordenação ou EE dono do pedido)
-// ============================================================================
+/**
+ * Consulta o detalhe específico de um pedido na base de dados.
+ * Protegido: Apenas para a Coordenação (Admin) ou o próprio EE detentor.
+ */
 async function getPedidoCoaching(req, res, next) {
     try {
         const idPedido = parseInt(req.params.id, 10);
@@ -630,10 +686,9 @@ async function getPedidoCoaching(req, res, next) {
     }
 }
 
-// ============================================================================
-// US05 / RF06 — LISTAR OS MEUS PEDIDOS DE COACHING (EE)
-// GET /api/coaching/pedidos/meus
-// ============================================================================
+/**
+ * US05 / RF06 — LISTAR OS MEUS PEDIDOS DE COACHING (EE)
+ */
 async function listarMeusPedidosCoaching(req, res, next) {
     try {
         const pedidos = await coachingModel.getPedidosPorEncarregado(req.utilizador.id);
@@ -643,10 +698,10 @@ async function listarMeusPedidosCoaching(req, res, next) {
     }
 }
 
-// ============================================================================
-// US05 / RF06 — CANCELAR PEDIDO PENDENTE (EE, apenas os seus)
-// DELETE /api/coaching/pedidos/:id/pendente
-// ============================================================================
+/**
+ * US05 / RF06 — CANCELAR PEDIDO PENDENTE
+ * Permite ao Encarregado cancelar o pedido desde que a Coordenação ainda não o tenha aprovado.
+ */
 async function cancelarMeuPedidoPendente(req, res, next) {
     try {
         const idPedido = parseInt(req.params.id, 10);
@@ -673,10 +728,10 @@ async function cancelarMeuPedidoPendente(req, res, next) {
     }
 }
 
-// ============================================================================
-// US06 / RF07 — LISTAR PEDIDOS PENDENTES (Coordenação)
-// GET /api/coaching/pedidos/pendentes
-// ============================================================================
+/**
+ * US06 / RF07 — LISTAR PEDIDOS PENDENTES (Coordenação)
+ * Retorna todos os pedidos dos vários encarregados que aguardam aprovação.
+ */
 async function getPedidosPendentes(req, res, next) {
     try {
         const pedidos = await coachingModel.getPedidosPendentes();
@@ -686,7 +741,9 @@ async function getPedidosPendentes(req, res, next) {
     }
 }
 
-// GET /api/coaching/pedidos/atribuidos-professor?dataInicio=&dataFim=
+/**
+ * Retorna pedidos já aprovados e atribuídos a um professor num dado intervalo.
+ */
 async function getPedidosAtribuidosProfessor(req, res, next) {
     try {
         const { dataInicio, dataFim } = req.query;
@@ -704,11 +761,10 @@ async function getPedidosAtribuidosProfessor(req, res, next) {
     }
 }
 
-// ============================================================================
-// US07, US08 / RF08, RF09, RF10 — APROVAR PEDIDO E AGENDAR COACHING (Coordenação)
-// POST /api/coaching/pedidos/:id/aprovar
-// Body: { idSala, idProfessor, valorFinal } — restantes campos vêm do pedido na BD
-// ============================================================================
+/**
+ * US07, US08 / RF08, RF09, RF10 — APROVAR PEDIDO E AGENDAR COACHING (Coordenação)
+ * O coordenador aprova um pedido pendente, define a sala, atesta a viabilidade e converte-o numa Aula real.
+ */
 async function aprovarPedido(req, res, next) {
     try {
         const idValidador = req.utilizador.id;
@@ -736,6 +792,7 @@ async function aprovarPedido(req, res, next) {
             return res.status(409).json({ mensagem: 'Este pedido já não está pendente de aprovação.' });
         }
 
+        // Recolha dos dados originais para transitar para o agendamento real
         const formatoAula = pedido.formato_aula;
         const duracaoMinutos = pedido.duracao_minutos;
         const numeroParticipantes = pedido.numero_participantes;
@@ -767,6 +824,7 @@ async function aprovarPedido(req, res, next) {
 
         const diaSemanaCoaching = diaSemanaCoachingFromDateValue(dataAula);
 
+        // Verifica obrigatoriamente se a atribuição final mantém o professor disponível
         const temDisponibilidade = await coachingModel.professorTemDisponibilidadeNoSlot({
             idProfessor: parseInt(idProfessor, 10),
             dataAula,
@@ -817,20 +875,18 @@ async function aprovarPedido(req, res, next) {
     }
 }
 
-// ============================================================================
-// US07 / RF08 — REJEITAR PEDIDO (Coordenação)
-// POST /api/coaching/pedidos/:id/rejeitar
-// Body: { justificacao }
-// ============================================================================
+/**
+ * US07 / RF08 — REJEITAR PEDIDO (Coordenação)
+ * Rejeita o pedido do EE e obriga à justificação da nega.
+ */
 async function rejeitarPedido(req, res, next) {
     try {
         const idPedido = parseInt(req.params.id, 10);
         const { justificacao } = req.body;
 
         if (!justificacao) {
-            return res.status(400).json({ mensagem: 'Justificação é obrigatória para rejeitar um pedido.' });
+            return res.status(400).json({ mensagem: 'A justificação é obrigatória para rejeitar um pedido.' });
         }
-        // A justificação não é persistida na BD neste modelo (sem coluna dedicada).
 
         const sucesso = await coachingModel.rejeitarPedidoCoaching(idPedido);
 
@@ -844,10 +900,10 @@ async function rejeitarPedido(req, res, next) {
     }
 }
 
-// ============================================================================
-// US12 / RF14 — CANCELAR COACHING (EE ou Coordenação)
-// DELETE /api/coaching/:id
-// ============================================================================
+/**
+ * US12 / RF14 — CANCELAR COACHING (EE ou Coordenação)
+ * Cancela uma aula já agendada no sistema, libertando assim a sala e o professor.
+ */
 async function cancelarCoaching(req, res, next) {
     try {
         const idCoaching = parseInt(req.params.id, 10);
@@ -862,9 +918,10 @@ async function cancelarCoaching(req, res, next) {
             return res.status(404).json({ mensagem: 'Coaching não encontrado.' });
         }
         if (cab.estado === 'Cancelado') {
-            return res.status(400).json({ mensagem: 'Este coaching já está cancelado.' });
+            return res.status(400).json({ mensagem: 'Este coaching já se encontra cancelado.' });
         }
 
+        // Se for um Encarregado (e não for Admin simultaneamente)
         if (utilizadorTemPerfil(perfis, 'EE') && !utilizadorTemPerfil(perfis, 'Admin')) {
             const autorizado = await coachingModel.coachingPertenceAEncarregado(
                 idCoaching,
@@ -881,6 +938,7 @@ async function cancelarCoaching(req, res, next) {
                 return res.status(400).json({ mensagem: 'Dados de data/hora do coaching inválidos.' });
             }
 
+            // Impede cancelar aulas que, temporalmente, já se iniciaram ou passaram
             if (inicioAula.getTime() <= Date.now()) {
                 return res.status(400).json({
                     mensagem: 'Não é possível cancelar uma aula cuja data e hora já passaram.'
@@ -899,12 +957,10 @@ async function cancelarCoaching(req, res, next) {
     }
 }
 
-// ============================================================================
-// US13 / RF15 — CONFIRMAR REALIZAÇÃO DA AULA (Professor ou EE)
-// POST /api/coaching/:id/validar
-// Body: { estadoValidacao, observacoes }
-// estadoValidacao: 'Confirmado' | 'Nao_Realizado'
-// ============================================================================
+/**
+ * US13 / RF15 — CONFIRMAR REALIZAÇÃO DA AULA (Professor ou EE)
+ * Após o final da aula, permite que o Professor ou o EE atestem se a aula efetivamente aconteceu.
+ */
 async function registarValidacao(req, res, next) {
     try {
         const idUtilizador = req.utilizador.id;
@@ -934,6 +990,7 @@ async function registarValidacao(req, res, next) {
             });
         }
 
+        // A lógica de negócio dita que a aula só pode ser dada como terminada se a hora já tiver decorrido
         const fimAula = instanteFimCoaching(cab);
         if (!fimAula || fimAula.getTime() > Date.now()) {
             return res.status(400).json({
@@ -941,7 +998,6 @@ async function registarValidacao(req, res, next) {
             });
         }
 
-        // Determinar tipo de validador com base no perfil do utilizador autenticado
         let tipoValidador;
         if (utilizadorTemPerfil(perfis, 'Professor')) {
             const ok = await coachingModel.coachingPertenceAProfessorAtivo(
@@ -986,20 +1042,16 @@ async function registarValidacao(req, res, next) {
     }
 }
 
-// ============================================================================
-// US14 / RF16 — CONCLUSÃO FINAL PELA COORDENAÇÃO (resolve divergências)
-// POST /api/coaching/:id/concluir
-// Body: { estadoFinal, observacoes }
-// estadoFinal: 'Realizado' | 'Nao_Realizado'
-// ============================================================================
-// GET /api/coaching/pendentes-conclusao — aulas já terminadas, aguardam decisão final (US14)
+/**
+ * Retorna as aulas em que a hora já foi ultrapassada e aguardam a conclusão formal da Coordenação.
+ */
 async function getPendentesConclusaoCoordenacao(req, res, next) {
     try {
         const lista = await coachingModel.listarCoachingsAbertosParaCoordenacao();
         const agora = Date.now();
         const filtrada = lista.filter((row) => {
             const fim = instanteFimCoaching(row);
-            return fim && fim.getTime() <= agora;
+            return fim && fim.getTime() <= agora; // Só mostra os que o tempo já expirou
         });
         return res.status(200).json(filtrada);
     } catch (error) {
@@ -1007,6 +1059,10 @@ async function getPendentesConclusaoCoordenacao(req, res, next) {
     }
 }
 
+/**
+ * US14 / RF16 — CONCLUSÃO FINAL PELA COORDENAÇÃO
+ * Resolve divergências de validação (ex: Professor diz sim, EE diz não) e fecha definitivamente o ciclo da aula.
+ */
 async function concluirCoaching(req, res, next) {
     try {
         const idCoordenador = req.utilizador.id;

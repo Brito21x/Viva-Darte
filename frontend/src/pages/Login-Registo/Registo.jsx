@@ -63,7 +63,6 @@ export default function Registo({ irParaLogin, irParaLanding }) {
         const resultado = await response.json();
 
         if (response.ok) {
-            // AQUI ESTÁ A MENSAGEM ATUALIZADA
             mostrarAlerta(resultado.mensagem || "A sua conta foi enviada para aprovação. Aguarde a confirmação da coordenação.", true);
         } else {
             mostrarAlerta(resultado.error || "Erro ao criar conta.");

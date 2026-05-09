@@ -59,7 +59,6 @@ function formatYMD(date) {
   return `${yyyy}-${mm}-${dd}`;
 }
 
-/** Data de calendário local — evita desvio do dia da semana com strings `YYYY-MM-DD` em UTC. */
 function parseDataCalendario(valor) {
   if (valor == null) return null;
   if (valor instanceof Date && !Number.isNaN(valor.getTime())) {
@@ -355,7 +354,6 @@ export default function MinhaAgendaProfessor({ irParaLanding, irParaEmprestimos,
   }, [agenda]);
 
   const agendaPorDiaHora = useMemo(() => {
-    /** key: `${DIA}|${HORA}` — coachings confirmados têm prioridade; pedidos só Pendente preenchem slot livre */
     const map = new Map();
     for (const row of agenda) {
       const diaKey = diaSemanaAbrev(row.data_aula);
@@ -672,7 +670,6 @@ export default function MinhaAgendaProfessor({ irParaLanding, irParaEmprestimos,
           setAgenda(Array.isArray(dataAgenda) ? dataAgenda : []);
           setPedidosPendentesProf(Array.isArray(dataPedidos) ? dataPedidos : []);
         } catch {
-          /* ignore refresh erro */
         }
       }
     } catch (e) {
@@ -718,7 +715,7 @@ export default function MinhaAgendaProfessor({ irParaLanding, irParaEmprestimos,
           </a>
         </li>
 
-        {/* NOVO: Disponibilidades - Aparece apenas se o utilizador for Professor */}
+        {/* Disponibilidades - Aparece apenas se o utilizador for Professor */}
         {(() => {
           const user = JSON.parse(localStorage.getItem('viva_user') || '{}');
           if (user.tipo === 'PROF' || user.role === 'PROFESSOR') {

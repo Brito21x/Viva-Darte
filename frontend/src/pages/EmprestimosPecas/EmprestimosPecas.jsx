@@ -50,12 +50,10 @@ export default function EmprestimosPecas({ irParaLanding, irParaEmprestimos, irP
   const fecharAlerta  = ()    => setCustomAlert({ show: false, message: '', type: 'alert', onConfirm: null });
 
   const parsearLocalizacao = (peca) => {
-    // 1. Prevenção de erro crítico: Se a peça for null, undefined ou não for um objeto
     if (!peca || typeof peca !== 'object') {
       return { valor_dia: '0', metodos: ['MBWay'] };
     }
 
-    // 2. Compatibilidade com registos antigos que tenham ficado na BD
     if (typeof peca.localizacao === 'string' && peca.localizacao.includes('valor_dia:')) {
       try {
         const partes = peca.localizacao.split(';');
@@ -65,7 +63,6 @@ export default function EmprestimosPecas({ irParaLanding, irParaEmprestimos, irP
       } catch { return { valor_dia: '0', metodos: ['MBWay'] }; }
     }
     
-    // 3. Nova estrutura lida diretamente das colunas adicionadas no SQL OUTER APPLY
     return { 
         valor_dia: peca.valor_dia || '0', 
         metodos: (typeof peca.metodos_pagamento === 'string') ? peca.metodos_pagamento.split(',') : ['MBWay'] 
@@ -207,7 +204,7 @@ export default function EmprestimosPecas({ irParaLanding, irParaEmprestimos, irP
           estado:            novaPeca.condicao,
           idCategoria:       1,
           fotos:             novaPeca.fotos,
-          valor_dia:         novaPeca.valor_dia, // Agora enviado diretamente na criação
+          valor_dia:         novaPeca.valor_dia, 
           metodos_pagamento: novaPeca.metodos_pagamento
         })
       });
@@ -334,11 +331,11 @@ export default function EmprestimosPecas({ irParaLanding, irParaEmprestimos, irP
         body: JSON.stringify({
           dataInicio:      dataInicio,
           dataFim:         dataFim,
-          metodoPagamento: metodoPagamentoSolicitacao, // Enviado para a coluna método_pagamento
-          observacoes:     observacoesSolicitacao,     // Enviado sem misturar com o método
+          metodoPagamento: metodoPagamentoSolicitacao, 
+          observacoes:     observacoesSolicitacao,   
           itens: [{
             idPeca:        pecaSelecionada.id_peca,
-            estadoEntrega: pecaSelecionada.condicao_peca || pecaSelecionada.estado || 'Bom' // Estado lido para a bd
+            estadoEntrega: pecaSelecionada.condicao_peca || pecaSelecionada.estado || 'Bom' 
           }]
         })
       });
@@ -367,7 +364,6 @@ export default function EmprestimosPecas({ irParaLanding, irParaEmprestimos, irP
   const handleSubmeterAcaoEmprestimo = async (e) => {
     e.preventDefault();
     
-    // O sistema agora vai buscar o ID do empréstimo automaticamente!
     const idEmp = acaoPeca?.active_id_emprestimo;
     if (!idEmp) return mostrarAlerta('Erro: Não foi possível identificar o empréstimo ativo. Atualiza a página.');
     
@@ -457,7 +453,6 @@ export default function EmprestimosPecas({ irParaLanding, irParaEmprestimos, irP
           </li>
           <li className="nav-separator">|</li>
           
-          {/* Lógica para saber se envia para a Agenda de Prof ou de EE */}
           <li>
             <a href="#agenda" onClick={(e) => { 
               e.preventDefault(); 
@@ -634,12 +629,10 @@ export default function EmprestimosPecas({ irParaLanding, irParaEmprestimos, irP
                     {estaEmprestado ? (
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', lineHeight: '1.2' }}>
                         {eMinhaPeca ? (
-                          // O dono vê sempre este botão se a peça estiver emprestada
                           <button className="btn-dark btn-sm" onClick={() => handleAbrirAcoesEmprestimo(peca)}>
                             Gerir Empréstimo
                           </button>
                         ) : (
-                          // Outros utilizadores apenas vêem o texto informativo
                           <span className="texto-emprestado-rodape">Emprestado</span>
                         )}
                       </div>

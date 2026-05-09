@@ -69,13 +69,13 @@
   align-items: center;
   justify-content: center;
   padding: 40px;
-  overflow-y: auto; /* Adicionado caso o ecrã seja pequeno e o formulário de registo seja longo */
+  overflow-y: auto; 
 }
 
 .form-box {
   width: 100%;
   max-width: 380px;
-  margin: auto 0; /* Ajuda a centrar no scroll */
+  margin: auto 0; 
 }
 
 .form-header h2 {
@@ -169,14 +169,14 @@
   font-weight: 600;
   font-size: 0.95rem;
   color: var(--primary-dark);
-  margin-right: 15px; /* Espaçamento entre o +351 e o número escrito */
+  margin-right: 15px; 
   user-select: none;
   opacity: 0.9;
 }
 
 .phone-input-wrapper input {
   flex: 1;
-  border-bottom: none !important; /* Tira a linha do input pq o wrapper já tem */
+  border-bottom: none !important; 
   padding-left: 0;
 }
 

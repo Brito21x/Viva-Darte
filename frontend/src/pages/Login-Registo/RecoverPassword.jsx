@@ -5,10 +5,8 @@ export default function RecoverPassword({ irParaLogin, irParaLanding }) {
   const [etapa, setEtapa] = useState(1); 
   const [email, setEmail] = useState('');
   
-  // Estado para o input do utilizador
   const [token, setToken] = useState('');
   
-  // Estado para guardar o token real gerado pelo backend
   const [tokenGerado, setTokenGerado] = useState(''); 
   
   const [novaPassword, setNovaPassword] = useState('');
@@ -30,7 +28,6 @@ export default function RecoverPassword({ irParaLogin, irParaLanding }) {
     setCustomAlert({ show: false, message: '', redirectOnClose: false });
   };
 
-  // ETAPA 1: Validar Email na BD e guardar o Token gerado
   const lidarComEmail = async (e) => {
     e.preventDefault();
     try {
@@ -43,11 +40,9 @@ export default function RecoverPassword({ irParaLogin, irParaLanding }) {
       const resultado = await response.json();
 
       if (response.ok) {
-        // Guarda o token real em memória para comparar no passo 2
         setTokenGerado(resultado.token);
         
         setEtapa(2);
-        // ALERTA COM O CÓDIGO (Simulação de Email)
         mostrarAlerta(`📧 SIMULAÇÃO DE EMAIL: O teu código de segurança é: ${resultado.token}`);
       } else {
         mostrarAlerta(resultado.mensagem || "Erro ao solicitar recuperação.");
@@ -57,11 +52,9 @@ export default function RecoverPassword({ irParaLogin, irParaLanding }) {
     }
   };
 
-  // ETAPA 2: Validar se o token inserido é igual ao token gerado
   const lidarComToken = (e) => {
     e.preventDefault();
     
-    // Compara ignorando espaços e garantindo maiúsculas
     if (token.trim().toUpperCase() === tokenGerado.trim().toUpperCase()) {
       setEtapa(3); // Se for igual, avança
     } else {
@@ -69,7 +62,6 @@ export default function RecoverPassword({ irParaLogin, irParaLanding }) {
     }
   };
 
-  // ETAPA 3: Envia Token + Nova Password para a Base de Dados
   const confirmarAlteracao = async (e) => {
     e.preventDefault();
 

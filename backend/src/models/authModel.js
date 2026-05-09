@@ -1,5 +1,5 @@
 /**
- * Modelo de Autenticação e Gestão de Utilizadores
+ * @fileoverview Modelo de Autenticação e Gestão de Utilizadores
  * Este ficheiro centraliza todas as interações com a base de dados SQL Server
  * referentes a utilizadores, perfis e tokens de segurança.
  */

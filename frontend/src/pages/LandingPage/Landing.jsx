@@ -21,7 +21,6 @@ export default function Landing({
     const userGuardado = localStorage.getItem('viva_user');
     if (userGuardado) {
       setUtilizador(JSON.parse(userGuardado));
-      // Assim que entra, vai direto para o modo portal (links de gestão)
       setModoPortal(true);
     }
     document.title = "Viva D'arte | Escola de Dança";
@@ -38,7 +37,6 @@ export default function Landing({
 
   const handleIrParaInicio = (e) => {
     if (e) e.preventDefault();
-    // Ao clicar em Início, sai do modo portal para ver o conteúdo da landing page
     setModoPortal(false); 
     
     window.history.replaceState(null, '', window.location.pathname);
@@ -113,7 +111,6 @@ export default function Landing({
               <li><a href="#professores">Professores</a></li>
             </>
           ) : !modoPortal ? (
-            // VISTA LOGADO MAS NO "INÍCIO" (Mostra conteúdo geral + Botão de Atalho para o Portal)
             <>
               <li><a href="#sobre">Sobre Nós</a></li>
               <li><a href="#modalidades">Modalidades</a></li>
@@ -143,7 +140,6 @@ export default function Landing({
               )}
             </>
           ) : (
-            // VISTA "MODO PORTAL" (Entrada direta após login com as ferramentas de gestão)
             <>
               <li className="nav-separator">|</li>
               {isProfessorUtilizador(utilizador) ? (
@@ -292,7 +288,7 @@ export default function Landing({
         </div>
       </section>
 
-      {/* --- FOOTER COMPACTO --- */}
+      {/* --- FOOTER  --- */}
       <footer className="main-footer">
         <div className="footer-container">
           <div className="footer-column">

@@ -1,39 +1,55 @@
 /**
- * Rotas do Inventário, Empréstimos e Mercado de vendas de figurinos
- * Este ficheiro define todos os endpoints da API relacionados com a gestão física
- * das peças (Empréstimo e venda).
+ * @fileoverview Rotas do Inventário, Empréstimos e Mercado de Vendas.
+ * Este ficheiro mapeia os endpoints da API relacionados com a gestão física
+ * das peças de vestuário/figurinos, abrangendo o catálogo geral, ciclo de
+ * empréstimos, devoluções, penalizações e transações do mercado de segunda mão.
  */
 
 const express = require('express');
 const router = express.Router();
 
-const inventarioController = require('../controllers/inventarioController'); // Controlador com a lógica de negócio
+const inventarioController = require('../controllers/inventarioController');
 const { autenticar, autorizar } = require('../middlewares/auth');
 
 // ============================================================================
 // MIDDLEWARE GLOBAL DA ROTA
 // ============================================================================
-// Aplica a verificação de token (autenticar) a TODAS as rotas declaradas abaixo.
-// Isto garante que o Catálogo e o Mercado são exclusivos para a comunidade escolar registada.
+// Aplica a verificação de token JWT a TODAS as rotas declaradas abaixo.
+// Garante que o Catálogo e o Mercado são exclusivos para a comunidade escolar registada.
 router.use(autenticar);
 
 // ============================================================================
 // CATÁLOGO E GESTÃO BASE DE PEÇAS 
 // ============================================================================
 
-// [GET] Listar todas as peças disponíveis no inventário da escola
+/**
+ * [PROTEGIDO] Obtém a lista de todas as peças disponíveis no inventário da escola.
+ * GET /api/inventario/
+ */
 router.get('/', inventarioController.getCatalogo);
 
-// [GET] Listar especificamente as peças que estão no mercado de vendas
+/**
+ * [PROTEGIDO] Obtém especificamente as peças que se encontram anunciadas no mercado de vendas.
+ * GET /api/inventario/vendas
+ */
 router.get('/vendas', inventarioController.getPecasAVenda);
 
-// [GET] Obter os detalhes completos de uma peça específica e respetiva galeria de fotos
+/**
+ * [PROTEGIDO] Obtém os detalhes completos de uma peça específica e a respetiva galeria de fotografias.
+ * GET /api/inventario/:id
+ */
 router.get('/:id', inventarioController.getPecaDetalhes);
 
-// [POST] Registar uma nova peça no sistema
+/**
+ * [PROTEGIDO] Regista uma nova peça no sistema (pode ser configurada logo para empréstimo/venda).
+ * POST /api/inventario/
+ */
 router.post('/', inventarioController.registarPeca);
 
-// [PUT] Atualizar configurações da peça
+/**
+ * [PROTEGIDO] Atualiza configurações operacionais da peça (estado físico, disponibilidade e localização).
+ * PUT /api/inventario/:id
+ */
 router.put('/:id', inventarioController.atualizarEstadoPeca);
 
 
@@ -41,33 +57,57 @@ router.put('/:id', inventarioController.atualizarEstadoPeca);
 // CICLO DE EMPRÉSTIMOS 
 // ============================================================================
 
-// [POST] Efetuar um novo pedido de requisição/empréstimo de uma peça
+/**
+ * [PROTEGIDO] Efetua um novo pedido de requisição/empréstimo de peças.
+ * POST /api/inventario/emprestimos
+ */
 router.post('/emprestimos', inventarioController.requisitarEmprestimo);
 
-// [PUT] Registar a devolução física de uma peça (inclui avaliação de danos)
+/**
+ * [PROTEGIDO] Regista a devolução física de peças, incluindo a avaliação do estado de entrega.
+ * PUT /api/inventario/emprestimos/:id/devolucao
+ */
 router.put('/emprestimos/:id/devolucao', inventarioController.registarDevolucao);
 
-// [POST] Aplicar multas/penalizações a um empréstimo (ex: Atraso, Dano, Perda)
+/**
+ * [PROTEGIDO] Aplica multas ou penalizações financeiras a um empréstimo (ex: Atraso, Dano, Perda).
+ * POST /api/inventario/emprestimos/:id/penalizacoes
+ */
 router.post('/emprestimos/:id/penalizacoes', inventarioController.registarPenalizacao);
 
-// [PUT] Registar o pagamento de taxas associadas a um empréstimo
+/**
+ * [PROTEGIDO] Regista o pagamento de taxas ou multas associadas a um empréstimo.
+ * PUT /api/inventario/emprestimos/:id/pagamento
+ */
 router.put('/emprestimos/:id/pagamento', inventarioController.registarPagamentoEmprestimo);
 
 
 // ============================================================================
-//  MERCADO DE VENDAS 
+// MERCADO DE VENDAS E EDIÇÃO AVANÇADA
 // ============================================================================
 
-// [POST] Promover uma peça do inventário para o mercado de vendas (Anunciar)
+/**
+ * [PROTEGIDO] Promove uma peça existente no inventário para o mercado de vendas (cria anúncio).
+ * POST /api/inventario/vendas
+ */
 router.post('/vendas', inventarioController.colocarPecaAVenda);
 
-// [PUT] Finalizar uma venda (Registar o comprador e o método de pagamento recebido)
+/**
+ * [PROTEGIDO] Finaliza uma venda, registando o comprador e o método de pagamento recebido.
+ * PUT /api/inventario/vendas/:id/concluir
+ */
 router.put('/vendas/:id/concluir', inventarioController.registarConclusaoVenda);
 
-// [PUT] Edição global de uma peça (Altera nome, descrição, preços e atualiza fotografias)
+/**
+ * [PROTEGIDO] Edição global de uma peça (altera nome, descrição, preços e substitui fotografias).
+ * PUT /api/inventario/:id/editar
+ */
 router.put('/:id/editar', inventarioController.editarPeca);
 
-// [DELETE] Apagar permanentemente uma peça do sistema (Eliminação em Cascata de Empréstimos e Fotos)
+/**
+ * [PROTEGIDO] Apaga permanentemente uma peça do sistema (eliminação em cascata de histórico e fotos).
+ * DELETE /api/inventario/:id
+ */
 router.delete('/:id', inventarioController.apagarPeca);
 
 module.exports = router;

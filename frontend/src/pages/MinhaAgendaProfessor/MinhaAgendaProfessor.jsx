@@ -156,7 +156,7 @@ function normalizeTime(hhmm) {
   return `${hora}:00`;
 }
 
-export default function MinhaAgendaProfessor({ irParaLanding, modo = 'professor' }) {
+export default function MinhaAgendaProfessor({ irParaLanding, irParaEmprestimos, irParaVendaFigurinos, irParaMinhaAgendaProfessor, irParaMinhaAgendaEE, modo = 'professor' }) {
   const [agenda, setAgenda] = useState([]);
   const [pedidosPendentesProf, setPedidosPendentesProf] = useState([]);
   const [utilizador, setUtilizador] = useState(null);
@@ -698,11 +698,53 @@ export default function MinhaAgendaProfessor({ irParaLanding, modo = 'professor'
           <span>VIVA D'ARTE</span>
         </div>
         <ul className="nav-menu">
-          <li><a href="#" onClick={(e) => { e.preventDefault(); irParaLanding?.(); }}>Início</a></li>
-          <li><span className="nav-separator">|</span></li>
-          <li><a href="#agenda" className="special-link active">Minha Agenda</a></li>
-          {!isAgendaEE && <li><a href="#disponibilidade" className="special-link">Disponibilidades</a></li>}
-        </ul>
+        <li>
+          <a href="#inicio" onClick={(e) => { e.preventDefault(); irParaLanding?.(); }}>Início</a>
+        </li>
+        <li className="nav-separator">|</li>
+        
+        {/* Link da Agenda - Dinâmico para EE ou Professor */}
+        <li>
+          <a href="#agenda" className="special-link active" onClick={(e) => { 
+            e.preventDefault(); 
+            const user = JSON.parse(localStorage.getItem('viva_user') || '{}');
+            if (user.tipo === 'PROF' || user.role === 'PROFESSOR') {
+              irParaMinhaAgendaProfessor?.();
+            } else {
+              irParaMinhaAgendaEE?.();
+            }
+          }}>
+            Minha Agenda
+          </a>
+        </li>
+
+        {/* NOVO: Disponibilidades - Aparece apenas se o utilizador for Professor */}
+        {(() => {
+          const user = JSON.parse(localStorage.getItem('viva_user') || '{}');
+          if (user.tipo === 'PROF' || user.role === 'PROFESSOR') {
+            return (
+              <li>
+                <a href="#disponibilidade" className="special-link" onClick={(e) => e.preventDefault()}>
+                  Disponibilidades
+                </a>
+              </li>
+            );
+          }
+          return null;
+        })()}
+
+        <li>
+          <a href="#emprestimos" onClick={(e) => { e.preventDefault(); irParaEmprestimos?.(); }}>
+            Empréstimos de peças
+          </a>
+        </li>
+        
+        <li>
+          <a href="#figurinos" onClick={(e) => { e.preventDefault(); irParaVendaFigurinos?.(); }}>
+            Venda de figurinos
+          </a>
+        </li>
+      </ul>
         <div className="nav-actions">
           <div className="user-profile">
             <span className="welcome-text">Olá, <strong>{utilizador?.nome?.split(' ')[0] || ''}</strong></span>
@@ -810,7 +852,7 @@ export default function MinhaAgendaProfessor({ irParaLanding, modo = 'professor'
 
         {isPrecoModalOpen && (
           <div className="modal-overlay" onClick={() => setIsPrecoModalOpen(false)}>
-            <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-content agenda-modal" onClick={(e) => e.stopPropagation()}>
               <h2>Preço Estimado</h2>
               <p style={{ margin: '6px 0 14px', opacity: 0.8 }}>
                 {precoInfo.dataAula} • {precoInfo.horaInicio}
@@ -1081,7 +1123,7 @@ export default function MinhaAgendaProfessor({ irParaLanding, modo = 'professor'
 
       {!isAgendaEE && isDispoModalOpen && (
         <div className="modal-overlay" onClick={() => setIsDispoModalOpen(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+          <div className="modal-content agenda-modal" onClick={(e) => e.stopPropagation()}>
             <h2>Editar Horários</h2>
             {erroDispo && <p className="modal-error">{erroDispo}</p>}
 

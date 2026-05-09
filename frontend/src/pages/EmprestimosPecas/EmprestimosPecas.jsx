@@ -3,7 +3,7 @@ import './EmprestimosPecas.css';
 import logoImg from '../../assets/logo.png';
 import { API_URL, getAuthToken } from '../../services/api';
 
-export default function EmprestimosPecas({ irParaLanding, irParaVendaFigurinos }) {
+export default function EmprestimosPecas({ irParaLanding, irParaEmprestimos, irParaVendaFigurinos, irParaMinhaAgendaProfessor, irParaMinhaAgendaEE }) {
   const [utilizador, setUtilizador]   = useState(null);
   const [pecas, setPecas]             = useState([]);
   const [isLoading, setIsLoading]     = useState(true);
@@ -451,21 +451,38 @@ export default function EmprestimosPecas({ irParaLanding, irParaVendaFigurinos }
           <span>VIVA D'ARTE</span>
         </div>
 
-        <ul className="nav-menu">
-          <li><a href="#" onClick={(e) => { e.preventDefault(); irParaLanding(); }}>Início</a></li>
-          {utilizador?.perfil === 'Professor' ? (
-            <>
-              <li><span className="nav-separator">|</span></li>
-              <li><a href="#" className="special-link active">Empréstimos de peças</a></li>
-              <li><a href="#" className="special-link" onClick={(e) => { e.preventDefault(); irParaVendaFigurinos(); }}>Venda de figurinos</a></li>
-            </>
-          ) : utilizador ? (
-            <>
-              <li><span className="nav-separator">|</span></li>
-              <li><a href="#" className="special-link active">Empréstimos de peças</a></li>
-              <li><a href="#" className="special-link" onClick={(e) => { e.preventDefault(); irParaVendaFigurinos(); }}>Venda de figurinos</a></li>
-            </>
-          ) : null}
+          <ul className="nav-menu">
+          <li>
+            <a href="#inicio" onClick={(e) => { e.preventDefault(); irParaLanding?.(); }}>Início</a>
+          </li>
+          <li className="nav-separator">|</li>
+          
+          {/* Lógica para saber se envia para a Agenda de Prof ou de EE */}
+          <li>
+            <a href="#agenda" onClick={(e) => { 
+              e.preventDefault(); 
+              const user = JSON.parse(localStorage.getItem('viva_user') || '{}');
+              if (user.tipo === 'PROF' || user.role === 'PROFESSOR') {
+                irParaMinhaAgendaProfessor?.();
+              } else {
+                irParaMinhaAgendaEE?.();
+              }
+            }}>
+              Minha Agenda
+            </a>
+          </li>
+
+          <li>
+            <a href="#emprestimos" className="special-link active" onClick={(e) => { e.preventDefault(); irParaEmprestimos?.(); }}>
+              Empréstimos de peças
+            </a>
+          </li>
+          
+          <li>
+            <a href="#figurinos" onClick={(e) => { e.preventDefault(); irParaVendaFigurinos?.(); }}>
+              Venda de figurinos
+            </a>
+          </li>
         </ul>
 
         <div className="nav-actions">
@@ -645,7 +662,7 @@ export default function EmprestimosPecas({ irParaLanding, irParaVendaFigurinos }
 
       {isAdicionarModalOpen && (
         <div className="modal-overlay">
-          <div className="modal-content form-venda">
+            <div className="modal-content form-venda">
             <h2>Disponibilizar para Empréstimo</h2>
 
             <form onSubmit={handleSubmeterNovo}>

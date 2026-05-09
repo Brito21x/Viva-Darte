@@ -43,11 +43,9 @@ export default function Login({
         // Grava o objeto que o backend envia (inclui o perfil ativo validado)
         localStorage.setItem('viva_user', JSON.stringify(resultado.utilizador));
         localStorage.setItem('viva_token', resultado.token);
-        if (tipo === 'PROF') {
-          irParaMinhaAgendaProfessor?.();
-        } else {
-          irParaMinhaAgendaEE?.();
-        }
+        
+        // Redireciona sempre para a Landing Page após o login
+        irParaLanding?.();
       } else {
         mostrarAlerta(resultado.mensagem || "Dados de acesso incorretos.");
       }

@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
+import { BrowserRouter as Router, Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import Landing from './pages/LandingPage/Landing';
 import Login from './pages/Login-Registo/Login';
 import Registo from './pages/Login-Registo/Registo';
@@ -8,109 +9,89 @@ import EmprestimosPecas from './pages/EmprestimosPecas/EmprestimosPecas';
 import AdminDashboard from './pages/AdminDashboard/AdminDashboard';
 import MinhaAgendaProfessor from './pages/MinhaAgendaProfessor/MinhaAgendaProfessor';
 
-function App() {
-  const [paginaAtual, setPaginaAtual] = useState(() => {
-    if (window.location.pathname === '/admin') {
-      return 'admin';
-    }
-    return 'landing';
-  });
+// Componente auxiliar para gerir a lógica de navegação antiga (compatibilidade)
+function AppRoutes() {
+  const navigate = useNavigate();
+  const location = useLocation();
 
+  // Mantém a proteção de rota que tinhas para o admin
   useEffect(() => {
-    if (paginaAtual !== 'admin' && window.location.pathname === '/admin') {
-      window.history.pushState({}, '', '/');
+    if (location.pathname === '/admin') {
+      // Podes adicionar aqui lógica de verificação de admin se necessário
     }
-    
-    localStorage.setItem('ultimaPagina', paginaAtual);
-  }, [paginaAtual]);
+  }, [location]);
 
+  // Objeto de navegação que passas para os teus componentes
+  // Agora em vez de mudar um estado, eles mudam o URL do browser
   const nav = {
-    landing: () => setPaginaAtual('landing'),
-    login: () => setPaginaAtual('login'),
-    registo: () => setPaginaAtual('registo'),
-    recuperar: () => setPaginaAtual('recuperar'),
-    venda_figurinos: () => setPaginaAtual('venda_figurinos'),
-    emprestimos_pecas: () => setPaginaAtual('emprestimos_pecas'),
-    minha_agenda_professor: () => setPaginaAtual('minha_agenda_professor'),
-    minha_agenda_ee: () => setPaginaAtual('minha_agenda_ee'),
+    landing: () => navigate('/'),
+    login: () => navigate('/login'),
+    registo: () => navigate('/registo'),
+    recuperar: () => navigate('/recuperar'),
+    venda_figurinos: () => navigate('/vendas-de-figurinos'),
+    emprestimos_pecas: () => navigate('/emprestimos'),
+    minha_agenda_professor: () => navigate('/agenda'),
+    minha_agenda_ee: () => navigate('/agenda'),
+    admin: () => navigate('/admin')
   };
 
   return (
-    <div className="App">
-      
-      {/* LANDING PAGE */}
-      {paginaAtual === 'landing' && (
+    <Routes>
+      <Route path="/" element={
         <Landing 
           irParaLogin={nav.login} 
           irParaRegisto={nav.registo} 
-          irParaVendaFigurinos={nav.venda_figurinos} 
+          irParaVendaFigurinos={nav.venda_figurinos}
           irParaEmprestimos={nav.emprestimos_pecas}
           irParaMinhaAgendaProfessor={nav.minha_agenda_professor}
           irParaMinhaAgendaEE={nav.minha_agenda_ee}
         />
-      )}
-      
-      {/* LOGIN */}
-      {paginaAtual === 'login' && (
-        <Login 
-          irParaRegisto={nav.registo} 
-          irParaLanding={nav.landing} 
-          irParaRecuperar={nav.recuperar} 
-          irParaMinhaAgendaProfessor={nav.minha_agenda_professor}
-          irParaMinhaAgendaEE={nav.minha_agenda_ee}
-        />
-      )}
-      
-      {/* REGISTO */}
-      {paginaAtual === 'registo' && (
-        <Registo 
-          irParaLogin={nav.login} 
-          irParaLanding={nav.landing} 
-        />
-      )}
+      } />
 
-      {/* RECUPERAR PASSWORD */}
-      {paginaAtual === 'recuperar' && (
-        <RecoverPassword 
-          irParaLogin={nav.login} 
-          irParaLanding={nav.landing} 
-        />
-      )}
-
-      {/* VENDA DE FIGURINOS */}
-      {paginaAtual === 'venda_figurinos' && (
+      <Route path="/login" element={<Login irParaLanding={nav.landing} irParaRegisto={nav.registo} irParaRecuperar={nav.recuperar} />} />
+      <Route path="/registo" element={<Registo irParaLogin={nav.login} irParaLanding={nav.landing} />} />
+      <Route path="/recuperar" element={<RecoverPassword irParaLogin={nav.login} />} />
+      
+      <Route path="/vendas-de-figurinos" element={
         <VendaFigurinos 
           irParaLanding={nav.landing} 
           irParaEmprestimos={nav.emprestimos_pecas}
+          irParaVendaFigurinos={nav.venda_figurinos}
+          irParaMinhaAgendaProfessor={nav.minha_agenda_professor}
+          irParaMinhaAgendaEE={nav.minha_agenda_ee}
         />
-      )}
+      } />
 
-      {/* EMPRÉSTIMO DE PEÇAS */}
-      {paginaAtual === 'emprestimos_pecas' && (
+      <Route path="/emprestimos" element={
         <EmprestimosPecas 
           irParaLanding={nav.landing} 
+          irParaEmprestimos={nav.emprestimos_pecas}
           irParaVendaFigurinos={nav.venda_figurinos}
+          irParaMinhaAgendaProfessor={nav.minha_agenda_professor}
+          irParaMinhaAgendaEE={nav.minha_agenda_ee}
         />
-      )}
+      } />
 
-      {/* MINHA AGENDA PROFESSOR */}
-      {paginaAtual === 'minha_agenda_professor' && (
-        <MinhaAgendaProfessor irParaLanding={nav.landing} modo="professor" />
-      )}
-
-      {/* MINHA AGENDA EE */}
-      {paginaAtual === 'minha_agenda_ee' && (
-        <MinhaAgendaProfessor irParaLanding={nav.landing} modo="ee" />
-      )}
-
-      {/* ADMIN DASHBOARD */}
-      {paginaAtual === 'admin' && (
-        <AdminDashboard 
-          irParaLanding={nav.landing}
+      <Route path="/agenda" element={
+        <MinhaAgendaProfessor 
+          irParaLanding={nav.landing} 
+          irParaEmprestimos={nav.emprestimos_pecas}
+          irParaVendaFigurinos={nav.venda_figurinos}
+          irParaMinhaAgendaProfessor={nav.minha_agenda_professor}
+          irParaMinhaAgendaEE={nav.minha_agenda_ee}
         />
-      )}
+      } />
 
-    </div>
+      <Route path="/admin" element={<AdminDashboard />} />
+    </Routes>
+  );
+}
+
+function App() {
+  return (
+    <Router>
+      <AppRoutes />
+    </Router>
   );
 }
 

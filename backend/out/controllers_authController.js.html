@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: controllers/authController.js</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: controllers/authController.js</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>/**
+ * @fileoverview Controlador de Autenticação e Gestão de Utilizadores.
+ * Lida com o login, registo, recuperação de palavra-passe e gestão CRUD de utilizadores e alunos associados.
+ */
+
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
+const utilizadorModel = require('../models/authModel');
+
+/**
+ * Autentica um utilizador no sistema e gera um token JWT.
+ * @param {Object} req - Objeto de requisição do Express.
+ * @param {Object} res - Objeto de resposta do Express.
+ * @param {Function} next - Middleware seguinte para tratamento de erros.
+ */
+async function login(req, res, next) {
+    try {
+        const { email, password, tipo, perfil } = req.body;
+
+        // Validação inicial de campos obrigatórios
+        if (!email || !password) {
+            return res.status(400).json({ mensagem: 'Email e palavra-passe são obrigatórios.' });
+        }
+
+        // Normalização do tipo/perfil fornecido no request para validação
+        const tipoFornecido = tipo || perfil || 'PROF';
+        const tipoUp = String(tipoFornecido).trim().toUpperCase();
+        
+        // Obtenção do utilizador pela base de dados
+        const utilizador = await utilizadorModel.getUtilizadorByEmail(email);
+
+        if (!utilizador) return res.status(401).json({ mensagem: 'Credenciais inválidas.' });
+        
+        // Verifica se a conta já foi aprovada/ativada pela administração
+        if (!utilizador.ativo) {
+            return res.status(403).json({ mensagem: 'Conta desativada. Aguarde a aprovação da administração.' });
+        }
+
+        // Validação da palavra-passe com o hash guardado
+        const passwordCorreta = await bcrypt.compare(password, utilizador.password);
+        if (!passwordCorreta) return res.status(401).json({ mensagem: 'Credenciais inválidas.' });
+
+        // Validação dos perfis atribuídos ao utilizador
+        const perfis = await utilizadorModel.getPerfisDoUtilizador(utilizador.id_utilizador);
+        let temPerfil = false;
+        
+        // Verifica se o utilizador possui o perfil adequado ao tipo de login que está a tentar fazer
+        if (tipoUp === 'ADMIN') {
+            temPerfil = perfis.some(p => p.toLowerCase().includes('admin') || p.toLowerCase().includes('coord'));
+        } else if (tipoUp === 'PROF' || tipoUp === 'PROFESSOR') {
+            temPerfil = perfis.some(p => p.toLowerCase().includes('prof'));
+        } else {
+            temPerfil = perfis.some(p => p.toLowerCase().includes('encarregado') || p.toLowerCase().includes('educação') || p.toLowerCase().includes('educacao') || p.toLowerCase() === 'ee');
+        }
+
+        if (!temPerfil) return res.status(403).json({ mensagem: 'Acesso negado.' });
+
+        // Define o perfil final que será injetado no token JWT
+        let perfilFinal = 'Encarregado de Educação';
+        if (tipoUp === 'PROF' || tipoUp === 'PROFESSOR') perfilFinal = 'Professor';
+        if (tipoUp === 'ADMIN') perfilFinal = 'Admin';
+
+        // Geração do token JWT com payload relevante e validade de 8 horas
+        const token = jwt.sign(
+            { 
+                id: utilizador.id_utilizador, 
+                nome: utilizador.nome, 
+                email: utilizador.email, 
+                perfis, 
+                perfil: perfilFinal, 
+                id_perfil: tipoUp === 'ADMIN' ? 1 : null 
+            },
+            process.env.JWT_SECRET || 'segredo_super_seguro_123',
+            { expiresIn: '8h' }
+        );
+
+        return res.status(200).json({
+            mensagem: 'Login efetuado',
+            token,
+            utilizador: { 
+                id: utilizador.id_utilizador, 
+                nome: utilizador.nome, 
+                email: utilizador.email, 
+                perfis, 
+                perfil: perfilFinal 
+            }
+        });
+    } catch (error) {
+        next(error);
+    }
+}
+
+/**
+ * Termina a sessão do utilizador (no lado do cliente, normalmente o token é descartado).
+ */
+async function logout(req, res) {
+    return res.status(200).json({ mensagem: 'Sessão terminada com sucesso.' });
+}
+
+/**
+ * Solicita a recuperação da palavra-passe, gerando um token seguro enviado (ou para envio) ao utilizador.
+ */
+async function solicitarRecuperacaoPassword(req, res, next) {
+    try {
+        const { email } = req.body;
+        const utilizador = await utilizadorModel.getUtilizadorByEmail(email);
+
+        // Apenas utilizadores existentes e ativos podem recuperar a palavra-passe
+        if (!utilizador || !utilizador.ativo) {
+            return res.status(404).json({ mensagem: 'Email não encontrado ou inativo.' });
+        }
+
+        // Gera um token hexadecimal de 8 caracteres
+        const token = crypto.randomBytes(4).toString('hex').toUpperCase();
+        await utilizadorModel.guardarTokenRecuperacao(utilizador.id_utilizador, token);
+
+        return res.status(200).json({ mensagem: 'Token gerado.', token });
+    } catch (error) {
+        next(error);
+    }
+}
+
+/**
+ * Redefine a palavra-passe utilizando o token de recuperação previamente gerado.
+ */
+async function redefinirPassword(req, res, next) {
+    try {
+        const { token, novaPassword } = req.body;
+        if (!token || !novaPassword) {
+            return res.status(400).json({ mensagem: 'Token e password obrigatórios.' });
+        }
+
+        // Valida se o token existe e ainda é válido
+        const tokenValido = await utilizadorModel.validarTokenRecuperacao(token);
+        if (!tokenValido) return res.status(400).json({ mensagem: 'Token inválido.' });
+
+        // Aplica hash à nova palavra-passe antes de guardar
+        const hash = await bcrypt.hash(novaPassword, 10);
+        await utilizadorModel.atualizarPassword(tokenValido.UTILIZADORid_utilizador, hash, tokenValido.id_token_recuperacao);
+
+        return res.status(200).json({ mensagem: 'Palavra-passe atualizada.' });
+    } catch (error) {
+        next(error);
+    }
+}
+
+/**
+ * Regista um novo utilizador no sistema. O utilizador fica inativo até aprovação da administração.
+ */
+async function register(req, res, next) {
+    try {
+        const { nome, email, telefone, password, tipo } = req.body;
+        if (!nome || !email || !password || !tipo) return res.status(400).json({ error: 'Campos em falta.' });
+
+        const passwordHash = await bcrypt.hash(password, 10);
+        const nomePerfil = tipo === 'PROF' ? 'Professor' : 'Encarregado';
+
+        // Cria o utilizador com estado ativo = 0 (pendente de aprovação)
+        await utilizadorModel.criarUtilizador({ nome, email, passwordHash, telefone, nomePerfil, ativo: 0 });
+        return res.status(201).json({ mensagem: 'Registo concluído! Aguarde aprovação.' });
+    } catch (error) {
+        if (error.message.includes('Já existe')) return res.status(400).json({ error: error.message });
+        next(error);
+    }
+}
+
+/**
+ * Lista todos os utilizadores registados no sistema.
+ */
+async function listarUtilizadores(req, res, next) {
+    try {
+        const lista = await utilizadorModel.listarTodosUtilizadores();
+        return res.status(200).json(lista);
+    } catch (error) {
+        next(error);
+    }
+}
+
+/**
+ * Permite a um Administrador criar um utilizador, definindo imediatamente o seu estado como ativo e associando modalidades.
+ */
+async function criarUtilizadorAdmin(req, res, next) {
+    try {
+        const { nome, email, telefone, password, tipo, idsModalidades } = req.body;
+
+        if (!nome || !email || !password || !tipo) {
+            return res.status(400).json({ mensagem: 'Nome, email, password e tipo (PROF ou EE) são obrigatórios.' });
+        }
+
+        let nomePerfil = 'Encarregado';
+        if (tipo === 'PROF') nomePerfil = 'Professor';
+        if (tipo === 'ADMIN') nomePerfil = 'Admin';
+        
+        let idsModalidadesProf;
+        // Validação estrita: Professores devem ter obrigatoriamente modalidades associadas
+        if (tipo === 'PROF') {
+            idsModalidadesProf = Array.isArray(idsModalidades) ? idsModalidades : [];
+            if (idsModalidadesProf.length === 0) {
+                return res.status(400).json({
+                    mensagem: 'Para professor, indica pelo menos uma modalidade (idsModalidades).'
+                });
+            }
+        }
+
+        const passwordHash = await bcrypt.hash(password, 10);
+
+        // Cria o utilizador já com estado ativo = 1
+        const novo = await utilizadorModel.criarUtilizador({
+            nome,
+            email,
+            passwordHash,
+            telefone,
+            nomePerfil,
+            ativo: 1,
+            idsModalidades: idsModalidadesProf
+        });
+
+        return res.status(201).json({ mensagem: 'Utilizador criado.', utilizador: novo });
+    } catch (error) {
+        // Tratamento de erros específicos vindos do model
+        if (error.message === 'Já existe um utilizador com este email.') {
+            return res.status(400).json({ mensagem: error.message });
+        }
+        if (error.message &amp;&amp; error.message.startsWith('PERFIL_NAO_ENCONTRADO')) {
+            const perfisNaBd = error.message.split(':')[1];
+            return res.status(400).json({
+                mensagem: `Perfil não encontrado na BD. Perfis existentes: ${perfisNaBd}`
+            });
+        }
+        next(error);
+    }
+}
+
+/**
+ * Edita os dados de um utilizador existente.
+ */
+async function editarUtilizador(req, res, next) {
+    try {
+        const id = parseInt(req.params.id, 10);
+        if (Number.isNaN(id)) {
+            return res.status(400).json({ mensagem: 'ID inválido.' });
+        }
+
+        const { nome, email, telefone, password, nomePerfil, tipo, idsModalidades } = req.body;
+        if (!nome) {
+            return res.status(400).json({ mensagem: 'Nome é obrigatório.' });
+        }
+
+        // Determinação do perfil final com base nos inputs recebidos
+        let perfilFinal = nomePerfil;
+        if (!perfilFinal &amp;&amp; tipo === 'PROF') perfilFinal = 'Professor';
+        if (!perfilFinal &amp;&amp; tipo === 'ADMIN') perfilFinal = 'Admin';
+        if (!perfilFinal &amp;&amp; tipo === 'EE') perfilFinal = 'Encarregado';
+        
+        let passwordHash = null;
+        // Apenas aplica hash e atualiza a password se uma nova for fornecida
+        if (password &amp;&amp; password.trim() !== '') {
+            passwordHash = await bcrypt.hash(password, 10);
+        }
+
+        const ok = await utilizadorModel.atualizarUtilizadorCompleto(id, {
+            nome,
+            email,
+            telefone,
+            passwordHash,
+            nomePerfil: perfilFinal,
+            idsModalidades
+        });
+        
+        if (!ok) {
+            return res.status(404).json({ mensagem: 'Utilizador não encontrado.' });
+        }
+        return res.status(200).json({ mensagem: 'Utilizador atualizado.' });
+    } catch (error) {
+        next(error);
+    }
+}
+
+/**
+ * Altera o estado (ativo/inativo) de um utilizador.
+ */
+async function alterarEstado(req, res, next) {
+    try {
+        const id = parseInt(req.params.id, 10);
+        if (Number.isNaN(id)) {
+            return res.status(400).json({ mensagem: 'ID inválido.' });
+        }
+
+        const { ativo } = req.body;
+        if (typeof ativo !== 'boolean') {
+            return res.status(400).json({ mensagem: 'Campo "ativo" (boolean) é obrigatório.' });
+        }
+
+        const ok = await utilizadorModel.alterarEstadoUtilizador(id, ativo, req.body.idsModalidades);
+        if (!ok) {
+            return res.status(404).json({ mensagem: 'Utilizador não encontrado.' });
+        }
+        return res.status(200).json({ mensagem: ativo ? 'Conta ativada.' : 'Conta desativada.' });
+    } catch (error) {
+        next(error);
+    }
+}
+
+/**
+ * Ativa a conta de um utilizador (útil para aprovação de registos pendentes).
+ */
+async function ativarUtilizador(req, res, next) {
+    try {
+        const perfis = await utilizadorModel.getPerfisDoUtilizador(req.params.id);
+        const isProfessor = perfis.some((p) => String(p).toLowerCase().includes('prof'));
+        const idsModalidades = Array.isArray(req.body?.idsModalidades) ? req.body.idsModalidades : null;
+
+        // Se for professor, é obrigatório atribuir modalidades no momento da ativação
+        if (isProfessor &amp;&amp; (!idsModalidades || idsModalidades.length === 0)) {
+            return res.status(400).json({ mensagem: 'Seleciona pelo menos uma modalidade para aceitar este professor.' });
+        }
+
+        const sucesso = await utilizadorModel.alterarEstadoUtilizador(req.params.id, true, idsModalidades);
+        if (sucesso) return res.status(200).json({ mensagem: 'Utilizador aceite!' });
+        return res.status(400).json({ mensagem: 'Erro ao aceitar.' });
+    } catch (error) {
+        next(error);
+    }
+}
+
+/**
+ * Desativa a conta de um utilizador, revogando o seu acesso ao sistema.
+ */
+async function desativarUtilizador(req, res, next) {
+    try {
+        const sucesso = await utilizadorModel.alterarEstadoUtilizador(req.params.id, false);
+        if (sucesso) return res.status(200).json({ mensagem: 'Acesso revogado!' });
+        return res.status(400).json({ mensagem: 'Erro ao revogar.' });
+    } catch (error) {
+        next(error);
+    }
+}
+
+/**
+ * Apaga permanentemente um utilizador do sistema.
+ */
+async function eliminarUtilizador(req, res, next) {
+    try {
+        const sucesso = await utilizadorModel.apagarUtilizador(req.params.id);
+        if (sucesso) return res.status(200).json({ mensagem: 'Pedido eliminado com sucesso!' });
+        return res.status(400).json({ mensagem: 'Erro ao eliminar utilizador.' });
+    } catch (error) {
+        next(error);
+    }
+}
+
+/**
+ *  Criação de utilizador por um administrador.
+ */
+async function adminCriarUtilizador(req, res, next) {
+    try {
+        const { nome, email, telefone, password, tipo, idsModalidades } = req.body;
+        if (!nome || !email || !password || !tipo) {
+            return res.status(400).json({ mensagem: 'Campos obrigatórios em falta.' });
+        }
+
+        const passwordHash = await bcrypt.hash(password, 10);
+        let nomePerfil = 'Encarregado';
+        if (tipo === 'PROF') nomePerfil = 'Professor';
+        if (tipo === 'ADMIN') nomePerfil = 'Admin';
+        
+        if (tipo === 'PROF' &amp;&amp; (!Array.isArray(idsModalidades) || idsModalidades.length === 0)) {
+            return res.status(400).json({ mensagem: 'Seleciona pelo menos uma modalidade para este professor.' });
+        }
+
+        await utilizadorModel.criarUtilizador({ nome, email, passwordHash, telefone, nomePerfil, ativo: 1, idsModalidades });
+        return res.status(201).json({ mensagem: 'Utilizador criado e ativado com sucesso!' });
+    } catch (error) {
+        if (error.message.includes('Já existe')) return res.status(400).json({ mensagem: error.message });
+        next(error);
+    }
+}
+
+/**
+ * Edição Completa do Utilizador
+ */
+async function editarUtilizadorCompleto(req, res, next) {
+    try {
+        const { id } = req.params;
+        const { nome, email, telefone, password, tipo, idsModalidades } = req.body;
+
+        if (!nome || !email) return res.status(400).json({ mensagem: 'Nome e email são obrigatórios.' });
+
+        let passwordHash = null;
+        if (password &amp;&amp; password.trim() !== '') {
+            passwordHash = await bcrypt.hash(password, 10);
+        }
+
+        let nomePerfil = 'Encarregado';
+        if (tipo === 'PROF') nomePerfil = 'Professor';
+        if (tipo === 'ADMIN') nomePerfil = 'Admin';
+        
+        if (tipo === 'PROF' &amp;&amp; (!Array.isArray(idsModalidades) || idsModalidades.length === 0)) {
+            return res.status(400).json({ mensagem: 'Seleciona pelo menos uma modalidade para este professor.' });
+        }
+
+        await utilizadorModel.atualizarUtilizadorCompleto(id, { nome, email, telefone, passwordHash, nomePerfil, idsModalidades });
+        return res.status(200).json({ mensagem: 'Dados atualizados com sucesso!' });
+    } catch (error) {
+        next(error);
+    }
+}
+
+/**
+ * Obtém a lista de alunos associados ao Encarregado de Educação autenticado.
+ * Depende da injeção do utilizador via middleware de autenticação (JWT).
+ */
+async function getMeusAlunos(req, res, next) {
+    try {
+        const idEncarregado = req.utilizador?.id;
+        if (idEncarregado == null) {
+            return res.status(401).json({ mensagem: 'Sessão inválida.' });
+        }
+        
+        const alunos = await utilizadorModel.getAlunosPorEncarregado(idEncarregado);
+        return res.status(200).json(alunos);
+    } catch (error) {
+        next(error);
+    }
+}
+
+/**
+ * Cria e associa um novo aluno ao Encarregado de Educação autenticado.
+ */
+async function criarMeuAluno(req, res, next) {
+    try {
+        const idEncarregado = req.utilizador?.id;
+        const { nome, dataNascimento } = req.body;
+
+        if (idEncarregado == null) {
+            return res.status(401).json({ mensagem: 'Sessão inválida.' });
+        }
+        if (!nome || !String(nome).trim()) {
+            return res.status(400).json({ mensagem: 'Nome do aluno é obrigatório.' });
+        }
+
+        const aluno = await utilizadorModel.criarAlunoParaEncarregado(idEncarregado, {
+            nome: String(nome).trim(),
+            dataNascimento: dataNascimento || null
+        });
+
+        return res.status(201).json(aluno);
+    } catch (error) {
+        next(error);
+    }
+}
+
+// Exportação de todas as funções do controlador
+module.exports = {
+    login,
+    logout,
+    solicitarRecuperacaoPassword,
+    redefinirPassword,
+    register,
+    listarUtilizadores,
+    criarUtilizadorAdmin,
+    editarUtilizador,
+    alterarEstado,
+    ativarUtilizador,
+    desativarUtilizador,
+    adminCriarUtilizador,
+    editarUtilizadorCompleto,
+    eliminarUtilizador,
+    getMeusAlunos,
+    criarMeuAluno
+};</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Global</h3><ul><li><a href="global.html#DATA_REF_COMPARACAO_HORAS">DATA_REF_COMPARACAO_HORAS</a></li><li><a href="global.html#adicionarDisponibilidade">adicionarDisponibilidade</a></li><li><a href="global.html#adicionarDisponibilidadeProfessor">adicionarDisponibilidadeProfessor</a></li><li><a href="global.html#adminCriarUtilizador">adminCriarUtilizador</a></li><li><a href="global.html#alterarEstado">alterarEstado</a></li><li><a href="global.html#alterarEstadoUtilizador">alterarEstadoUtilizador</a></li><li><a href="global.html#apagarPeca">apagarPeca</a></li><li><a href="global.html#apagarUtilizador">apagarUtilizador</a></li><li><a href="global.html#aprovarEAgendarCoaching">aprovarEAgendarCoaching</a></li><li><a href="global.html#aprovarPedido">aprovarPedido</a></li><li><a href="global.html#assertAlunosPertencemAoEncarregado">assertAlunosPertencemAoEncarregado</a></li><li><a href="global.html#associarProfessorModalidade">associarProfessorModalidade</a></li><li><a href="global.html#ativarUtilizador">ativarUtilizador</a></li><li><a href="global.html#atualizarDadosCompletosPeca">atualizarDadosCompletosPeca</a></li><li><a href="global.html#atualizarDadosVenda">atualizarDadosVenda</a></li><li><a href="global.html#atualizarEstadoPeca">atualizarEstadoPeca</a></li><li><a href="global.html#atualizarFotosPeca">atualizarFotosPeca</a></li><li><a href="global.html#atualizarPagamentoEmprestimo">atualizarPagamentoEmprestimo</a></li><li><a href="global.html#atualizarPassword">atualizarPassword</a></li><li><a href="global.html#atualizarUtilizadorCompleto">atualizarUtilizadorCompleto</a></li><li><a href="global.html#autenticar">autenticar</a></li><li><a href="global.html#autorizar">autorizar</a></li><li><a href="global.html#calcularCustoAutomatico">calcularCustoAutomatico</a></li><li><a href="global.html#cancelarCoaching">cancelarCoaching</a></li><li><a href="global.html#cancelarMeuPedidoPendente">cancelarMeuPedidoPendente</a></li><li><a href="global.html#cancelarPedidoPendenteEncarregado">cancelarPedidoPendenteEncarregado</a></li><li><a href="global.html#coachingPertenceAEncarregado">coachingPertenceAEncarregado</a></li><li><a href="global.html#coachingPertenceAProfessorAtivo">coachingPertenceAProfessorAtivo</a></li><li><a href="global.html#colocarPecaAVenda">colocarPecaAVenda</a></li><li><a href="global.html#colunasTabelaPrecoCache">colunasTabelaPrecoCache</a></li><li><a href="global.html#concluirCoaching">concluirCoaching</a></li><li><a href="global.html#concluirCoachingPelaCoordenacao">concluirCoachingPelaCoordenacao</a></li><li><a href="global.html#criarMeuAluno">criarMeuAluno</a></li><li><a href="global.html#criarPedidoCoaching">criarPedidoCoaching</a></li><li><a href="global.html#criarRequest">criarRequest</a></li><li><a href="global.html#criarUtilizador">criarUtilizador</a></li><li><a href="global.html#criarUtilizadorAdmin">criarUtilizadorAdmin</a></li><li><a href="global.html#desativarUtilizador">desativarUtilizador</a></li><li><a href="global.html#diaSemanaCoachingFromDateValue">diaSemanaCoachingFromDateValue</a></li><li><a href="global.html#diaSemanaDisponibilidadeDeDiaReal">diaSemanaDisponibilidadeDeDiaReal</a></li><li><a href="global.html#diaSemanaDisponibilidadeFromDateValue">diaSemanaDisponibilidadeFromDateValue</a></li><li><a href="global.html#diaSemanaHorarioDeData">diaSemanaHorarioDeData</a></li><li><a href="global.html#diaSemanaPrecoFromDateValue">diaSemanaPrecoFromDateValue</a></li><li><a href="global.html#duracaoSlotMinutos">duracaoSlotMinutos</a></li><li><a href="global.html#editarPeca">editarPeca</a></li><li><a href="global.html#editarUtilizador">editarUtilizador</a></li><li><a href="global.html#editarUtilizadorCompleto">editarUtilizadorCompleto</a></li><li><a href="global.html#eliminarPecaCompleta">eliminarPecaCompleta</a></li><li><a href="global.html#eliminarUtilizador">eliminarUtilizador</a></li><li><a href="global.html#existeConflitoCoachingProfessor">existeConflitoCoachingProfessor</a></li><li><a href="global.html#existeConflitoCoachingSala">existeConflitoCoachingSala</a></li><li><a href="global.html#existeConflitoHorarioProfessor">existeConflitoHorarioProfessor</a></li><li><a href="global.html#existeConflitoHorarioSala">existeConflitoHorarioSala</a></li><li><a href="global.html#getAgenda">getAgenda</a></li><li><a href="global.html#getAgendaProfessor">getAgendaProfessor</a></li><li><a href="global.html#getAnosLetivos">getAnosLetivos</a></li><li><a href="global.html#getCatalogo">getCatalogo</a></li><li><a href="global.html#getCatalogoPecas">getCatalogoPecas</a></li><li><a href="global.html#getCoachingCabecalhoCancelamento">getCoachingCabecalhoCancelamento</a></li><li><a href="global.html#getCompatibilidade">getCompatibilidade</a></li><li><a href="global.html#getCompatibilidadeSalasModalidades">getCompatibilidadeSalasModalidades</a></li><li><a href="global.html#getDisponibilidadeEfetiva">getDisponibilidadeEfetiva</a></li><li><a href="global.html#getDisponibilidades">getDisponibilidades</a></li><li><a href="global.html#getDisponibilidadesProfessor">getDisponibilidadesProfessor</a></li><li><a href="global.html#getHorarios">getHorarios</a></li><li><a href="global.html#getHorariosPorAnoLetivo">getHorariosPorAnoLetivo</a></li><li><a href="global.html#getMeusAlunos">getMeusAlunos</a></li><li><a href="global.html#getModalidades">getModalidades</a></li><li><a href="global.html#getModalidadesAtivas">getModalidadesAtivas</a></li><li><a href="global.html#getModalidadesPorProfessor">getModalidadesPorProfessor</a></li><li><a href="global.html#getPecaDetalhes">getPecaDetalhes</a></li><li><a href="global.html#getPecasAVenda">getPecasAVenda</a></li><li><a href="global.html#getPedidoCoaching">getPedidoCoaching</a></li><li><a href="global.html#getPedidoCoachingPorId">getPedidoCoachingPorId</a></li><li><a href="global.html#getPedidosAtribuidosAoProfessor">getPedidosAtribuidosAoProfessor</a></li><li><a href="global.html#getPedidosAtribuidosAoProfessorNoPeriodo">getPedidosAtribuidosAoProfessorNoPeriodo</a></li><li><a href="global.html#getPedidosAtribuidosProfessor">getPedidosAtribuidosProfessor</a></li><li><a href="global.html#getPedidosPendentes">getPedidosPendentes</a></li><li><a href="global.html#getPedidosPorEncarregado">getPedidosPorEncarregado</a></li><li><a href="global.html#getPendentesConclusaoCoordenacao">getPendentesConclusaoCoordenacao</a></li><li><a href="global.html#getPerfisDoUtilizador">getPerfisDoUtilizador</a></li><li><a href="global.html#getPrecoEstimado">getPrecoEstimado</a></li><li><a href="global.html#getProfessoresAtivos">getProfessoresAtivos</a></li><li><a href="global.html#getProfessoresDisponiveisAprovacao">getProfessoresDisponiveisAprovacao</a></li><li><a href="global.html#getProfessoresPorModalidade">getProfessoresPorModalidade</a></li><li><a href="global.html#getSalas">getSalas</a></li><li><a href="global.html#getSalasPorModalidade">getSalasPorModalidade</a></li><li><a href="global.html#getSlotLivre">getSlotLivre</a></li><li><a href="global.html#getUtilizadorByEmail">getUtilizadorByEmail</a></li><li><a href="global.html#getVagasDisponiveis">getVagasDisponiveis</a></li><li><a href="global.html#guardarTokenRecuperacao">guardarTokenRecuperacao</a></li><li><a href="global.html#instanteFimCoaching">instanteFimCoaching</a></li><li><a href="global.html#instanteHoraReferencia">instanteHoraReferencia</a></li><li><a href="global.html#instanteInicioCoaching">instanteInicioCoaching</a></li><li><a href="global.html#listarCoachingsAbertosParaCoordenacao">listarCoachingsAbertosParaCoordenacao</a></li><li><a href="global.html#listarMeusPedidosCoaching">listarMeusPedidosCoaching</a></li><li><a href="global.html#listarTodosUtilizadores">listarTodosUtilizadores</a></li><li><a href="global.html#listarUtilizadores">listarUtilizadores</a></li><li><a href="global.html#login">login</a></li><li><a href="global.html#logout">logout</a></li><li><a href="global.html#minutosDaHora">minutosDaHora</a></li><li><a href="global.html#normalizarHoraSql">normalizarHoraSql</a></li><li><a href="global.html#normalizarHoraSqlTime">normalizarHoraSqlTime</a></li><li><a href="global.html#obterColunasTabelaPreco">obterColunasTabelaPreco</a></li><li><a href="global.html#parseDateParts">parseDateParts</a></li><li><a href="global.html#professorTemDisponibilidadeNoSlot">professorTemDisponibilidadeNoSlot</a></li><li><a href="global.html#redefinirPassword">redefinirPassword</a></li><li><a href="global.html#registarConclusaoVenda">registarConclusaoVenda</a></li><li><a href="global.html#registarDevolucao">registarDevolucao</a></li><li><a href="global.html#registarDevolucaoEmprestimo">registarDevolucaoEmprestimo</a></li><li><a href="global.html#registarFotosPeca">registarFotosPeca</a></li><li><a href="global.html#registarNovaPeca">registarNovaPeca</a></li><li><a href="global.html#registarPagamentoEmprestimo">registarPagamentoEmprestimo</a></li><li><a href="global.html#registarPeca">registarPeca</a></li><li><a href="global.html#registarPenalizacao">registarPenalizacao</a></li><li><a href="global.html#registarValidacao">registarValidacao</a></li><li><a href="global.html#registarValidacaoAula">registarValidacaoAula</a></li><li><a href="global.html#register">register</a></li><li><a href="global.html#rejeitarPedido">rejeitarPedido</a></li><li><a href="global.html#rejeitarPedidoCoaching">rejeitarPedidoCoaching</a></li><li><a href="global.html#removerDisponibilidade">removerDisponibilidade</a></li><li><a href="global.html#removerDisponibilidadeProfessor">removerDisponibilidadeProfessor</a></li><li><a href="global.html#removerProfessorModalidade">removerProfessorModalidade</a></li><li><a href="global.html#requisitarEmprestimo">requisitarEmprestimo</a></li><li><a href="global.html#solicitarRecuperacaoPassword">solicitarRecuperacaoPassword</a></li><li><a href="global.html#utilizadorTemPerfil">utilizadorTemPerfil</a></li><li><a href="global.html#validarDuracaoAula">validarDuracaoAula</a></li><li><a href="global.html#validarFormatoAula">validarFormatoAula</a></li><li><a href="global.html#validarParticipantesPorFormato">validarParticipantesPorFormato</a></li><li><a href="global.html#validarTokenRecuperacao">validarTokenRecuperacao</a></li><li><a href="global.html#verificarSlotLivreProfessor">verificarSlotLivreProfessor</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.5</a> on Sat May 09 2026 23:10:52 GMT+0100 (Hora de verão da Europa Ocidental)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

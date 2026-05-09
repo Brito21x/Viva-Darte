@@ -17,8 +17,6 @@ describe('AuthController - Função login', () => {
         next = vi.fn();
         vi.clearAllMocks();
 
-        // A NOSSA FÓRMULA MÁGICA:
-        // Injetar a simulação diretamente em TODOS os módulos!
         utilizadorModel.getUtilizadorByEmail = vi.fn();
         utilizadorModel.getPerfisDoUtilizador = vi.fn();
         bcrypt.compare = vi.fn();
@@ -74,7 +72,6 @@ describe('AuthController - Função login', () => {
 
         utilizadorModel.getPerfisDoUtilizador.mockResolvedValue(['Admin']);
         
-        // Agora o bcrypt e o jwt já sabem o que é o mockResolvedValue/mockReturnValue!
         bcrypt.compare.mockResolvedValue(true);
         jwt.sign.mockReturnValue('meu-token-jwt-simulado');
 

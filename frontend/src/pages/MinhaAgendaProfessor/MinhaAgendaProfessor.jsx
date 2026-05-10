@@ -711,7 +711,7 @@ export default function MinhaAgendaProfessor({ irParaLanding, irParaEmprestimos,
               irParaMinhaAgendaEE?.();
             }
           }}>
-            Minha Agenda
+            Minha agenda
           </a>
         </li>
 

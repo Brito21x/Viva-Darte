@@ -16,36 +16,40 @@ const utilizadorModel = require('../models/authModel');
  */
 async function login(req, res, next) {
     try {
-        const { email, password, tipo, perfil } = req.body;
+        const { email, password, tipo, perfil, captchaToken } = req.body;
 
-        // Validação inicial de campos obrigatórios
         if (!email || !password) {
             return res.status(400).json({ mensagem: 'Email e palavra-passe são obrigatórios.' });
         }
 
-        // Normalização do tipo/perfil fornecido no request para validação
+        if (captchaToken) {
+            const chaveSecreta = process.env.RECAPTCHA_SECRET_KEY;
+            const googleVerifyUrl = `https://www.google.com/recaptcha/api/siteverify?secret=${chaveSecreta}&response=${captchaToken}`;
+            const recaptchaResponse = await fetch(googleVerifyUrl, { method: 'POST' });
+            const recaptchaData = await recaptchaResponse.json();
+
+            if (!recaptchaData.success) {
+                return res.status(400).json({ mensagem: 'A validação do reCAPTCHA falhou. Tenta novamente.' });
+            }
+        }
+
         const tipoFornecido = tipo || perfil || 'PROF';
         const tipoUp = String(tipoFornecido).trim().toUpperCase();
         
-        // Obtenção do utilizador pela base de dados
         const utilizador = await utilizadorModel.getUtilizadorByEmail(email);
 
         if (!utilizador) return res.status(401).json({ mensagem: 'Credenciais inválidas.' });
         
-        // Verifica se a conta já foi aprovada/ativada pela administração
         if (!utilizador.ativo) {
             return res.status(403).json({ mensagem: 'Conta desativada. Aguarde a aprovação da administração.' });
         }
 
-        // Validação da palavra-passe com o hash guardado
         const passwordCorreta = await bcrypt.compare(password, utilizador.password);
         if (!passwordCorreta) return res.status(401).json({ mensagem: 'Credenciais inválidas.' });
 
-        // Validação dos perfis atribuídos ao utilizador
         const perfis = await utilizadorModel.getPerfisDoUtilizador(utilizador.id_utilizador);
         let temPerfil = false;
         
-        // Verifica se o utilizador possui o perfil adequado ao tipo de login que está a tentar fazer
         if (tipoUp === 'ADMIN') {
             temPerfil = perfis.some(p => p.toLowerCase().includes('admin') || p.toLowerCase().includes('coord'));
         } else if (tipoUp === 'PROF' || tipoUp === 'PROFESSOR') {
@@ -54,14 +58,12 @@ async function login(req, res, next) {
             temPerfil = perfis.some(p => p.toLowerCase().includes('encarregado') || p.toLowerCase().includes('educação') || p.toLowerCase().includes('educacao') || p.toLowerCase() === 'ee');
         }
 
-        if (!temPerfil) return res.status(403).json({ mensagem: 'Acesso negado.' });
+        if (perfis.length === 0) return res.status(403).json({ mensagem: 'Acesso negado. Nenhum perfil associado.' });
 
-        // Define o perfil final que será injetado no token JWT
         let perfilFinal = 'Encarregado de Educação';
-        if (tipoUp === 'PROF' || tipoUp === 'PROFESSOR') perfilFinal = 'Professor';
-        if (tipoUp === 'ADMIN') perfilFinal = 'Admin';
+        if (perfis.some(p => p.toLowerCase().includes('prof'))) perfilFinal = 'Professor';
+        if (perfis.some(p => p.toLowerCase().includes('admin') || p.toLowerCase().includes('coord'))) perfilFinal = 'Admin';
 
-        // Geração do token JWT com payload relevante e validade de 8 horas
         const token = jwt.sign(
             { 
                 id: utilizador.id_utilizador, 
@@ -69,7 +71,7 @@ async function login(req, res, next) {
                 email: utilizador.email, 
                 perfis, 
                 perfil: perfilFinal, 
-                id_perfil: tipoUp === 'ADMIN' ? 1 : null 
+                id_perfil: perfilFinal === 'Admin' ? 1 : null 
             },
             process.env.JWT_SECRET || 'segredo_super_seguro_123',
             { expiresIn: '8h' }
@@ -150,14 +152,37 @@ async function redefinirPassword(req, res, next) {
  */
 async function register(req, res, next) {
     try {
-        const { nome, email, telefone, password, tipo } = req.body;
+        // 1. Desestruturar o captchaToken
+        const { nome, email, telefone, password, tipo, nomeAluno, dataNascimentoAluno, captchaToken } = req.body;
+        
         if (!nome || !email || !password || !tipo) return res.status(400).json({ error: 'Campos em falta.' });
+
+        if (tipo === 'EE' && (!nomeAluno || !dataNascimentoAluno)) {
+            return res.status(400).json({ error: 'Nome e data de nascimento do aluno são obrigatórios.' });
+        }
+
+        if (!captchaToken) {
+            return res.status(400).json({ error: 'Validação reCAPTCHA em falta.' });
+        }
+
+        const chaveSecreta = process.env.RECAPTCHA_SECRET_KEY;
+        
+        const googleVerifyUrl = `https://www.google.com/recaptcha/api/siteverify?secret=${chaveSecreta}&response=${captchaToken}`;
+        const recaptchaResponse = await fetch(googleVerifyUrl, { method: 'POST' });
+        const recaptchaData = await recaptchaResponse.json();
+
+        if (!recaptchaData.success) {
+            return res.status(400).json({ error: 'A validação do reCAPTCHA falhou. Tenta novamente.' });
+        }
 
         const passwordHash = await bcrypt.hash(password, 10);
         const nomePerfil = tipo === 'PROF' ? 'Professor' : 'Encarregado';
 
-        // Cria o utilizador com estado ativo = 0 (pendente de aprovação)
-        await utilizadorModel.criarUtilizador({ nome, email, passwordHash, telefone, nomePerfil, ativo: 0 });
+        await utilizadorModel.criarUtilizador({ 
+            nome, email, passwordHash, telefone, nomePerfil, ativo: 0, 
+            nomeAluno, dataNascimentoAluno 
+        });
+        
         return res.status(201).json({ mensagem: 'Registo concluído! Aguarde aprovação.' });
     } catch (error) {
         if (error.message.includes('Já existe')) return res.status(400).json({ error: error.message });
@@ -383,9 +408,12 @@ async function adminCriarUtilizador(req, res, next) {
 async function editarUtilizadorCompleto(req, res, next) {
     try {
         const { id } = req.params;
-        const { nome, email, telefone, password, tipo, idsModalidades } = req.body;
+        // Adicionado: nomeAluno e dataNascimentoAluno no destructuring
+        const { nome, email, telefone, password, tipo, idsModalidades, nomeAluno, dataNascimentoAluno } = req.body;
 
-        if (!nome || !email) return res.status(400).json({ mensagem: 'Nome e email são obrigatórios.' });
+        if (!nome || !email) {
+            return res.status(400).json({ mensagem: 'Nome e email são obrigatórios.' });
+        }
 
         let passwordHash = null;
         if (password && password.trim() !== '') {
@@ -400,7 +428,18 @@ async function editarUtilizadorCompleto(req, res, next) {
             return res.status(400).json({ mensagem: 'Seleciona pelo menos uma modalidade para este professor.' });
         }
 
-        await utilizadorModel.atualizarUtilizadorCompleto(id, { nome, email, telefone, passwordHash, nomePerfil, idsModalidades });
+        // Passando agora os dados do aluno para o model
+        await utilizadorModel.atualizarUtilizadorCompleto(id, { 
+            nome, 
+            email, 
+            telefone, 
+            passwordHash, 
+            nomePerfil, 
+            idsModalidades,
+            nomeAluno,
+            dataNascimentoAluno
+        });
+
         return res.status(200).json({ mensagem: 'Dados atualizados com sucesso!' });
     } catch (error) {
         next(error);

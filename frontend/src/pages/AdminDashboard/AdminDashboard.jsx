@@ -8,11 +8,7 @@ function traduzErroCoaching(err, fallback) {
   const msg = String(err?.message || '').trim();
   if (!msg) return fallback;
   const low = msg.toLowerCase();
-  if (
-    low.includes('fora da disponibilidade') ||
-    low.includes('não tem disponibilidade') ||
-    low.includes('nao tem disponibilidade')
-  ) {
+  if (low.includes('fora da disponibilidade') || low.includes('não tem disponibilidade') || low.includes('nao tem disponibilidade')) {
     return 'Professor sem disponibilidade no horário escolhido.';
   }
   if (low.includes('ocorreu um erro interno') || low.includes('erro interno')) {
@@ -44,9 +40,7 @@ async function apiFetchChecked(path, token, opts = {}) {
     body: opts.body ? JSON.stringify(opts.body) : undefined,
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    throw new Error(data?.mensagem || data?.error || 'Erro na operação');
-  }
+  if (!res.ok) throw new Error(data?.mensagem || data?.error || 'Erro na operação');
   return data;
 }
 
@@ -115,15 +109,8 @@ export default function AdminDashboard({ irParaLanding }) {
 
   const [modalUser, setModalUser] = useState({ isOpen: false, mode: 'create', data: {} });
   const [modalAprovacao, setModalAprovacao] = useState({
-    isOpen: false,
-    pedido: null,
-    professores: [],
-    salas: [],
-    idProfessor: '',
-    idSala: '',
-    valorFinal: '',
-    isSaving: false,
-    erro: ''
+    isOpen: false, pedido: null, professores: [], salas: [],
+    idProfessor: '', idSala: '', valorFinal: '', isSaving: false, erro: ''
   });
 
   useEffect(() => {
@@ -209,10 +196,7 @@ export default function AdminDashboard({ irParaLanding }) {
               method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` }
           });
           if (res.ok) { mostrarMsg("Registo apagado para sempre!", 'ok'); carregarDados(); } 
-          else {
-              const data = await res.json();
-              mostrarMsg(data.mensagem || "Erro ao eliminar.", 'erro'); 
-          }
+          else { const data = await res.json(); mostrarMsg(data.mensagem || "Erro ao eliminar.", 'erro'); }
       } catch (err) { mostrarMsg("Erro de rede.", 'erro'); }
   }
 
@@ -220,7 +204,7 @@ export default function AdminDashboard({ irParaLanding }) {
       setModalUser({ 
           isOpen: true, 
           mode: 'create', 
-          data: { nome: '', email: '', telefone: '', password: '', tipo: tipoRecomendado } 
+          data: { nome: '', email: '', telefone: '', password: '', tipo: tipoRecomendado, nomeAluno: '', dataNascimentoAluno: '' } 
       });
   }
 
@@ -232,7 +216,17 @@ export default function AdminDashboard({ irParaLanding }) {
       setModalUser({
           isOpen: true,
           mode: 'edit',
-          data: { id: u.id_utilizador, nome: u.nome, email: u.email, telefone: u.telefone || '', password: '', tipo: tipoBase }
+          data: { 
+              id: u.id_utilizador, 
+              nome: u.nome, 
+              email: u.email, 
+              telefone: u.telefone || '', 
+              password: '', 
+              tipo: tipoBase,
+              // Novos campos para Aluno preenchidos através do Backend
+              nomeAluno: u.nomeAluno || '',
+              dataNascimentoAluno: u.dataNascimentoAluno ? formatDataApi(u.dataNascimentoAluno) : ''
+          }
       });
   }
 
@@ -314,7 +308,7 @@ export default function AdminDashboard({ irParaLanding }) {
     <table className="admin-table">
       <thead>
         <tr>
-          <th>ID</th><th>Nome</th><th>Email</th><th>Telefone</th><th>Estado</th>
+          <th>ID</th><th>Nome</th><th>Email</th><th>Telefone</th><th>Educando</th><th>Estado</th>
           <th>Criação</th><th style={{ textAlign: 'center' }}>Ações</th> 
         </tr>
       </thead>
@@ -325,7 +319,9 @@ export default function AdminDashboard({ irParaLanding }) {
               <tr key={u.id_utilizador} style={{ backgroundColor: !isAtivo ? '#fffbf0' : 'transparent' }}>
                 <td>{u.id_utilizador}</td>
                 <td><strong>{u.nome}</strong></td>
-                <td>{u.email}</td><td>{u.telefone || '—'}</td>
+                <td>{u.email}</td>
+                <td>{u.telefone || '—'}</td>
+                <td>{u.nomeAluno || '—'}</td>
                 <td><span className={`badge badge--${isAtivo ? 'green' : 'orange'}`}>{isAtivo ? 'Ativo' : 'Pendente'}</span></td>
                 <td>{new Date(u.data_criacao).toLocaleDateString('pt-PT')}</td>
                 <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
@@ -342,139 +338,7 @@ export default function AdminDashboard({ irParaLanding }) {
               </tr>
           );
         })}
-        {listaUtilizadores.length === 0 && ( <tr><td colSpan={7} className="empty-row" style={{ textAlign: 'center', padding: '20px' }}>Vazio.</td></tr> )}
-      </tbody>
-    </table>
-  );
-
-  async function handleRejeitarPedido(idPedido) {
-    const justificacao = window.prompt('Indica a justificação da rejeição:');
-    if (!justificacao) return;
-    try {
-      await apiFetchChecked(`/api/coaching/pedidos/${idPedido}/rejeitar`, token, {
-        method: 'POST',
-        body: { justificacao }
-      });
-      mostrarMsg('Pedido rejeitado com sucesso.', 'ok');
-      carregarDados();
-    } catch (e) {
-      mostrarMsg(e.message || 'Erro ao rejeitar pedido.', 'erro');
-    }
-  }
-
-  async function handleAprovarPedido(pedido) {
-    try {
-      const dataAula = formatDataApi(pedido.data_aula_pretendida);
-      const horaInicio = formatHoraCurta(pedido.hora_inicio_pretendida);
-      if (!dataAula || horaInicio === '—') {
-        throw new Error('Data/hora do pedido inválida.');
-      }
-      const params = new URLSearchParams({
-        idModalidade: String(pedido.id_modalidade),
-        dataAula,
-        horaInicio,
-        duracaoMinutos: String(pedido.duracao_minutos)
-      }).toString();
-      const [profsDisponiveis, salas] = await Promise.all([
-        apiFetchChecked(`/api/coaching/professores-disponiveis?${params}`, token),
-        apiFetchChecked(`/api/escola/modalidades/${pedido.id_modalidade}/salas`, token)
-      ]);
-      const profs = Array.isArray(profsDisponiveis) ? profsDisponiveis : [];
-      const profDesejadoDisponivel = pedido.id_professor_desejado
-        ? profs.some((p) => String(p.id_professor) === String(pedido.id_professor_desejado))
-        : false;
-      const profSug = profDesejadoDisponivel ? pedido.id_professor_desejado : profs?.[0]?.id_professor || '';
-      const salaSug = salas?.[0]?.id_sala || '';
-      const valorSug = Number(pedido.custo_estimado || 0).toFixed(2);
-      setModalAprovacao({
-        isOpen: true,
-        pedido,
-        professores: profs,
-        salas: Array.isArray(salas) ? salas : [],
-        idProfessor: String(profSug || ''),
-        idSala: String(salaSug || ''),
-        valorFinal: String(valorSug),
-        isSaving: false,
-        erro: profs.length === 0 ? 'Não há professores com disponibilidade nesse horário.' : ''
-      });
-    } catch (e) {
-      mostrarMsg(e.message || 'Erro ao aprovar pedido.', 'erro');
-    }
-  }
-
-  function fecharModalAprovacao() {
-    setModalAprovacao({
-      isOpen: false,
-      pedido: null,
-      professores: [],
-      salas: [],
-      idProfessor: '',
-      idSala: '',
-      valorFinal: '',
-      isSaving: false,
-      erro: ''
-    });
-  }
-
-  async function confirmarAprovacaoPedido() {
-    if (!modalAprovacao.pedido) return;
-    if (!modalAprovacao.idProfessor || !modalAprovacao.idSala || !modalAprovacao.valorFinal) {
-      setModalAprovacao((m) => ({ ...m, erro: 'Seleciona professor, sala e valor final.' }));
-      return;
-    }
-    const valorNormalizado = Number(String(modalAprovacao.valorFinal).replace(',', '.'));
-    if (!Number.isFinite(valorNormalizado) || valorNormalizado <= 0) {
-      setModalAprovacao((m) => ({ ...m, erro: 'Valor final inválido.' }));
-      return;
-    }
-    setModalAprovacao((m) => ({ ...m, isSaving: true, erro: '' }));
-    try {
-      await apiFetchChecked(`/api/coaching/pedidos/${modalAprovacao.pedido.id_pedido_coaching}/aprovar`, token, {
-        method: 'POST',
-        body: {
-          idProfessor: Number(modalAprovacao.idProfessor),
-          idSala: Number(modalAprovacao.idSala),
-          valorFinal: valorNormalizado
-        }
-      });
-      fecharModalAprovacao();
-      mostrarMsg('Pedido aprovado e coaching agendado.', 'ok');
-      carregarDados();
-    } catch (e) {
-      setModalAprovacao((m) => ({
-        ...m,
-        isSaving: false,
-        erro: traduzErroCoaching(e, 'Erro ao aprovar pedido.')
-      }));
-    }
-  }
-
-  const renderTabelaPedidos = (lista) => (
-    <table className="admin-table">
-      <thead>
-        <tr>
-          <th>ID</th><th>Data</th><th>Hora</th><th>Modalidade</th><th>Formato</th><th>Professor</th><th>EE</th><th>Alunos</th><th>Custo</th><th style={{ textAlign: 'center' }}>Ações</th>
-        </tr>
-      </thead>
-      <tbody>
-        {lista.map((p) => (
-          <tr key={p.id_pedido_coaching}>
-            <td>{p.id_pedido_coaching}</td>
-            <td>{new Date(p.data_aula_pretendida).toLocaleDateString('pt-PT')}</td>
-            <td>{formatHoraCurta(p.hora_inicio_pretendida)}</td>
-            <td>{p.modalidade || `#${p.id_modalidade}`}</td>
-            <td>{p.formato_aula} ({p.duracao_minutos}m)</td>
-            <td>{p.professor_desejado || 'Sem preferência'}</td>
-            <td>{p.requisitante}<br /><span style={{ opacity: 0.7, fontSize: '0.78rem' }}>{p.email_requisitante}</span></td>
-            <td>{p.total_alunos || 0}</td>
-            <td><strong>{Number(p.custo_estimado || 0).toFixed(2)} EUR</strong></td>
-            <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
-              <button className="btn-sm btn-sm--green" style={{ marginRight: 8 }} onClick={() => handleAprovarPedido(p)}>Aprovar</button>
-              <button className="btn-sm btn-sm--danger" onClick={() => handleRejeitarPedido(p.id_pedido_coaching)}>Rejeitar</button>
-            </td>
-          </tr>
-        ))}
-        {lista.length === 0 && (<tr><td colSpan={10} className="empty-row">Sem pedidos pendentes.</td></tr>)}
+        {listaUtilizadores.length === 0 && ( <tr><td colSpan={8} className="empty-row" style={{ textAlign: 'center', padding: '20px' }}>Vazio.</td></tr> )}
       </tbody>
     </table>
   );
@@ -512,7 +376,7 @@ export default function AdminDashboard({ irParaLanding }) {
       <main className="admin-main">
         {activeTab === 'overview' && (
           <div className="tab-content">
-            <h1 className="page-title">Olá, {utilizador?.nome?.split(' ')[0]} 👋</h1>
+            <h1 className="page-title">Olá, {utilizador?.nome?.split(' ')[0]} </h1>
             <p className="page-subtitle">Resumo do sistema</p>
             <div className="stats-grid">
               <StatCard icon="👥" label="Total Utilizadores" value={utilizadores.length} accent="blue" />
@@ -526,44 +390,22 @@ export default function AdminDashboard({ irParaLanding }) {
           <div className="tab-content">
             <h1 className="page-title">👥 Gestão de Utilizadores</h1>
 
-            <Section title={`⏳ Pendentes (${pendentes.length})`} icon="🚨" defaultOpen={true}>
+            <Section title={`Pendentes (${pendentes.length})`} defaultOpen={true}>
               {renderTabelaUtilizadores(pendentes)}
             </Section>
 
-            <Section 
-              title={`👨‍👩‍👧‍👦 Encarregados de Educação (${encarregados.length})`} 
-              icon="👪" defaultOpen={true}
-              actionButton={<button className="btn-sm btn-sm--primary" onClick={(e) => { e.stopPropagation(); abrirModalCriar('EE'); }}>+ Novo</button>}
-            >
+            <Section title={`Encarregados de Educação (${encarregados.length})`} defaultOpen={true} actionButton={<button className="btn-sm btn-sm--primary" onClick={(e) => { e.stopPropagation(); abrirModalCriar('EE'); }}>+ Novo</button>}>
               {renderTabelaUtilizadores(encarregados)}
             </Section>
 
-            <Section 
-              title={`👩‍🏫 Professores (${profs.length})`} 
-              icon="🎭" defaultOpen={true}
-              actionButton={<button className="btn-sm btn-sm--primary" onClick={(e) => { e.stopPropagation(); abrirModalCriar('PROF'); }}>+ Novo</button>}
-            >
+            <Section title={`Professores (${profs.length})`} defaultOpen={true} actionButton={<button className="btn-sm btn-sm--primary" onClick={(e) => { e.stopPropagation(); abrirModalCriar('PROF'); }}>+ Novo</button>}>
               {renderTabelaUtilizadores(profs)}
             </Section>
 
-            <Section 
-              title={`🛡️ Administração (${adminsEOutros.length})`} 
-              icon="⚙️" defaultOpen={true}
-              actionButton={<button className="btn-sm btn-sm--primary" onClick={(e) => { e.stopPropagation(); abrirModalCriar('ADMIN'); }}>+ Novo</button>}
-            >
+            <Section title={`Administração (${adminsEOutros.length})`} defaultOpen={true} actionButton={<button className="btn-sm btn-sm--primary" onClick={(e) => { e.stopPropagation(); abrirModalCriar('ADMIN'); }}>+ Novo</button>}>
               {renderTabelaUtilizadores(adminsEOutros)}
             </Section>
 
-          </div>
-        )}
-
-        {activeTab === 'coaching' && (
-          <div className="tab-content">
-            <h1 className="page-title">🗓️ Pedidos de Coaching Pendentes</h1>
-            <p className="page-subtitle">Aprovar agendação ou rejeitar pedidos enviados.</p>
-            <Section title={`⏳ Pendentes (${pedidosPendentes.length})`} icon="🎯" defaultOpen={true}>
-              {renderTabelaPedidos(pedidosPendentes)}
-            </Section>
           </div>
         )}
       </main>
@@ -573,12 +415,27 @@ export default function AdminDashboard({ irParaLanding }) {
             <div style={{ backgroundColor: '#ffffff', padding: '40px', borderRadius: '16px', width: '90%', maxWidth: '540px', boxShadow: '0 20px 40px rgba(0,0,0,0.15)', fontFamily: "'Poppins', sans-serif" }}>
                 
                 <h2 style={{ marginBottom: '25px', fontFamily: "'Cormorant Garamond', serif", fontSize: '2.2rem', color: '#333', borderBottom: '2px solid #f0f0f0', paddingBottom: '15px' }}>
-                    {modalUser.mode === 'create' ? '✨ Criar Novo Utilizador' : '✏️ Editar Utilizador'}
+                    {modalUser.mode === 'create' ? 'Criar Novo Utilizador' : 'Editar Utilizador'}
                 </h2>
                 
                 <form onSubmit={submeterModal}>
+                    
+                    {/* NOVOS CAMPOS: APENAS VISÍVEL PARA ENCARREGADOS DE EDUCAÇÃO */}
+                    {modalUser.data.tipo === 'EE' && (
+                        <div style={{ display: 'flex', gap: '20px', marginBottom: '20px' }}>
+                            <div style={{ flex: 2 }}>
+                                <label style={labelStyle}>Nome do Educando (Aluno)</label>
+                                <input style={inputStyle} type="text" placeholder="Nome do aluno" value={modalUser.data.nomeAluno || ''} onChange={e => setModalUser({ ...modalUser, data: { ...modalUser.data, nomeAluno: e.target.value } })} />
+                            </div>
+                            <div style={{ flex: 1 }}>
+                                <label style={labelStyle}>Data Nasc.</label>
+                                <input style={inputStyle} type="date" value={modalUser.data.dataNascimentoAluno || ''} onChange={e => setModalUser({ ...modalUser, data: { ...modalUser.data, dataNascimentoAluno: e.target.value } })} />
+                            </div>
+                        </div>
+                    )}
+
                     <div style={{ marginBottom: '20px' }}>
-                        <label style={labelStyle}>Nome Completo *</label>
+                        <label style={labelStyle}>Nome Completo (Encarregado/Prof)</label>
                         <input style={inputStyle} type="text" value={modalUser.data.nome} onChange={e => setModalUser({ ...modalUser, data: { ...modalUser.data, nome: e.target.value } })} required />
                     </div>
                     
@@ -623,64 +480,7 @@ export default function AdminDashboard({ irParaLanding }) {
         </div>
       )}
 
-      {modalAprovacao.isOpen && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(3px)', zIndex: 9999, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-          <div style={{ backgroundColor: '#ffffff', padding: '30px', borderRadius: '16px', width: '92%', maxWidth: '620px', boxShadow: '0 20px 40px rgba(0,0,0,0.15)', fontFamily: "'Poppins', sans-serif" }}>
-            <h2 style={{ marginBottom: '14px', fontFamily: "'Cormorant Garamond', serif", fontSize: '2rem', color: '#333' }}>
-              Aprovar Pedido #{modalAprovacao.pedido?.id_pedido_coaching}
-            </h2>
-            <p style={{ marginTop: 0, color: '#7b756f' }}>
-              {modalAprovacao.pedido?.modalidade} • {modalAprovacao.pedido?.formato_aula} ({modalAprovacao.pedido?.duracao_minutos} min)
-            </p>
-
-            <div className="form-grid">
-              <div className="field">
-                <label>Professor</label>
-                <select value={modalAprovacao.idProfessor} onChange={(e) => setModalAprovacao((m) => ({ ...m, idProfessor: e.target.value }))}>
-                  <option value="">Selecionar professor</option>
-                  {modalAprovacao.professores.map((p) => (
-                    <option key={p.id_professor} value={p.id_professor}>{p.nome_professor}</option>
-                  ))}
-                </select>
-                <small style={{ display: 'block', marginTop: 6, opacity: 0.7 }}>
-                  Só aparecem professores disponíveis para a data/hora do pedido.
-                </small>
-              </div>
-              <div className="field">
-                <label>Sala</label>
-                <select value={modalAprovacao.idSala} onChange={(e) => setModalAprovacao((m) => ({ ...m, idSala: e.target.value }))}>
-                  <option value="">Selecionar sala</option>
-                  {modalAprovacao.salas.map((s) => (
-                    <option key={s.id_sala} value={s.id_sala}>{s.nome_sala || s.nome}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="field">
-                <label>Valor final (EUR)</label>
-                <input type="number" step="0.01" min="0" value={modalAprovacao.valorFinal} onChange={(e) => setModalAprovacao((m) => ({ ...m, valorFinal: e.target.value }))} />
-              </div>
-            </div>
-
-            {modalAprovacao.erro && (
-              <div className="info-note" style={{ marginTop: '14px', borderLeftColor: 'var(--red)', backgroundColor: '#fce8e8', color: 'var(--red)' }}>
-                {modalAprovacao.erro}
-              </div>
-            )}
-
-            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '22px' }}>
-              <button type="button" className="btn-sm" style={{ backgroundColor: '#f1f1f1', color: '#555' }} onClick={fecharModalAprovacao}>
-                Cancelar
-              </button>
-              <button type="button" className="btn-sm btn-sm--green" onClick={confirmarAprovacaoPedido} disabled={modalAprovacao.isSaving}>
-                {modalAprovacao.isSaving ? 'A aprovar…' : 'Confirmar Aprovação'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {msg && (<div className={`toast toast--${msg.tipo}`} style={{ zIndex: 99999 }}>{msg.texto}</div>)}
-
     </div>
   );
 }

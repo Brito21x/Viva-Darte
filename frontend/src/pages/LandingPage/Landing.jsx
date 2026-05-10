@@ -144,7 +144,7 @@ export default function Landing({
               <li className="nav-separator">|</li>
               {isProfessorUtilizador(utilizador) ? (
                 <>
-                  <li><a href="#minha-agenda-professor" className="special-link" onClick={(e) => { e.preventDefault(); irParaMinhaAgendaProfessor?.(); }}>Minha Agenda</a></li>
+                  <li><a href="#minha-agenda-professor" className="special-link" onClick={(e) => { e.preventDefault(); irParaMinhaAgendaProfessor?.(); }}>Minha agenda</a></li>
                   <li><a href="#emprestimos" className="special-link" onClick={(e) => { e.preventDefault(); irParaEmprestimos(); }}>Empréstimos de peças</a></li>
                   <li><a href="#figurinos" className="special-link" onClick={(e) => { e.preventDefault(); irParaVendaFigurinos(); }}>Venda de figurinos</a></li>
                 </>

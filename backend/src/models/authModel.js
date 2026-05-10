@@ -57,10 +57,15 @@ async function listarTodosUtilizadores() {
     try {
         const pool = await poolPromise;
         const query = `
-            SELECT u.id_utilizador, u.nome, u.email, u.telefone, u.ativo, u.data_criacao, STRING_AGG(p.nome, ', ') AS perfis
+            SELECT u.id_utilizador, u.nome, u.email, u.telefone, u.ativo, u.data_criacao, 
+            STRING_AGG(p.nome, ', ') AS perfis,
+            MAX(a.nome) AS nomeAluno, 
+            MAX(a.data_nascimento) AS dataNascimentoAluno
             FROM UTILIZADOR u
             LEFT JOIN UTILIZADOR_PERFIL up ON u.id_utilizador = up.UTILIZADORid_utilizador
             LEFT JOIN PERFIL p ON up.PERFILid_perfil = p.id_perfil
+            LEFT JOIN ENCARREGADO_ALUNO ea ON u.id_utilizador = ea.UTILIZADORid_utilizador
+            LEFT JOIN ALUNO a ON ea.ALUNOid_aluno = a.id_aluno
             GROUP BY u.id_utilizador, u.nome, u.email, u.telefone, u.ativo, u.data_criacao
             ORDER BY u.id_utilizador ASC;
         `;
@@ -74,20 +79,20 @@ async function listarTodosUtilizadores() {
  * Utiliza uma transação SQL para garantir que ambos os registos (utilizador e perfil)
  * só são guardados se não ocorrerem erros.
  */
-async function criarUtilizador({ nome, email, passwordHash, telefone, nomePerfil, ativo = 0 }) {
+
+async function criarUtilizador({ nome, email, passwordHash, telefone, nomePerfil, ativo = 0, nomeAluno, dataNascimentoAluno }) {
     const pool = await poolPromise;
     const transaction = pool.transaction();
     await transaction.begin();
- 
+
     try {
-        // 1. Verifica se o email já está em uso na plataforma
+        // ... (Mesma lógica de verificação de email e perfil) ...
         const emailExiste = await transaction.request()
             .input('Email', sql.VarChar(255), email)
             .query('SELECT id_utilizador FROM UTILIZADOR WHERE email = @Email');
- 
+
         if (emailExiste.recordset.length > 0) throw new Error('Já existe um utilizador com este email.');
- 
-        // 2. Mapeamento do nome do perfil para o seu ID correspondente na BD
+
         let idPerfil = null;
         if (nomePerfil === 'Professor') {
             const res = await transaction.request().query("SELECT TOP 1 id_perfil FROM PERFIL WHERE nome LIKE '%Prof%'");
@@ -99,13 +104,13 @@ async function criarUtilizador({ nome, email, passwordHash, telefone, nomePerfil
             const res = await transaction.request().query("SELECT TOP 1 id_perfil FROM PERFIL WHERE nome LIKE '%Encarregado%' OR nome LIKE '%Educação%' OR nome = 'EE'");
             idPerfil = res.recordset[0]?.id_perfil;
         }
- 
+
         if (!idPerfil) throw new Error('Perfil não encontrado.');
- 
-        // 3. Inserção do Utilizador (Usa OUTPUT para devolver imediatamente os dados gerados)
+
+        // 3. Inserção do Utilizador
         const insertUserQuery = `
             INSERT INTO UTILIZADOR (nome, email, password, telefone, ativo, data_criacao)
-            OUTPUT INSERTED.id_utilizador, INSERTED.nome, INSERTED.email, INSERTED.ativo
+            OUTPUT INSERTED.id_utilizador
             VALUES (@Nome, @Email, @Password, @Telefone, @Ativo, GETDATE());
         `;
         const novoUserResult = await transaction.request()
@@ -115,21 +120,45 @@ async function criarUtilizador({ nome, email, passwordHash, telefone, nomePerfil
             .input('Telefone', sql.VarChar(30), telefone || null)
             .input('Ativo', sql.Bit, ativo)
             .query(insertUserQuery);
- 
+
         const novoUtilizador = novoUserResult.recordset[0];
- 
-        // 4. Criação da ligação entre Utilizador e Perfil
+
+        // 4. Ligação Perfil
         await transaction.request()
             .input('IdUser', sql.Int, novoUtilizador.id_utilizador)
             .input('IdPerfil', sql.Int, idPerfil)
             .query(`INSERT INTO UTILIZADOR_PERFIL (UTILIZADORid_utilizador, PERFILid_perfil) VALUES (@IdUser, @IdPerfil);`);
- 
-        // Valida e guarda todas as alterações permanentemente
+
+        // 5. Inserção do Aluno (Inativo se o EE for inativo)
+        if (nomePerfil !== 'Professor' && nomePerfil !== 'Admin' && nomeAluno) {
+            
+            const insertAlunoQuery = `
+                INSERT INTO ALUNO (nome, data_nascimento, ativo, data_criacao)
+                OUTPUT INSERTED.id_aluno
+                VALUES (@NomeAluno, @DataNasc, @AtivoAluno, GETDATE());
+            `;
+            const novoAlunoResult = await transaction.request()
+                .input('NomeAluno', sql.VarChar(255), nomeAluno)
+                .input('DataNasc', sql.Date, dataNascimentoAluno || null) // Passando a data
+                .input('AtivoAluno', sql.Bit, ativo) 
+                .query(insertAlunoQuery);
+
+            const novoAlunoId = novoAlunoResult.recordset[0].id_aluno;
+
+            await transaction.request()
+                .input('IdUtilizadorEnc', sql.Int, novoUtilizador.id_utilizador)
+                .input('IdAlunoNovo', sql.Int, novoAlunoId)
+                .query(`
+                    INSERT INTO ENCARREGADO_ALUNO (UTILIZADORid_utilizador, ALUNOid_aluno)
+                    VALUES (@IdUtilizadorEnc, @IdAlunoNovo);
+                `);
+        }
+
         await transaction.commit();
         return novoUtilizador;
+        
     } catch (error) {
-        // Se houver um erro a meio do processo, reverte todas as inserções
-        await transaction.rollback();
+        if (transaction) await transaction.rollback();
         throw error;
     }
 }
@@ -137,7 +166,7 @@ async function criarUtilizador({ nome, email, passwordHash, telefone, nomePerfil
 /**
  * Atualiza todos os dados submetidos pelo Administrador para um utilizador específico.
  */
-async function atualizarUtilizadorCompleto(id, { nome, email, telefone, passwordHash, nomePerfil }) {
+async function atualizarUtilizadorCompleto(id, { nome, email, telefone, passwordHash, nomePerfil, idsModalidades, nomeAluno, dataNascimentoAluno, dataNascimentoAluno}) {
     const pool = await poolPromise;
     const transaction = pool.transaction();
     await transaction.begin();
@@ -181,6 +210,22 @@ async function atualizarUtilizadorCompleto(id, { nome, email, telefone, password
                     .query(`INSERT INTO UTILIZADOR_PERFIL (UTILIZADORid_utilizador, PERFILid_perfil) VALUES (@Id, @IdPerfil);`);
             }
         }
+
+        if (nomeAluno) {
+            await transaction.request()
+                .input('IdUtilizador', sql.Int, id)
+                .input('NomeAluno', sql.VarChar(255), nomeAluno)
+                .input('DataNasc', sql.Date, dataNascimentoAluno || null)
+                .query(`
+                    UPDATE ALUNO 
+                    SET nome = @NomeAluno, data_nascimento = @DataNasc 
+                    WHERE id_aluno IN (
+                        SELECT ALUNOid_aluno FROM ENCARREGADO_ALUNO WHERE UTILIZADORid_utilizador = @IdUtilizador
+                    )
+                `);
+        }
+        // ----------------------------------------
+
         await transaction.commit();
         return true;
     } catch (error) {
@@ -195,16 +240,40 @@ async function atualizarUtilizadorCompleto(id, { nome, email, telefone, password
  * @param {boolean} estadoAtivo - true para ativar, false para suspender/reprovar.
  */
 async function alterarEstadoUtilizador(idUtilizador, estadoAtivo) {
+    const pool = await poolPromise;
+    const transaction = pool.transaction();
+    await transaction.begin();
+
     try {
-        const pool = await poolPromise;
-        const result = await pool.request()
-            .input('EstadoAtivo', sql.Bit, estadoAtivo ? 1 : 0) // Conversão de booleano para bit (SQL Server)
+        const status = estadoAtivo ? 1 : 0;
+
+        // 1. Atualiza o estado do Utilizador
+        await transaction.request()
+            .input('EstadoAtivo', sql.Bit, status)
             .input('IdUtilizador', sql.Int, idUtilizador)
             .query(`UPDATE UTILIZADOR SET ativo = @EstadoAtivo WHERE id_utilizador = @IdUtilizador;`);
-        
-        // Retorna verdadeiro se a linha foi realmente atualizada
-        return result.rowsAffected[0] > 0;
-    } catch (error) { throw error; }
+
+        // 2. Atualiza o estado de todos os ALUNOS ligados a este Encarregado
+        // Esta query procura na tabela intermédia ENCARREGADO_ALUNO e atualiza a tabela ALUNO
+        await transaction.request()
+            .input('EstadoAtivo', sql.Bit, status)
+            .input('IdUtilizador', sql.Int, idUtilizador)
+            .query(`
+                UPDATE ALUNO 
+                SET ativo = @EstadoAtivo 
+                WHERE id_aluno IN (
+                    SELECT ALUNOid_aluno 
+                    FROM ENCARREGADO_ALUNO 
+                    WHERE UTILIZADORid_utilizador = @IdUtilizador
+                );
+            `);
+
+        await transaction.commit();
+        return true;
+    } catch (error) {
+        if (transaction) await transaction.rollback();
+        throw error;
+    }
 }
 
 /**
@@ -215,18 +284,36 @@ async function apagarUtilizador(idUtilizador) {
     const pool = await poolPromise;
     const transaction = pool.transaction();
     await transaction.begin();
+    
     try {
-        // Limpar ligações de perfil primeiro (senão o SQL bloqueia por Foreign Key Violation)
+        // 1. Limpar ligações de perfil
         await transaction.request()
             .input('Id', sql.Int, idUtilizador)
             .query('DELETE FROM UTILIZADOR_PERFIL WHERE UTILIZADORid_utilizador = @Id');
             
-        // Limpar possíveis tokens de recuperação associados a esta conta
+        // 2. Limpar possíveis tokens de recuperação
         await transaction.request()
             .input('Id', sql.Int, idUtilizador)
             .query('DELETE FROM TOKEN_RECUPERACAO WHERE UTILIZADORid_utilizador = @Id');
 
-        // Finalmente, apagar o registo raiz do utilizador
+        // 3. Buscar os IDs dos alunos associados a este Encarregado (para os apagarmos a seguir)
+        const alunosResult = await transaction.request()
+            .input('Id', sql.Int, idUtilizador)
+            .query('SELECT ALUNOid_aluno FROM ENCARREGADO_ALUNO WHERE UTILIZADORid_utilizador = @Id');
+
+        // 4. Limpar a ligação na tabela intermédia ENCARREGADO_ALUNO
+        await transaction.request()
+            .input('Id', sql.Int, idUtilizador)
+            .query('DELETE FROM ENCARREGADO_ALUNO WHERE UTILIZADORid_utilizador = @Id');
+
+        // 5. Apagar os registos dos alunos órfãos (para não deixar "lixo" na tabela ALUNO)
+        for (const row of alunosResult.recordset) {
+            await transaction.request()
+                .input('IdAluno', sql.Int, row.ALUNOid_aluno)
+                .query('DELETE FROM ALUNO WHERE id_aluno = @IdAluno');
+        }
+
+        // 6. Finalmente, apagar o registo raiz do utilizador
         const result = await transaction.request()
             .input('Id', sql.Int, idUtilizador)
             .query('DELETE FROM UTILIZADOR WHERE id_utilizador = @Id');
@@ -234,7 +321,8 @@ async function apagarUtilizador(idUtilizador) {
         await transaction.commit();
         return result.rowsAffected[0] > 0;
     } catch (error) {
-        await transaction.rollback();
+        // Se der erro, desfaz tudo para não deixar a BD inconsistente
+        if (transaction) await transaction.rollback();
         throw error;
     }
 }

@@ -57,16 +57,35 @@ async function listarTodosUtilizadores() {
     try {
         const pool = await poolPromise;
         const query = `
-            SELECT u.id_utilizador, u.nome, u.email, u.telefone, u.ativo, u.data_criacao, 
-            STRING_AGG(p.nome, ', ') AS perfis,
-            MAX(a.nome) AS nomeAluno, 
-            MAX(a.data_nascimento) AS dataNascimentoAluno
+            SELECT 
+                u.id_utilizador, u.nome, u.email, u.telefone, u.ativo, u.data_criacao,
+                (
+                    SELECT STRING_AGG(p.nome, ', ')
+                    FROM UTILIZADOR_PERFIL up
+                    JOIN PERFIL p ON up.PERFILid_perfil = p.id_perfil
+                    WHERE up.UTILIZADORid_utilizador = u.id_utilizador
+                ) AS perfis,
+                (
+                    SELECT STRING_AGG(m.nome, ', ')
+                    FROM PROFESSOR_MODALIDADE pm
+                    JOIN MODALIDADE m ON pm.MODALIDADEid_modalidade = m.id_modalidade
+                    WHERE pm.UTILIZADORid_utilizador = u.id_utilizador
+                ) AS modalidades,
+                (
+                    SELECT TOP 1 a.nome
+                    FROM ENCARREGADO_ALUNO ea
+                    JOIN ALUNO a ON ea.ALUNOid_aluno = a.id_aluno
+                    WHERE ea.UTILIZADORid_utilizador = u.id_utilizador
+                    ORDER BY a.id_aluno DESC
+                ) AS nomeAluno,
+                (
+                    SELECT TOP 1 a.data_nascimento
+                    FROM ENCARREGADO_ALUNO ea
+                    JOIN ALUNO a ON ea.ALUNOid_aluno = a.id_aluno
+                    WHERE ea.UTILIZADORid_utilizador = u.id_utilizador
+                    ORDER BY a.id_aluno DESC
+                ) AS dataNascimentoAluno
             FROM UTILIZADOR u
-            LEFT JOIN UTILIZADOR_PERFIL up ON u.id_utilizador = up.UTILIZADORid_utilizador
-            LEFT JOIN PERFIL p ON up.PERFILid_perfil = p.id_perfil
-            LEFT JOIN ENCARREGADO_ALUNO ea ON u.id_utilizador = ea.UTILIZADORid_utilizador
-            LEFT JOIN ALUNO a ON ea.ALUNOid_aluno = a.id_aluno
-            GROUP BY u.id_utilizador, u.nome, u.email, u.telefone, u.ativo, u.data_criacao
             ORDER BY u.id_utilizador ASC;
         `;
         const result = await pool.request().query(query);
@@ -226,6 +245,33 @@ async function atualizarUtilizadorCompleto(id, { nome, email, telefone, password
         }
         // ----------------------------------------
 
+        await transaction.commit();
+        return true;
+    } catch (error) {
+        await transaction.rollback();
+        throw error;
+    }
+}
+
+async function atualizarModalidadesProfessor(idUtilizador, idsModalidades) {
+    const pool = await poolPromise;
+    const transaction = pool.transaction();
+    await transaction.begin();
+    try {
+        // 1. Limpar associações atuais
+        await transaction.request()
+            .input('Id', sql.Int, idUtilizador)
+            .query('DELETE FROM PROFESSOR_MODALIDADE WHERE UTILIZADORid_utilizador = @Id');
+
+        // 2. Inserir novas
+        if (Array.isArray(idsModalidades) && idsModalidades.length > 0) {
+            for (const idMod of idsModalidades) {
+                await transaction.request()
+                    .input('IdU', sql.Int, idUtilizador)
+                    .input('IdM', sql.Int, idMod)
+                    .query('INSERT INTO PROFESSOR_MODALIDADE (UTILIZADORid_utilizador, MODALIDADEid_modalidade) VALUES (@IdU, @IdM)');
+            }
+        }
         await transaction.commit();
         return true;
     } catch (error) {
@@ -405,7 +451,8 @@ module.exports = {
     getPerfisDoUtilizador, 
     listarTodosUtilizadores,
     criarUtilizador, 
-    atualizarUtilizadorCompleto, 
+    atualizarUtilizadorCompleto,
+    atualizarModalidadesProfessor, 
     alterarEstadoUtilizador,
     guardarTokenRecuperacao, 
     validarTokenRecuperacao, 

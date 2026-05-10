@@ -58,7 +58,13 @@ async function login(req, res, next) {
             temPerfil = perfis.some(p => p.toLowerCase().includes('encarregado') || p.toLowerCase().includes('educação') || p.toLowerCase().includes('educacao') || p.toLowerCase() === 'ee');
         }
 
-        if (perfis.length === 0) return res.status(403).json({ mensagem: 'Acesso negado. Nenhum perfil associado.' });
+        if (perfis.length === 0) return res.status(403).json({ mensagem: 'Acesso negado. Nenhum perfil associado à conta.' });
+
+        // Correção do Bug de permissões cruzadas
+        if (!temPerfil) {
+            const perfilNome = (tipoUp === 'PROF' || tipoUp === 'PROFESSOR') ? 'Professor' : 'Encarregado de Educação';
+            return res.status(403).json({ mensagem: `Acesso negado.` });
+        }
 
         let perfilFinal = 'Encarregado de Educação';
         if (perfis.some(p => p.toLowerCase().includes('prof'))) perfilFinal = 'Professor';
@@ -105,7 +111,21 @@ async function logout(req, res) {
  */
 async function solicitarRecuperacaoPassword(req, res, next) {
     try {
-        const { email } = req.body;
+        const { email, captchaToken } = req.body;
+
+        if (!captchaToken) {
+            return res.status(400).json({ mensagem: 'Validação reCAPTCHA em falta.' });
+        }
+
+        const chaveSecreta = process.env.RECAPTCHA_SECRET_KEY;
+        const googleVerifyUrl = `https://www.google.com/recaptcha/api/siteverify?secret=${chaveSecreta}&response=${captchaToken}`;
+        const recaptchaResponse = await fetch(googleVerifyUrl, { method: 'POST' });
+        const recaptchaData = await recaptchaResponse.json();
+
+        if (!recaptchaData.success) {
+            return res.status(400).json({ mensagem: 'A validação do reCAPTCHA falhou. Tenta novamente.' });
+        }
+
         const utilizador = await utilizadorModel.getUtilizadorByEmail(email);
 
         // Apenas utilizadores existentes e ativos podem recuperar a palavra-passe
@@ -332,16 +352,15 @@ async function alterarEstado(req, res, next) {
  */
 async function ativarUtilizador(req, res, next) {
     try {
-        const perfis = await utilizadorModel.getPerfisDoUtilizador(req.params.id);
-        const isProfessor = perfis.some((p) => String(p).toLowerCase().includes('prof'));
-        const idsModalidades = Array.isArray(req.body?.idsModalidades) ? req.body.idsModalidades : null;
+        const { id } = req.params;
+        const { idsModalidades } = req.body;
 
-        // Se for professor, é obrigatório atribuir modalidades no momento da ativação
-        if (isProfessor && (!idsModalidades || idsModalidades.length === 0)) {
-            return res.status(400).json({ mensagem: 'Seleciona pelo menos uma modalidade para aceitar este professor.' });
+        const sucesso = await utilizadorModel.alterarEstadoUtilizador(id, true);
+        
+        if (sucesso && Array.isArray(idsModalidades)) {
+            await utilizadorModel.atualizarModalidadesProfessor(id, idsModalidades);
         }
 
-        const sucesso = await utilizadorModel.alterarEstadoUtilizador(req.params.id, true, idsModalidades);
         if (sucesso) return res.status(200).json({ mensagem: 'Utilizador aceite!' });
         return res.status(400).json({ mensagem: 'Erro ao aceitar.' });
     } catch (error) {
@@ -375,8 +394,24 @@ async function eliminarUtilizador(req, res, next) {
     }
 }
 
+async function atualizarModalidades(req, res, next) {
+    try {
+        const { id } = req.params;
+        const { idsModalidades } = req.body;
+        
+        if (!Array.isArray(idsModalidades)) {
+            return res.status(400).json({ mensagem: 'Lista de modalidades inválida.' });
+        }
+
+        await utilizadorModel.atualizarModalidadesProfessor(id, idsModalidades);
+        return res.status(200).json({ mensagem: 'Modalidades atualizadas com sucesso.' });
+    } catch (error) {
+        next(error);
+    }
+}
+
 /**
- *  Criação de utilizador por um administrador.
+ * Criação de utilizador por um administrador.
  */
 async function adminCriarUtilizador(req, res, next) {
     try {
@@ -506,6 +541,7 @@ module.exports = {
     adminCriarUtilizador,
     editarUtilizadorCompleto,
     eliminarUtilizador,
+    atualizarModalidades,
     getMeusAlunos,
     criarMeuAluno
 };

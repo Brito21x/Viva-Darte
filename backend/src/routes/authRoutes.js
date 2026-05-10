@@ -96,5 +96,11 @@ router.put('/utilizadores/:id/desativar', autenticar, authController.desativarUt
  */
 router.delete('/utilizadores/:id', autenticar, authController.eliminarUtilizador);
 
+/**
+ * [PROTEGIDO] Atualizar apenas as modalidades de um professor.
+ * PUT /api/auth/utilizadores/:id/modalidades
+ */
+router.put('/utilizadores/:id/modalidades', autenticar, authController.atualizarModalidades);
+
 // Exportação do router para ser consumido no entry point da aplicação (ex: app.js)
 module.exports = router;

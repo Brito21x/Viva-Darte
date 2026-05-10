@@ -104,10 +104,12 @@ export default function AdminDashboard({ irParaLanding }) {
   const [activeTab, setActiveTab] = useState('overview');
 
   const [utilizadores, setUtilizadores] = useState([]); 
+  const [allModalidades, setAllModalidades] = useState([]); 
   const [pedidosPendentes, setPedidosPendentes] = useState([]);
   const [msg, setMsg] = useState('');
 
   const [modalUser, setModalUser] = useState({ isOpen: false, mode: 'create', data: {} });
+  const [modalMods, setModalMods] = useState({ isOpen: false, userId: null, selectedIds: [] });
   const [modalAprovacao, setModalAprovacao] = useState({
     isOpen: false, pedido: null, professores: [], salas: [],
     idProfessor: '', idSala: '', valorFinal: '', isSaving: false, erro: ''
@@ -155,8 +157,13 @@ export default function AdminDashboard({ irParaLanding }) {
 
   async function carregarDados() {
     try {
-      const usersData = await apiFetch('/api/auth/utilizadores', token).catch(() => []);
+      const [usersData, modalidadesData] = await Promise.all([
+          apiFetch('/api/auth/utilizadores', token).catch(() => []),
+          apiFetch('/api/escola/modalidades', token).catch(() => [])
+      ]);
       if (Array.isArray(usersData)) setUtilizadores(usersData);
+      if (Array.isArray(modalidadesData)) setAllModalidades(modalidadesData);
+
       const pedidos = await apiFetch('/api/coaching/pedidos/pendentes', token).catch(() => []);
       if (Array.isArray(pedidos)) setPedidosPendentes(pedidos);
     } catch (e) { mostrarMsg('Erro ao carregar dados.', 'erro'); }
@@ -223,7 +230,6 @@ export default function AdminDashboard({ irParaLanding }) {
               telefone: u.telefone || '', 
               password: '', 
               tipo: tipoBase,
-              // Novos campos para Aluno preenchidos através do Backend
               nomeAluno: u.nomeAluno || '',
               dataNascimentoAluno: u.dataNascimentoAluno ? formatDataApi(u.dataNascimentoAluno) : ''
           }
@@ -272,6 +278,33 @@ export default function AdminDashboard({ irParaLanding }) {
       } catch (err) { mostrarMsg("Erro de ligação.", 'erro'); }
   }
 
+  // --- Lógica Modal Modalidades ---
+  function abrirModalModalidades(u) {
+      const uMods = typeof u.modalidades === 'string' ? u.modalidades.split(', ') : [];
+      const preSelected = allModalidades
+          .filter(m => uMods.includes(m.nome))
+          .map(m => m.id_modalidade);
+
+      setModalMods({ isOpen: true, userId: u.id_utilizador, selectedIds: preSelected });
+  }
+
+  async function guardarModalidades() {
+      try {
+          const res = await fetch(`${API_URL}/api/auth/utilizadores/${modalMods.userId}/modalidades`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+              body: JSON.stringify({ idsModalidades: modalMods.selectedIds })
+          });
+          if (res.ok) {
+              mostrarMsg("Modalidades atualizadas!", 'ok');
+              setModalMods({ isOpen: false, userId: null, selectedIds: [] });
+              carregarDados();
+          } else {
+              mostrarMsg("Erro ao salvar modalidades.", 'erro');
+          }
+      } catch (e) { mostrarMsg("Erro de rede.", 'erro'); }
+  }
+
   if (!isAuthorized) {
       return (
           <div className="admin-root" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', backgroundColor: 'var(--bg-section)' }}>
@@ -304,24 +337,34 @@ export default function AdminDashboard({ irParaLanding }) {
   const encarregados = aceites.filter(u => u.perfis && (u.perfis.toLowerCase().includes('encarregado') || u.perfis.toLowerCase().includes('educação') || u.perfis === 'EE'));
   const adminsEOutros = aceites.filter(u => u.perfis && !u.perfis.toLowerCase().includes('prof') && !u.perfis.toLowerCase().includes('encarregado') && !u.perfis.toLowerCase().includes('educação') && u.perfis !== 'EE');
 
+  // Tabela Dinâmica
   const renderTabelaUtilizadores = (listaUtilizadores) => (
     <table className="admin-table">
       <thead>
         <tr>
-          <th>ID</th><th>Nome</th><th>Email</th><th>Telefone</th><th>Educando</th><th>Estado</th>
+          <th>ID</th><th>Nome</th><th>Email</th><th>Telefone</th><th>Educando / Modalidades</th><th>Estado</th>
           <th>Criação</th><th style={{ textAlign: 'center' }}>Ações</th> 
         </tr>
       </thead>
       <tbody>
         {listaUtilizadores.map(u => {
           const isAtivo = u.ativo === true || u.ativo === 1;
+          const isProf = u.perfis && u.perfis.toLowerCase().includes('prof');
+
           return (
               <tr key={u.id_utilizador} style={{ backgroundColor: !isAtivo ? '#fffbf0' : 'transparent' }}>
                 <td>{u.id_utilizador}</td>
                 <td><strong>{u.nome}</strong></td>
                 <td>{u.email}</td>
                 <td>{u.telefone || '—'}</td>
-                <td>{u.nomeAluno || '—'}</td>
+                
+                {/* Lógica de exibição da coluna do meio */}
+                <td>
+                  {isProf 
+                    ? (u.modalidades || <span style={{opacity:0.5}}>Nenhuma</span>) 
+                    : (u.nomeAluno || '—')}
+                </td>
+
                 <td><span className={`badge badge--${isAtivo ? 'green' : 'orange'}`}>{isAtivo ? 'Ativo' : 'Pendente'}</span></td>
                 <td>{new Date(u.data_criacao).toLocaleDateString('pt-PT')}</td>
                 <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
@@ -333,6 +376,12 @@ export default function AdminDashboard({ irParaLanding }) {
                     ) : (
                         <button className="btn-sm btn-sm--danger" style={{ marginRight: '8px' }} onClick={() => handleRevogarUtilizador(u.id_utilizador)}>Suspender</button>
                     )}
+                    
+                    {/* Botão de Modalidades exclusivo para Professores Ativos */}
+                    {isProf && isAtivo && (
+                        <button className="btn-sm btn-sm--gold" style={{ marginRight: '8px' }} onClick={() => abrirModalModalidades(u)}>Modalidades</button>
+                    )}
+
                     <button className="btn-sm btn-sm--primary" onClick={() => abrirModalEditar(u)}>Editar</button>
                 </td>
               </tr>
@@ -410,6 +459,7 @@ export default function AdminDashboard({ irParaLanding }) {
         )}
       </main>
 
+      {/* Modal de Criar/Editar Utilizador */}
       {modalUser.isOpen && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(3px)', zIndex: 9999, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
             <div style={{ backgroundColor: '#ffffff', padding: '40px', borderRadius: '16px', width: '90%', maxWidth: '540px', boxShadow: '0 20px 40px rgba(0,0,0,0.15)', fontFamily: "'Poppins', sans-serif" }}>
@@ -420,7 +470,6 @@ export default function AdminDashboard({ irParaLanding }) {
                 
                 <form onSubmit={submeterModal}>
                     
-                    {/* NOVOS CAMPOS: APENAS VISÍVEL PARA ENCARREGADOS DE EDUCAÇÃO */}
                     {modalUser.data.tipo === 'EE' && (
                         <div style={{ display: 'flex', gap: '20px', marginBottom: '20px' }}>
                             <div style={{ flex: 2 }}>
@@ -477,6 +526,41 @@ export default function AdminDashboard({ irParaLanding }) {
                     </div>
                 </form>
             </div>
+        </div>
+      )}
+
+      {/* MODAL DE ASSOCIAÇÃO DE MODALIDADES */}
+      {modalMods.isOpen && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(3px)', zIndex: 9999, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+          <div style={{ backgroundColor: '#ffffff', padding: '40px', borderRadius: '16px', width: '90%', maxWidth: '500px', boxShadow: '0 20px 40px rgba(0,0,0,0.15)', fontFamily: "'Poppins', sans-serif" }}>
+            <h3 style={{ marginBottom: '15px', fontFamily: "'Cormorant Garamond', serif", fontSize: '1.8rem', color: '#333' }}>Associar Modalidades</h3>
+            <p style={{ marginBottom: '25px', color: '#666', fontSize: '0.9rem' }}>Selecione as modalidades que este professor leciona:</p>
+            
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '35px' }}>
+                {allModalidades.map(m => (
+                    <label key={m.id_modalidade} className="check-label" style={{ backgroundColor: '#f9f9f9', padding: '10px 15px', borderRadius: '8px', border: '1px solid #eee' }}>
+                        <input 
+                            type="checkbox" 
+                            style={{ marginRight: '8px', accentColor: 'var(--accent-gold)' }}
+                            checked={modalMods.selectedIds.includes(m.id_modalidade)}
+                            onChange={(e) => {
+                                const ids = e.target.checked 
+                                    ? [...modalMods.selectedIds, m.id_modalidade]
+                                    : modalMods.selectedIds.filter(id => id !== m.id_modalidade);
+                                setModalMods({...modalMods, selectedIds: ids});
+                            }}
+                        /> 
+                        <span style={{ fontWeight: '500', color: '#444' }}>{m.nome}</span>
+                    </label>
+                ))}
+                {allModalidades.length === 0 && <span style={{ color: '#aaa', fontStyle: 'italic', gridColumn: '1 / -1' }}>Nenhuma modalidade registada no sistema.</span>}
+            </div>
+
+            <div style={{ display: 'flex', gap: '15px', justifyContent: 'flex-end' }}>
+                <button style={{ padding: '10px 20px', backgroundColor: '#f1f1f1', color: '#555', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '600' }} onClick={() => setModalMods({isOpen:false})}>Cancelar</button>
+                <button style={{ padding: '10px 20px', backgroundColor: '#3d342b', color: '#ffffff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '600' }} onClick={guardarModalidades}>Guardar</button>
+            </div>
+          </div>
         </div>
       )}
 

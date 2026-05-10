@@ -108,9 +108,9 @@ export default function RecoverPassword({ irParaLogin, irParaLanding }) {
         <div className="form-box">
           <header className="form-header">
             <h2>
-              {etapa === 1 && "Recuperar Password 🔑"}
-              {etapa === 2 && "Verificação de Segurança 📱"}
-              {etapa === 3 && "Nova Password ✨"}
+              {etapa === 1 && "Recuperar Password "}
+              {etapa === 2 && "Verificação de Segurança "}
+              {etapa === 3 && "Nova Password "}
             </h2>
           </header>
 

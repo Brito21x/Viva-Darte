@@ -12,11 +12,17 @@ export default function VendaFigurinos({ irParaLanding, irParaEmprestimos, irPar
   const [filtroEstado, setFiltroEstado] = useState('Todos');
   const [ordenacao, setOrdenacao] = useState('recentes');
 
+  const [indicesImagens, setIndicesImagens] = useState({});
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isCompraModalOpen, setIsCompraModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
+  // Novos estados para a HUD e Lightbox
+  const [figurinoDetalhe, setFigurinoDetalhe] = useState(null);
+  const [isLightboxOpen, setIsLightboxOpen] = useState(false);
+
   const [customAlert, setCustomAlert] = useState({ show: false, message: '', type: 'alert', onConfirm: null });
   const [figurinoSelecionado, setFigurinoSelecionado] = useState(null);
 
@@ -27,26 +33,11 @@ export default function VendaFigurinos({ irParaLanding, irParaEmprestimos, irPar
 
   const [figurinoEmEdicao, setFigurinoEmEdicao] = useState(null);
   const [metodoPagamentoCompra, setMetodoPagamentoCompra] = useState('MBWay');
-  const [indicesImagens, setIndicesImagens] = useState({});
 
   const inventarioBase = `${API_URL}/api/inventario`;
 
   const mostrarAlerta = (msg) => setCustomAlert({ show: true, message: msg, type: 'alert', onConfirm: null });
   const fecharAlerta = () => setCustomAlert({ show: false, message: '', type: 'alert', onConfirm: null });
-
-  useEffect(() => {
-    const userGuardado = localStorage.getItem('viva_user');
-    if (userGuardado) setUtilizador(JSON.parse(userGuardado));
-    document.title = "Venda de Figurinos | Viva D'arte";
-    
-    carregarFigurinos(true);
-
-    const interval = setInterval(() => {
-      carregarFigurinos(false);
-    }, 5000);
-
-    return () => clearInterval(interval);
-  }, []);
 
   const getToken = () => getAuthToken() || '';
 
@@ -55,9 +46,7 @@ export default function VendaFigurinos({ irParaLanding, irParaEmprestimos, irPar
     try {
       const response = await fetch(`${inventarioBase}/vendas`, {
         method: 'GET',
-        headers: { 
-          'Authorization': `Bearer ${getToken()}`
-        },
+        headers: { 'Authorization': `Bearer ${getToken()}` },
         cache: 'no-store' 
       });
       
@@ -72,10 +61,56 @@ export default function VendaFigurinos({ irParaLanding, irParaEmprestimos, irPar
     }
   };
 
+  useEffect(() => {
+    document.title = "Venda de Figurinos | Viva D'arte";
+    const userGuardado = localStorage.getItem('viva_user');
+    if (userGuardado) setUtilizador(JSON.parse(userGuardado));
+    
+    carregarFigurinos(true);
+    const interval = setInterval(() => carregarFigurinos(false), 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // --- NAVEGAÇÃO COM TECLADO ---
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+      if (isLightboxOpen && figurinoDetalhe) {
+        const totalFotos = figurinoDetalhe.fotos?.length || 0;
+        if (totalFotos > 1) {
+          if (e.key === 'ArrowRight') {
+            setIndicesImagens(prev => ({ ...prev, [figurinoDetalhe.id_venda]: ((prev[figurinoDetalhe.id_venda] || 0) + 1) % totalFotos }));
+          } else if (e.key === 'ArrowLeft') {
+            setIndicesImagens(prev => ({ ...prev, [figurinoDetalhe.id_venda]: ((prev[figurinoDetalhe.id_venda] || 0) - 1 + totalFotos) % totalFotos }));
+          }
+        }
+        if (e.key === 'Escape') setIsLightboxOpen(false);
+      } 
+      else if (figurinoDetalhe && !isLightboxOpen && !isCompraModalOpen && !isEditModalOpen && !isModalOpen) {
+        if (e.key === 'Escape') {
+          setFigurinoDetalhe(null);
+        } else if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+          if (figurinosFiltrados.length <= 1) return;
+          const currentIndex = figurinosFiltrados.findIndex(f => f.id_venda === figurinoDetalhe.id_venda);
+          if (currentIndex === -1) return;
+          
+          let nextIndex = e.key === 'ArrowRight' ? currentIndex + 1 : currentIndex - 1;
+          if (nextIndex < 0) nextIndex = figurinosFiltrados.length - 1;
+          if (nextIndex >= figurinosFiltrados.length) nextIndex = 0;
+          
+          setFigurinoDetalhe(figurinosFiltrados[nextIndex]);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [figurinoDetalhe, isLightboxOpen, isCompraModalOpen, isEditModalOpen, isModalOpen]);
+
+
   const handleLogout = () => {
-    localStorage.removeItem('viva_user');
-    localStorage.removeItem('viva_token');
-    localStorage.removeItem('token');
+    localStorage.clear();
     setUtilizador(null);
     if(irParaLanding) irParaLanding(); 
     window.location.reload();
@@ -189,7 +224,8 @@ export default function VendaFigurinos({ irParaLanding, irParaEmprestimos, irPar
     }
   };
 
-  const confirmarEliminacao = (idVenda, idPeca) => {
+  const confirmarEliminacao = (e, idVenda, idPeca) => {
+    e.stopPropagation();
     setCustomAlert({
       show: true,
       message: `Tens a certeza que queres apagar este produto?`,
@@ -210,6 +246,7 @@ export default function VendaFigurinos({ irParaLanding, irParaEmprestimos, irPar
 
       if (response.ok) {
         mostrarAlerta("Produto removido com sucesso!");
+        if(figurinoDetalhe?.id_peca === idPeca) setFigurinoDetalhe(null);
         carregarFigurinos(false);
       } else {
         const data = await response.json();
@@ -220,7 +257,8 @@ export default function VendaFigurinos({ irParaLanding, irParaEmprestimos, irPar
     }
   };
 
-  const abrirEdicao = (figurino) => {
+  const abrirEdicao = (e, figurino) => {
+    e.stopPropagation();
     setFigurinoEmEdicao({
       ...figurino,
       PECA_nome: figurino.nome_peca,
@@ -257,6 +295,9 @@ export default function VendaFigurinos({ irParaLanding, irParaEmprestimos, irPar
         if (response.ok) {
             mostrarAlerta('Figurino atualizado com sucesso!');
             setIsEditModalOpen(false);
+            if(figurinoDetalhe && figurinoDetalhe.id_venda === figurinoEmEdicao.id_venda) {
+              setFigurinoDetalhe(null);
+            }
             carregarFigurinos(false);
         } else {
             const data = await response.json();
@@ -267,7 +308,8 @@ export default function VendaFigurinos({ irParaLanding, irParaEmprestimos, irPar
     }
   };
 
-  const handleComprar = (figurino) => {
+  const handleComprar = (e, figurino) => {
+    if(e) e.stopPropagation();
     setFigurinoSelecionado(figurino);
     const acceptedMethods = figurino.metodos_aceites ? figurino.metodos_aceites.split(',') : ['MBWay'];
     setMetodoPagamentoCompra(acceptedMethods[0]);
@@ -296,6 +338,7 @@ export default function VendaFigurinos({ irParaLanding, irParaEmprestimos, irPar
         if (response.ok) {
             mostrarAlerta(`Compra de ${figurinoSelecionado.nome_peca} confirmada!`);
             setIsCompraModalOpen(false);
+            setFigurinoDetalhe(null);
             carregarFigurinos(false); 
         } else {
             const err = await response.json();
@@ -315,14 +358,19 @@ export default function VendaFigurinos({ irParaLanding, irParaEmprestimos, irPar
     .sort((a, b) => {
       if (ordenacao === 'preco_asc') return parseFloat(a.preco) - parseFloat(b.preco);
       if (ordenacao === 'preco_desc') return parseFloat(b.preco) - parseFloat(a.preco);
-      // 'recentes' - assume IDs maiores como sendo mais recentes
       return b.id_venda - a.id_venda;
     });
+
+  // ESTILOS LOCAIS PARA A NOVA HUD (DETALHE)
+  const stylesHUD = {
+    badge: { padding: '6px 14px', borderRadius: '20px', fontSize: '0.8rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' },
+    label: { fontSize: '0.75rem', color: '#8a8480', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: '700', margin: '0 0 4px 0', display: 'block' }
+  };
 
   return (
     <div className="page-wrapper">
       <nav className="navbar">
-        <div className="nav-brand">
+        <div className="nav-brand" onClick={irParaLanding} style={{ cursor: 'pointer' }}>
           <img src={logoImg} alt="Logo" className="nav-logo-img" />
           <span>VIVA D'ARTE</span>
         </div>
@@ -331,28 +379,21 @@ export default function VendaFigurinos({ irParaLanding, irParaEmprestimos, irPar
           <a href="#inicio" onClick={(e) => { e.preventDefault(); irParaLanding?.(); }}>Início</a>
         </li>
         <li className="nav-separator">|</li>
-        
-        {/* Lógica para saber se envia para a Agenda de Prof ou de EE */}
         <li>
           <a href="#agenda" onClick={(e) => { 
             e.preventDefault(); 
             const user = JSON.parse(localStorage.getItem('viva_user') || '{}');
-            if (user.tipo === 'PROF' || user.role === 'PROFESSOR') {
-              irParaMinhaAgendaProfessor?.();
-            } else {
-              irParaMinhaAgendaEE?.();
-            }
+            if (user.tipo === 'PROF' || user.role === 'PROFESSOR') irParaMinhaAgendaProfessor?.();
+            else irParaMinhaAgendaEE?.();
           }}>
-            Minha Agenda
+            Minha agenda
           </a>
         </li>
-
         <li>
           <a href="#emprestimos" onClick={(e) => { e.preventDefault(); irParaEmprestimos?.(); }}>
             Empréstimos de peças
           </a>
         </li>
-        
         <li>
           <a href="#figurinos" className="special-link active" onClick={(e) => { e.preventDefault(); irParaVendaFigurinos?.(); }}>
             Venda de figurinos
@@ -386,15 +427,12 @@ export default function VendaFigurinos({ irParaLanding, irParaEmprestimos, irPar
         {!isLoading && figurinos.length > 0 && (
           <div style={{ display: 'flex', gap: '15px', marginBottom: '25px', flexWrap: 'wrap' }}>
             <input 
-              type="text" 
-              placeholder="Pesquisar por nome..." 
-              value={pesquisa} 
-              onChange={(e) => setPesquisa(e.target.value)} 
+              type="text" placeholder="Pesquisar por nome..." 
+              value={pesquisa} onChange={(e) => setPesquisa(e.target.value)} 
               style={{ flex: 1, minWidth: '220px', padding: '12px 16px', borderRadius: '8px', border: '1px solid rgba(0,0,0,0.12)', fontSize: '0.95rem' }}
             />
             <select 
-              value={filtroEstado} 
-              onChange={(e) => setFiltroEstado(e.target.value)}
+              value={filtroEstado} onChange={(e) => setFiltroEstado(e.target.value)}
               style={{ padding: '12px 16px', borderRadius: '8px', border: '1px solid rgba(0,0,0,0.12)', fontSize: '0.95rem', cursor: 'pointer', backgroundColor: '#fff' }}
             >
               <option value="Todos">Todos os Estados</option>
@@ -404,8 +442,7 @@ export default function VendaFigurinos({ irParaLanding, irParaEmprestimos, irPar
               <option value="Danificado">Danificado</option>
             </select>
             <select 
-              value={ordenacao} 
-              onChange={(e) => setOrdenacao(e.target.value)}
+              value={ordenacao} onChange={(e) => setOrdenacao(e.target.value)}
               style={{ padding: '12px 16px', borderRadius: '8px', border: '1px solid rgba(0,0,0,0.12)', fontSize: '0.95rem', cursor: 'pointer', backgroundColor: '#fff' }}
             >
               <option value="recentes">Mais Recentes</option>
@@ -416,17 +453,11 @@ export default function VendaFigurinos({ irParaLanding, irParaEmprestimos, irPar
         )}
 
         {isLoading ? (
-          <div className="empty-state">
-            A carregar figurinos...
-          </div>
+          <div className="empty-state">A carregar figurinos...</div>
         ) : figurinos.length === 0 ? (
-          <div className="empty-state">
-            Ainda não existem figurinos disponíveis para venda de momento.
-          </div>
+          <div className="empty-state">Ainda não existem figurinos disponíveis para venda de momento.</div>
         ) : figurinosFiltrados.length === 0 ? (
-          <div className="empty-state">
-            Nenhum figurino encontrado com esses filtros. Tenta outra pesquisa!
-          </div>
+          <div className="empty-state">Nenhum figurino encontrado com esses filtros. Tenta outra pesquisa!</div>
         ) : (
           <div className="figurinos-grid">
           {figurinosFiltrados.map((fig) => {
@@ -435,7 +466,12 @@ export default function VendaFigurinos({ irParaLanding, irParaEmprestimos, irPar
             const fotoExibida = totalFotos > 0 && fig.fotos[idxImg] ? fig.fotos[idxImg] : null;
 
             return (
-              <div className={`figurino-card ${fig.estado_venda === 'Concluída' || fig.estado_venda === 'Concluida' ? 'vendido' : ''}`} key={fig.id_venda}>
+              <div 
+                className={`figurino-card ${fig.estado_venda === 'Concluída' || fig.estado_venda === 'Concluida' ? 'vendido' : ''}`} 
+                key={fig.id_venda}
+                onClick={() => setFigurinoDetalhe(fig)}
+                style={{ cursor: 'pointer' }}
+              >
                 <div 
                   className="figurino-img" 
                   style={{ 
@@ -468,9 +504,9 @@ export default function VendaFigurinos({ irParaLanding, irParaEmprestimos, irPar
                   {(utilizador?.nome === fig.vendedor) && (
                     <div className="acoes-dono">
                       {(fig.estado_venda !== 'Concluída' && fig.estado_venda !== 'Concluida') && (
-                        <button className="btn-icon edit" title="Editar Informações" onClick={() => abrirEdicao(fig)}>✎</button>
+                        <button className="btn-icon edit" title="Editar Informações" onClick={(e) => abrirEdicao(e, fig)}>✎</button>
                       )}
-                      <button className="btn-icon delete" title="Apagar" onClick={() => confirmarEliminacao(fig.id_venda, fig.id_peca)}>🗑️</button>
+                      <button className="btn-icon delete" title="Apagar" onClick={(e) => confirmarEliminacao(e, fig.id_venda, fig.id_peca)}>🗑️</button>
                     </div>
                   )}
                 </div>
@@ -494,7 +530,7 @@ export default function VendaFigurinos({ irParaLanding, irParaEmprestimos, irPar
                     <span className="preco">{Number(fig.preco).toFixed(2)} €</span>
                     
                     {(fig.estado_venda === 'Disponível' || fig.estado_venda === 'Disponivel') && utilizador?.nome !== fig.vendedor && (
-                      <button className="btn-outline btn-sm" onClick={() => handleComprar(fig)} disabled={!utilizador}>Comprar</button>
+                      <button className="btn-outline btn-sm" onClick={(e) => handleComprar(e, fig)} disabled={!utilizador}>Comprar</button>
                     )}
                     
                     {(fig.estado_venda === 'Disponível' || fig.estado_venda === 'Disponivel') && utilizador?.nome === fig.vendedor && (
@@ -517,6 +553,225 @@ export default function VendaFigurinos({ irParaLanding, irParaEmprestimos, irPar
         </div>
         )}
       </div>
+
+      {/* --- HUD DE DETALHES MELHORADA --- */}
+      {figurinoDetalhe && (() => {
+        const idxImg = indicesImagens[figurinoDetalhe.id_venda] || 0;
+        const totalFotos = figurinoDetalhe.fotos?.length || 0;
+        const eMeu = utilizador?.nome === figurinoDetalhe.vendedor;
+        const estaVendido = figurinoDetalhe.estado_venda === 'Concluída' || figurinoDetalhe.estado_venda === 'Concluida';
+        const metodos = figurinoDetalhe.metodos_aceites ? figurinoDetalhe.metodos_aceites.split(',') : [];
+
+        const navigatePiece = (direction, e) => {
+          e.stopPropagation();
+          const currentIndex = figurinosFiltrados.findIndex(p => p.id_venda === figurinoDetalhe.id_venda);
+          if (currentIndex === -1) return;
+          let nextIndex = currentIndex + direction;
+          if (nextIndex < 0) nextIndex = figurinosFiltrados.length - 1;
+          if (nextIndex >= figurinosFiltrados.length) nextIndex = 0;
+          setFigurinoDetalhe(figurinosFiltrados[nextIndex]);
+        };
+
+        return (
+          <div className="modal-overlay" onClick={() => setFigurinoDetalhe(null)} style={{ zIndex: 2005, background: 'rgba(21, 19, 17, 0.92)' }}>
+            
+            {/* SETAS LATERAIS REDUZIDAS PARA SALTAR ENTRE PEÇAS */}
+            {figurinosFiltrados.length > 1 && (
+              <button 
+                onClick={(e) => navigatePiece(-1, e)}
+                style={{ position: 'absolute', left: '20px', background: 'rgba(238, 234, 226, 0.9)', color: '#2a2724', border: 'none', borderRadius: '50%', width: '45px', height: '45px', fontSize: '1.8rem', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', zIndex: 2006, boxShadow: '0 4px 15px rgba(0,0,0,0.2)', transition: 'transform 0.2s' }}
+                onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.1)'}
+                onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
+              >
+                ‹
+              </button>
+            )}
+
+            {figurinosFiltrados.length > 1 && (
+              <button 
+                onClick={(e) => navigatePiece(1, e)}
+                style={{ position: 'absolute', right: '20px', background: 'rgba(238, 234, 226, 0.9)', color: '#2a2724', border: 'none', borderRadius: '50%', width: '45px', height: '45px', fontSize: '1.8rem', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', zIndex: 2006, boxShadow: '0 4px 15px rgba(0,0,0,0.2)', transition: 'transform 0.2s' }}
+                onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.1)'}
+                onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
+              >
+                ›
+              </button>
+            )}
+
+            <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ 
+              maxWidth: '900px', width: '90%', maxHeight: '85vh', padding: '0', display: 'flex', flexDirection: 'row', 
+              overflow: 'hidden', backgroundColor: '#eeeae2', border: '1px solid rgba(0,0,0,0.1)', minHeight: '500px'
+            }}>
+              
+              {/* Esquerda: Imagem Principal com Miniaturas */}
+              <div style={{ flex: 1.1, display: 'flex', flexDirection: 'column', backgroundColor: '#dcd7ce', borderRight: '1px solid rgba(0,0,0,0.05)', minHeight: 0 }}>
+                
+                {/* Imagem Maior */}
+                <div style={{ flex: 1, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', padding: '20px', minHeight: 0 }}>
+                  {totalFotos > 0 ? (
+                    <img 
+                      src={figurinoDetalhe.fotos[idxImg]} 
+                      alt="Peça" 
+                      style={{ maxWidth: '100%', maxHeight: '100%', width: 'auto', height: 'auto', objectFit: 'contain', cursor: 'zoom-in' }} 
+                      onClick={() => setIsLightboxOpen(true)}
+                      title="Clicar para ver em Ecrã Inteiro"
+                    />
+                  ) : <span style={{ color: '#8a8480' }}>Sem Imagem</span>}
+                </div>
+
+                {/* Galeria de Miniaturas */}
+                {totalFotos > 1 && (
+                  <div style={{ 
+                    display: 'flex', gap: '12px', padding: '15px', backgroundColor: 'rgba(0,0,0,0.04)', 
+                    borderTop: '1px solid rgba(0,0,0,0.05)', overflowX: 'auto', justifyContent: 'center' 
+                  }}>
+                    {figurinoDetalhe.fotos.map((foto, index) => (
+                      <img
+                        key={index}
+                        src={foto}
+                        alt={`Thumbnail ${index}`}
+                        style={{
+                          width: '65px', height: '65px', objectFit: 'cover', cursor: 'pointer', borderRadius: '8px',
+                          border: index === idxImg ? '3px solid #ab855a' : '2px solid transparent',
+                          opacity: index === idxImg ? 1 : 0.6,
+                          transition: 'all 0.2s ease',
+                          boxShadow: index === idxImg ? '0 4px 10px rgba(0,0,0,0.1)' : 'none'
+                        }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setIndicesImagens(prev => ({ ...prev, [figurinoDetalhe.id_venda]: index }));
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.opacity = 1}
+                        onMouseLeave={(e) => { if(index !== idxImg) e.currentTarget.style.opacity = 0.6; }}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Direita: Painel de Informações */}
+              <div style={{ flex: 1, padding: '40px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', overflowY: 'auto' }}>
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '25px' }}>
+                    <span style={{ ...stylesHUD.badge, backgroundColor: estaVendido ? '#2a2724' : '#ab855a', color: '#fff' }}>
+                      {estaVendido ? 'Vendido' : 'Disponível para Compra'}
+                    </span>
+                    <button onClick={() => setFigurinoDetalhe(null)} style={{ background: 'none', border: 'none', fontSize: '1.8rem', cursor: 'pointer', color: '#8a8480' }}>&times;</button>
+                  </div>
+
+                  <h2 style={{ fontSize: '2.4rem', color: '#2a2724', margin: '0 0 10px 0', fontFamily: "'Cormorant Garamond', serif" }}>
+                    {figurinoDetalhe.nome_peca}
+                  </h2>
+
+                  <div style={{ display: 'flex', gap: '15px', marginBottom: '30px' }}>
+                    <div style={{ background: '#dfdbd2', padding: '10px 15px', borderRadius: '8px' }}>
+                      <span style={stylesHUD.label}>Estado</span>
+                      <strong style={{ fontSize: '0.9rem' }}>{figurinoDetalhe.condicao_peca}</strong>
+                    </div>
+                    <div style={{ background: '#dfdbd2', padding: '10px 15px', borderRadius: '8px' }}>
+                      <span style={stylesHUD.label}>Tamanho</span>
+                      <strong style={{ fontSize: '0.9rem' }}>{figurinoDetalhe.tamanho || 'Universal'}</strong>
+                    </div>
+                  </div>
+
+                  <span style={stylesHUD.label}>Descrição do Artigo</span>
+                  <p style={{ color: '#5a5450', lineHeight: '1.6', fontSize: '1rem', marginBottom: '30px' }}>
+                    {figurinoDetalhe.descricao || "Sem descrição detalhada."}
+                  </p>
+
+                  <div style={{ marginBottom: '30px' }}>
+                    <span style={stylesHUD.label}>Vendido Por</span>
+                    <p style={{ color: '#b38b59', fontWeight: '600', margin: '4px 0 15px 0' }}>{figurinoDetalhe.vendedor}</p>
+                    
+                    <span style={stylesHUD.label}>Métodos de Pagamento</span>
+                    <div style={{ display: 'flex', gap: '8px', marginTop: '8px', flexWrap: 'wrap' }}>
+                      {metodos.map(m => (
+                        <span key={m} style={{ fontSize: '0.75rem', background: '#fff', border: '1px solid #dcd7ce', padding: '5px 12px', borderRadius: '15px' }}>{m}</span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ borderTop: '1px solid #dcd7ce', paddingTop: '30px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '20px' }}>
+                  <div>
+                    <span style={stylesHUD.label}>Preço Fixo</span>
+                    <div style={{ fontSize: '2.2rem', fontWeight: '800', color: '#2a2724' }}>
+                      {parseFloat(figurinoDetalhe.preco).toFixed(2)}€
+                    </div>
+                  </div>
+
+                  {estaVendido ? (
+                    <div style={{ textAlign: 'right' }}>
+                      <span style={{ fontStyle: 'italic', color: '#2a2724', fontWeight: '700', fontSize: '1.2rem', display: 'block' }}>Vendido</span>
+                      {figurinoDetalhe.comprador && (
+                         <span style={{ fontSize: '0.8rem', color: '#888' }}>a {figurinoDetalhe.comprador}</span>
+                      )}
+                    </div>
+                  ) : eMeu ? (
+                    <span style={{ fontStyle: 'italic', color: '#ab855a', fontWeight: '600' }}>Este artigo é teu</span>
+                  ) : (
+                    <button 
+                      className="btn-dark" 
+                      style={{ padding: '15px 35px', borderRadius: '30px', whiteSpace: 'nowrap' }}
+                      onClick={(e) => { handleComprar(e, figurinoDetalhe); }}
+                      disabled={!utilizador}
+                    >
+                      Comprar Agora
+                    </button>
+                  )}
+                </div>
+              </div>
+
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* --- ECRÃ INTEIRO DAS IMAGENS (LIGHTBOX) --- */}
+      {isLightboxOpen && figurinoDetalhe && (() => {
+        const totalFotos = figurinoDetalhe.fotos?.length || 0;
+        const idxImg = indicesImagens[figurinoDetalhe.id_venda] || 0;
+
+        return (
+          <div className="modal-overlay" style={{ zIndex: 3000, background: 'rgba(0,0,0,0.95)' }} onClick={() => setIsLightboxOpen(false)}>
+            <button 
+              style={{ position: 'absolute', top: '20px', right: '30px', background: 'none', border: 'none', color: 'white', fontSize: '3rem', cursor: 'pointer' }} 
+              onClick={() => setIsLightboxOpen(false)}
+            >
+              &times;
+            </button>
+
+            {totalFotos > 1 && (
+              <button 
+                style={{ position: 'absolute', left: '30px', top: '50%', transform: 'translateY(-50%)', background: 'rgba(255,255,255,0.1)', color: 'white', border: 'none', borderRadius: '50%', width: '60px', height: '60px', fontSize: '2.5rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background 0.3s' }}
+                onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.3)'}
+                onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
+                onClick={(e) => { e.stopPropagation(); imagemAnterior(e, figurinoDetalhe.id_venda, totalFotos); }}
+              >
+                ‹
+              </button>
+            )}
+
+            <img 
+              src={figurinoDetalhe.fotos[idxImg]} 
+              style={{ maxWidth: '90%', maxHeight: '90vh', objectFit: 'contain', userSelect: 'none' }} 
+              alt="Fullscreen" 
+              onClick={(e) => e.stopPropagation()} 
+            />
+
+            {totalFotos > 1 && (
+              <button 
+                style={{ position: 'absolute', right: '30px', top: '50%', transform: 'translateY(-50%)', background: 'rgba(255,255,255,0.1)', color: 'white', border: 'none', borderRadius: '50%', width: '60px', height: '60px', fontSize: '2.5rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background 0.3s' }}
+                onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.3)'}
+                onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
+                onClick={(e) => { e.stopPropagation(); proximaImagem(e, figurinoDetalhe.id_venda, totalFotos); }}
+              >
+                ›
+              </button>
+            )}
+          </div>
+        );
+      })()}
 
       <footer className="main-footer">
         <div className="footer-container">
@@ -554,7 +809,7 @@ export default function VendaFigurinos({ irParaLanding, irParaEmprestimos, irPar
 
       {/* --- MODAL 1: VENDA --- */}
       {isModalOpen && (
-        <div className="modal-overlay">
+        <div className="modal-overlay" style={{ zIndex: 2002 }}>
           <div className="modal-content form-venda">
             <h2>Vender Figurino</h2>
             <form onSubmit={handleSubmeterVenda}>
@@ -624,7 +879,7 @@ export default function VendaFigurinos({ irParaLanding, irParaEmprestimos, irPar
 
       {/* --- MODAL 2: EDIÇÃO --- */}
       {isEditModalOpen && figurinoEmEdicao && (
-        <div className="modal-overlay">
+        <div className="modal-overlay" style={{ zIndex: 2002 }}>
           <div className="modal-content form-venda">
             <h2>Editar Figurino</h2>
             <form onSubmit={handleGuardarEdicao}>
@@ -686,28 +941,34 @@ export default function VendaFigurinos({ irParaLanding, irParaEmprestimos, irPar
         </div>
       )}
 
-      {/* --- MODAL 3: COMPRA --- */}
+      {/* --- MODAL 3: COMPRA (CLÁSSICO) --- */}
       {isCompraModalOpen && figurinoSelecionado && (
-        <div className="modal-overlay">
-          <div className="modal-content form-venda">
-            <h2>Confirmar Compra</h2>
+        <div className="modal-overlay" style={{ zIndex: 2010 }}>
+          <div className="modal-content form-venda" style={{ maxWidth: '450px', padding: '35px' }}>
+            <h2 style={{ marginBottom: '10px' }}>Confirmar Compra</h2>
+            <p style={{ color: '#8a8480', fontSize: '0.9rem', marginBottom: '25px' }}>
+              Estás prestes a adquirir: <strong>{figurinoSelecionado.nome_peca}</strong>
+            </p>
+
             <div className="resumo-compra">
               <p><strong>Item:</strong> {figurinoSelecionado.nome_peca}</p>
               {figurinoSelecionado.tamanho && <p><strong>Tamanho:</strong> {figurinoSelecionado.tamanho}</p>}
               <p><strong>Total:</strong> {Number(figurinoSelecionado.preco).toFixed(2)} €</p>
             </div>
+
             <form onSubmit={confirmarCompra}>
-              <div className="form-group">
-                <label>Método de Pagamento</label>
+              <div className="form-group" style={{ marginBottom: '30px' }}>
+                <label>Método de Pagamento a utilizar</label>
                 <select value={metodoPagamentoCompra} onChange={(e) => setMetodoPagamentoCompra(e.target.value)} required>
                   {figurinoSelecionado.metodos_aceites?.split(',').map(m => (
                     <option key={m} value={m}>{m}</option>
                   ))}
                 </select>
               </div>
-              <div className="modal-actions">
-                <button type="button" className="btn-text" onClick={() => setIsCompraModalOpen(false)}>Cancelar</button>
-                <button type="submit" className="btn-dark" disabled={isSubmitting}>{isSubmitting ? 'A Processar...' : 'Confirmar'}</button>
+              
+              <div style={{ display: 'flex', gap: '15px' }}>
+                <button type="button" className="btn-outline" style={{ flex: 1 }} onClick={() => setIsCompraModalOpen(false)}>Cancelar</button>
+                <button type="submit" className="btn-dark" style={{ flex: 1.5 }} disabled={isSubmitting}>{isSubmitting ? 'A Processar...' : 'Confirmar Compra'}</button>
               </div>
             </form>
           </div>
@@ -716,8 +977,8 @@ export default function VendaFigurinos({ irParaLanding, irParaEmprestimos, irPar
 
       {customAlert.show && (
         <div className="modal-overlay" style={{ zIndex: 9999 }}>
-          <div className="modal-content alert-box">
-            <p className="alert-message">{customAlert.message}</p>
+          <div className="modal-content alert-box" style={{ maxWidth: '350px' }}>
+            <p className="alert-message" style={{ fontSize: '1rem', marginBottom: '25px' }}>{customAlert.message}</p>
             <div className="alert-buttons">
               {customAlert.type === 'confirm' && (
                 <button className="btn-outline btn-sm" onClick={fecharAlerta}>Cancelar</button>

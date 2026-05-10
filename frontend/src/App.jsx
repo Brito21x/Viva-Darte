@@ -78,7 +78,7 @@ function AppRoutes() {
         />
       } />
 
-      <Route path="/admin" element={<AdminDashboard />} />
+      <Route path="/admin" element={<AdminDashboard irParaLanding={nav.landing} />} />
     </Routes>
   );
 }

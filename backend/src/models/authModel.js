@@ -166,7 +166,7 @@ async function criarUtilizador({ nome, email, passwordHash, telefone, nomePerfil
 /**
  * Atualiza todos os dados submetidos pelo Administrador para um utilizador específico.
  */
-async function atualizarUtilizadorCompleto(id, { nome, email, telefone, passwordHash, nomePerfil, idsModalidades, nomeAluno, dataNascimentoAluno, dataNascimentoAluno}) {
+async function atualizarUtilizadorCompleto(id, { nome, email, telefone, passwordHash, nomePerfil, idsModalidades, nomeAluno, dataNascimentoAluno}) {
     const pool = await poolPromise;
     const transaction = pool.transaction();
     await transaction.begin();

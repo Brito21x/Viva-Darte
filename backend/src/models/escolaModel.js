@@ -1,52 +1,52 @@
 /**
  * @fileoverview Modelo de Dados para a Estrutura da Escola.
- * Responsável por todas as interações com a base de dados SQL Server referentes 
- * ao catálogo de recursos fixos da escola: Anos Letivos, Modalidades (disciplinas), 
+ * Responsável por todas as interações com a base de dados SQL Server referentes
+ * ao catálogo de recursos fixos da escola: Anos Letivos, Modalidades (disciplinas),
  * Salas, Professores, respetivas compatibilidades/associações e horários regulares.
  */
 
-const { poolPromise } = require('../config/db');
-const sql = require('mssql');
- 
+const { poolPromise } = require("../config/db");
+const sql = require("mssql");
+
 // ============================================================================
 // 1. GESTÃO DO CALENDÁRIO LETIVO
 // ============================================================================
- 
+
 /**
  * Obtém a lista de anos letivos registados na base de dados.
  * A listagem é devolvida por ordem decrescente (do mais recente para o mais antigo).
  * @returns {Promise<Array>} Array de objetos com os anos letivos.
  */
 async function getAnosLetivos() {
-    try {
-        const pool = await poolPromise;
-        const query = `
+  try {
+    const pool = await poolPromise;
+    const query = `
             SELECT 
                 id_ano_letivo, 
                 ano 
             FROM ANO_LETIVO
             ORDER BY ano DESC;
         `;
-        const result = await pool.request().query(query);
-        return result.recordset;
-    } catch (error) {
-        console.error('Erro no Modelo (getAnosLetivos):', error);
-        throw error;
-    }
+    const result = await pool.request().query(query);
+    return result.recordset;
+  } catch (error) {
+    console.error("Erro no Modelo (getAnosLetivos):", error);
+    throw error;
+  }
 }
- 
+
 // ============================================================================
 // 2. CATÁLOGO DE RECURSOS (SALAS E MODALIDADES)
 // ============================================================================
- 
+
 /**
  * Obtém a lista de todas as modalidades (disciplinas ou instrumentos) ativas no sistema.
  * @returns {Promise<Array>} Array de modalidades ordenadas alfabeticamente.
  */
 async function getModalidadesAtivas() {
-    try {
-        const pool = await poolPromise;
-        const query = `
+  try {
+    const pool = await poolPromise;
+    const query = `
             SELECT 
                 id_modalidade, 
                 nome 
@@ -54,22 +54,22 @@ async function getModalidadesAtivas() {
             WHERE ativo = 1
             ORDER BY nome ASC;
         `;
-        const result = await pool.request().query(query);
-        return result.recordset;
-    } catch (error) {
-        console.error('Erro no Modelo (getModalidadesAtivas):', error);
-        throw error;
-    }
+    const result = await pool.request().query(query);
+    return result.recordset;
+  } catch (error) {
+    console.error("Erro no Modelo (getModalidadesAtivas):", error);
+    throw error;
+  }
 }
- 
+
 /**
  * Obtém o catálogo de salas físicas disponíveis na escola e as respetivas capacidades máximas.
  * @returns {Promise<Array>} Array de salas ordenadas alfabeticamente.
  */
 async function getSalas() {
-    try {
-        const pool = await poolPromise;
-        const query = `
+  try {
+    const pool = await poolPromise;
+    const query = `
             SELECT 
                 id_sala, 
                 nome, 
@@ -77,27 +77,27 @@ async function getSalas() {
             FROM SALA
             ORDER BY nome ASC;
         `;
-        const result = await pool.request().query(query);
-        return result.recordset;
-    } catch (error) {
-        console.error('Erro no Modelo (getSalas):', error);
-        throw error;
-    }
+    const result = await pool.request().query(query);
+    return result.recordset;
+  } catch (error) {
+    console.error("Erro no Modelo (getSalas):", error);
+    throw error;
+  }
 }
- 
+
 // ============================================================================
 // 3. MATRIZES DE CRUZAMENTO (REGRAS FÍSICAS E HUMANAS)
 // ============================================================================
- 
+
 /**
  * Retorna o mapa geral de quais salas estão equipadas e são compatíveis com quais modalidades.
  * Essencial para o sistema validar se uma aula pode ou não decorrer num determinado espaço físico.
  * @returns {Promise<Array>} Array detalhado das compatibilidades Sala ↔ Modalidade.
  */
 async function getCompatibilidadeSalasModalidades() {
-    try {
-        const pool = await poolPromise;
-        const query = `
+  try {
+    const pool = await poolPromise;
+    const query = `
             SELECT 
                 s.id_sala,
                 s.nome AS nome_sala,
@@ -110,23 +110,26 @@ async function getCompatibilidadeSalasModalidades() {
             WHERE m.ativo = 1
             ORDER BY s.nome ASC, m.nome ASC;
         `;
-        const result = await pool.request().query(query);
-        return result.recordset;
-    } catch (error) {
-        console.error('Erro no Modelo (getCompatibilidadeSalasModalidades):', error);
-        throw error;
-    }
+    const result = await pool.request().query(query);
+    return result.recordset;
+  } catch (error) {
+    console.error(
+      "Erro no Modelo (getCompatibilidadeSalasModalidades):",
+      error,
+    );
+    throw error;
+  }
 }
- 
+
 /**
  * Retorna especificamente as salas compatíveis com uma dada modalidade.
  * Usado para popular a dropdown de salas na interface de aprovação de pedidos de Coaching.
  * @param {number} idModalidade - O ID da modalidade a verificar.
  */
 async function getSalasPorModalidade(idModalidade) {
-    try {
-        const pool = await poolPromise;
-        const query = `
+  try {
+    const pool = await poolPromise;
+    const query = `
             SELECT 
                 s.id_sala,
                 s.nome AS nome_sala,
@@ -136,24 +139,25 @@ async function getSalasPorModalidade(idModalidade) {
             WHERE sm.MODALIDADEid_modalidade = @IdModalidade
             ORDER BY s.nome ASC;
         `;
-        const result = await pool.request()
-            .input('IdModalidade', sql.Int, idModalidade)
-            .query(query);
-        return result.recordset;
-    } catch (error) {
-        console.error('Erro no Modelo (getSalasPorModalidade):', error);
-        throw error;
-    }
+    const result = await pool
+      .request()
+      .input("IdModalidade", sql.Int, idModalidade)
+      .query(query);
+    return result.recordset;
+  } catch (error) {
+    console.error("Erro no Modelo (getSalasPorModalidade):", error);
+    throw error;
+  }
 }
- 
+
 /**
  * Retorna as modalidades que um professor específico está apto e autorizado a lecionar.
  * @param {number} idProfessor - O ID do utilizador (professor).
  */
 async function getModalidadesPorProfessor(idProfessor) {
-    try {
-        const pool = await poolPromise;
-        const query = `
+  try {
+    const pool = await poolPromise;
+    const query = `
             SELECT 
                 m.id_modalidade,
                 m.nome AS modalidade
@@ -165,24 +169,25 @@ async function getModalidadesPorProfessor(idProfessor) {
               AND m.ativo = 1
             ORDER BY m.nome ASC;
         `;
-        const result = await pool.request()
-            .input('IdProfessor', sql.Int, idProfessor)
-            .query(query);
-        return result.recordset;
-    } catch (error) {
-        console.error('Erro no Modelo (getModalidadesPorProfessor):', error);
-        throw error;
-    }
+    const result = await pool
+      .request()
+      .input("IdProfessor", sql.Int, idProfessor)
+      .query(query);
+    return result.recordset;
+  } catch (error) {
+    console.error("Erro no Modelo (getModalidadesPorProfessor):", error);
+    throw error;
+  }
 }
- 
+
 /**
  * Lista todos os utilizadores ativos no sistema que possuem o perfil de "Professor".
  * Utilizado para os painéis de administração e associação de modalidades (US11).
  */
 async function getProfessoresAtivos() {
-    try {
-        const pool = await poolPromise;
-        const query = `
+  try {
+    const pool = await poolPromise;
+    const query = `
             SELECT DISTINCT
                 u.id_utilizador AS id_professor,
                 u.nome AS nome_professor
@@ -193,12 +198,12 @@ async function getProfessoresAtivos() {
               AND u.ativo = 1
             ORDER BY u.nome ASC;
         `;
-        const result = await pool.request().query(query);
-        return result.recordset;
-    } catch (error) {
-        console.error('Erro no Modelo (getProfessoresAtivos):', error);
-        throw error;
-    }
+    const result = await pool.request().query(query);
+    return result.recordset;
+  } catch (error) {
+    console.error("Erro no Modelo (getProfessoresAtivos):", error);
+    throw error;
+  }
 }
 
 /**
@@ -207,9 +212,9 @@ async function getProfessoresAtivos() {
  * @param {number} idModalidade - A modalidade escolhida (ex: pelo Encarregado de Educação).
  */
 async function getProfessoresPorModalidade(idModalidade) {
-    try {
-        const pool = await poolPromise;
-        const query = `
+  try {
+    const pool = await poolPromise;
+    const query = `
             SELECT 
                 u.id_utilizador AS id_professor,
                 u.nome AS nome_professor
@@ -223,28 +228,28 @@ async function getProfessoresPorModalidade(idModalidade) {
               AND u.ativo = 1
             ORDER BY u.nome ASC;
         `;
-        const result = await pool.request()
-            .input('IdModalidade', sql.Int, idModalidade)
-            .query(query);
-        return result.recordset;
-    } catch (error) {
-        console.error('Erro no Modelo (getProfessoresPorModalidade):', error);
-        throw error;
-    }
+    const result = await pool
+      .request()
+      .input("IdModalidade", sql.Int, idModalidade)
+      .query(query);
+    return result.recordset;
+  } catch (error) {
+    console.error("Erro no Modelo (getProfessoresPorModalidade):", error);
+    throw error;
+  }
 }
- 
+
 /**
  * Associa oficialmente um professor a uma modalidade, permitindo que ele passe a lecioná-la. (US11 / RF13)
  * Utiliza o comando 'MERGE' (Upsert) para garantir de forma segura que não há inserção de duplicados na BD.
  */
 async function associarProfessorModalidade(idProfessor, idModalidade) {
-    try {
-        const pool = await poolPromise;
-        const result = await pool
-            .request()
-            .input('IdProfessor', sql.Int, idProfessor)
-            .input('IdModalidade', sql.Int, idModalidade)
-            .query(`
+  try {
+    const pool = await poolPromise;
+    const result = await pool
+      .request()
+      .input("IdProfessor", sql.Int, idProfessor)
+      .input("IdModalidade", sql.Int, idModalidade).query(`
                 /* O MERGE verifica se a associação já existe. Se não existir, faz o INSERT. */
                 MERGE PROFESSOR_MODALIDADE AS t
                 USING (SELECT @IdProfessor AS id_p, @IdModalidade AS id_m) AS s
@@ -254,66 +259,66 @@ async function associarProfessorModalidade(idProfessor, idModalidade) {
                     VALUES (s.id_p, s.id_m);
             `);
 
-        // Extrai o número de linhas afetadas de forma segura (lidando com diferentes respostas do driver mssql)
-        const ra = result.rowsAffected || [];
-        const totalAfetadas = (Array.isArray(ra) ? ra : [ra]).reduce(
-            (acc, n) => acc + (Number(n) || 0),
-            0
-        );
-        
-        // Se 0 linhas foram afetadas, a regra WHEN NOT MATCHED falhou (o registo já lá estava)
-        if (totalAfetadas < 1) {
-            throw new Error('Este professor já está associado a esta modalidade.');
-        }
+    // Extrai o número de linhas afetadas de forma segura (lidando com diferentes respostas do driver mssql)
+    const ra = result.rowsAffected || [];
+    const totalAfetadas = (Array.isArray(ra) ? ra : [ra]).reduce(
+      (acc, n) => acc + (Number(n) || 0),
+      0,
+    );
 
-        return true;
-    } catch (error) {
-        console.error('Erro no Modelo (associarProfessorModalidade):', error);
-        throw error;
+    // Se 0 linhas foram afetadas, a regra WHEN NOT MATCHED falhou (o registo já lá estava)
+    if (totalAfetadas < 1) {
+      throw new Error("Este professor já está associado a esta modalidade.");
     }
+
+    return true;
+  } catch (error) {
+    console.error("Erro no Modelo (associarProfessorModalidade):", error);
+    throw error;
+  }
 }
- 
+
 /**
  * Remove a autorização de lecionação de uma modalidade para um determinado professor.
  */
 async function removerProfessorModalidade(idProfessor, idModalidade) {
-    try {
-        const pool = await poolPromise;
-        const result = await pool.request()
-            .input('IdProfessor', sql.Int, idProfessor)
-            .input('IdModalidade', sql.Int, idModalidade)
-            .query(`
+  try {
+    const pool = await poolPromise;
+    const result = await pool
+      .request()
+      .input("IdProfessor", sql.Int, idProfessor)
+      .input("IdModalidade", sql.Int, idModalidade).query(`
                 DELETE FROM PROFESSOR_MODALIDADE 
                 WHERE UTILIZADORid_utilizador = @IdProfessor 
                   AND MODALIDADEid_modalidade = @IdModalidade;
             `);
- 
-        return result.rowsAffected[0] > 0;
-    } catch (error) {
-        console.error('Erro no Modelo (removerProfessorModalidade):', error);
-        throw error;
-    }
+
+    return result.rowsAffected[0] > 0;
+  } catch (error) {
+    console.error("Erro no Modelo (removerProfessorModalidade):", error);
+    throw error;
+  }
 }
- 
+
 /**
  * Extrai a grelha de horários de aulas regulares (turmas fixas da escola).
  * Pode ser filtrada opcionalmente por um ano letivo específico.
  * @param {number|null} idAnoLetivo - O ID do ano letivo (opcional).
  */
 async function getHorariosPorAnoLetivo(idAnoLetivo = null) {
-    try {
-        const pool = await poolPromise;
-        const request = pool.request();
+  try {
+    const pool = await poolPromise;
+    const request = pool.request();
 
-        let filtroAno = '';
-        
-        // Constrói dinamicamente a query consoante a presença do parâmetro
-        if (idAnoLetivo != null && !Number.isNaN(Number(idAnoLetivo))) {
-            filtroAno = 'AND h.ANO_LETIVOid_ano_letivo = @IdAnoLetivo';
-            request.input('IdAnoLetivo', sql.Int, parseInt(idAnoLetivo, 10));
-        }
+    let filtroAno = "";
 
-        const query = `
+    // Constrói dinamicamente a query consoante a presença do parâmetro
+    if (idAnoLetivo != null && !Number.isNaN(Number(idAnoLetivo))) {
+      filtroAno = "AND h.ANO_LETIVOid_ano_letivo = @IdAnoLetivo";
+      request.input("IdAnoLetivo", sql.Int, parseInt(idAnoLetivo, 10));
+    }
+
+    const query = `
             SELECT 
                 h.id_horario,
                 h.dia_semana,
@@ -338,25 +343,25 @@ async function getHorariosPorAnoLetivo(idAnoLetivo = null) {
             ORDER BY h.dia_semana, h.hora_inicio;
         `;
 
-        const result = await request.query(query);
-        return result.recordset;
-    } catch (error) {
-        console.error('Erro no Modelo (getHorariosPorAnoLetivo):', error);
-        throw error;
-    }
+    const result = await request.query(query);
+    return result.recordset;
+  } catch (error) {
+    console.error("Erro no Modelo (getHorariosPorAnoLetivo):", error);
+    throw error;
+  }
 }
 
 // Exportação dos métodos
 module.exports = {
-    getAnosLetivos,
-    getModalidadesAtivas,
-    getSalas,
-    getCompatibilidadeSalasModalidades,
-    getSalasPorModalidade,
-    getModalidadesPorProfessor,
-    getProfessoresAtivos,
-    getProfessoresPorModalidade,
-    associarProfessorModalidade,
-    removerProfessorModalidade,
-    getHorariosPorAnoLetivo
+  getAnosLetivos,
+  getModalidadesAtivas,
+  getSalas,
+  getCompatibilidadeSalasModalidades,
+  getSalasPorModalidade,
+  getModalidadesPorProfessor,
+  getProfessoresAtivos,
+  getProfessoresPorModalidade,
+  associarProfessorModalidade,
+  removerProfessorModalidade,
+  getHorariosPorAnoLetivo,
 };

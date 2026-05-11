@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import './LoginRegisto.css'; 
+import ReCAPTCHA from 'react-google-recaptcha';
 
 export default function RecoverPassword({ irParaLogin, irParaLanding }) {
   const [etapa, setEtapa] = useState(1); 
@@ -10,6 +11,10 @@ export default function RecoverPassword({ irParaLogin, irParaLanding }) {
   const [tokenGerado, setTokenGerado] = useState(''); 
   
   const [novaPassword, setNovaPassword] = useState('');
+
+  // Estados e ref para o reCAPTCHA
+  const [captchaToken, setCaptchaToken] = useState(null);
+  const recaptchaRef = useRef(null);
 
   const [customAlert, setCustomAlert] = useState({ show: false, message: '', redirectOnClose: false });
 
@@ -28,27 +33,40 @@ export default function RecoverPassword({ irParaLogin, irParaLanding }) {
     setCustomAlert({ show: false, message: '', redirectOnClose: false });
   };
 
+  const onCaptchaChange = (token) => {
+    setCaptchaToken(token);
+  };
+
   const lidarComEmail = async (e) => {
     e.preventDefault();
+
+    if (!captchaToken) {
+        mostrarAlerta("Por favor, confirma que não és um robô.");
+        return;
+    }
+
     try {
       const response = await fetch(`http://localhost:3000/api/auth/recuperar-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email })
+        body: JSON.stringify({ email, captchaToken }) // Adicionado o captchaToken
       });
 
       const resultado = await response.json();
 
       if (response.ok) {
         setTokenGerado(resultado.token);
-        
         setEtapa(2);
         mostrarAlerta(`📧 SIMULAÇÃO DE EMAIL: O teu código de segurança é: ${resultado.token}`);
       } else {
         mostrarAlerta(resultado.mensagem || "Erro ao solicitar recuperação.");
+        if (recaptchaRef.current) recaptchaRef.current.reset();
+        setCaptchaToken(null);
       }
     } catch (error) {
       mostrarAlerta("Erro ao ligar ao servidor. Verifica a tua ligação.");
+      if (recaptchaRef.current) recaptchaRef.current.reset();
+      setCaptchaToken(null);
     }
   };
 
@@ -120,6 +138,15 @@ export default function RecoverPassword({ irParaLogin, irParaLanding }) {
                 <label>O teu Email</label>
                 <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="exemplo@email.com" required />
               </div>
+
+              <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '15px', marginTop: '15px', transform: 'scale(0.90)', transformOrigin: 'center' }}>
+                  <ReCAPTCHA
+                      ref={recaptchaRef}
+                      sitekey="6LesTOIsAAAAACw0jFqhrje-SuCVR_HNRo3WhD2e" 
+                      onChange={onCaptchaChange}
+                  />
+              </div>
+
               <button type="submit" className="btn-login">Enviar Código</button>
             </form>
           )}

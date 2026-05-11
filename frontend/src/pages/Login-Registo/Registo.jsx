@@ -130,7 +130,7 @@ export default function Registo({ irParaLogin, irParaLanding }) {
             {tipo === 'EE' && (
               <div className="input-row" style={{ display: 'flex', gap: '15px', marginBottom: '15px' }}>
                 <div className="input-container" style={{ flex: 2, marginBottom: 0 }}>
-                  <label>Nome do Educando *</label>
+                  <label>Nome do Educando </label>
                   <input 
                     type="text" 
                     placeholder="Nome completo do aluno" 
@@ -140,7 +140,7 @@ export default function Registo({ irParaLogin, irParaLanding }) {
                   />
                 </div>
                 <div className="input-container" style={{ flex: 1, marginBottom: 0 }}>
-                  <label>Data Nascimento *</label>
+                  <label>Data Nascimento </label>
                   <input 
                     type="date" 
                     value={dataNascimentoAluno} 

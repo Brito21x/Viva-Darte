@@ -3,18 +3,19 @@ export function parseDateParts(dataValor) {
   if (!dataValor) return null;
   const s =
     dataValor instanceof Date
-      ? `${dataValor.getFullYear()}-${String(dataValor.getMonth() + 1).padStart(2, '0')}-${String(
-          dataValor.getDate()
-        ).padStart(2, '0')}`
-      : String(dataValor).split('T')[0];
-  const [y, m, d] = s.split('-').map(Number);
+      ? `${dataValor.getFullYear()}-${String(dataValor.getMonth() + 1).padStart(2, "0")}-${String(
+          dataValor.getDate(),
+        ).padStart(2, "0")}`
+      : String(dataValor).split("T")[0];
+  const [y, m, d] = s.split("-").map(Number);
   if (!y || !m || !d) return null;
   return new Date(y, m - 1, d);
 }
 
 /** Início da aula no fuso local (data_aula + hora_inicio). */
 export function instanteInicioCoaching({ data_aula, hora_inicio }) {
-  const d = data_aula instanceof Date ? new Date(data_aula) : parseDateParts(data_aula);
+  const d =
+    data_aula instanceof Date ? new Date(data_aula) : parseDateParts(data_aula);
   if (!d) return null;
   let hh = 0;
   let mm = 0;
@@ -45,12 +46,12 @@ export function instanteFimCoaching(cab) {
 
 /** Aula já terminou e o coaching permite validação pelo EE/prof (Agendado ou Confirmado). */
 export function podeMostrarValidacaoRealizacao(row) {
-  const estado = String(row.estado_coaching || row.estado || '').trim();
-  if (!['Agendado', 'Confirmado'].includes(estado)) return false;
+  const estado = String(row.estado_coaching || row.estado || "").trim();
+  if (!["Agendado", "Confirmado"].includes(estado)) return false;
   const fim = instanteFimCoaching({
     data_aula: row.data_aula_coaching ?? row.data_aula,
     hora_inicio: row.hora_inicio_coaching ?? row.hora_inicio,
-    duracao_minutos: row.duracao_minutos
+    duracao_minutos: row.duracao_minutos,
   });
   if (!fim) return false;
   return fim.getTime() <= Date.now();

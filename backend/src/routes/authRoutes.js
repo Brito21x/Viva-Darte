@@ -121,5 +121,9 @@ router.put(
   authController.atualizarModalidades,
 );
 
+router.get("/me/alunos", autenticar, authController.getMeusAlunos);
+
+router.post("/me/alunos", autenticar, authController.criarMeuAluno);
+
 // Exportação do router para ser consumido no entry point da aplicação (ex: app.js)
 module.exports = router;

@@ -131,6 +131,12 @@ router.get(
   coachingController.getPedidosPendentes,
 );
 
+router.get(
+  "/pedidos/meus",
+  autorizar("EE"),
+  coachingController.listarMeusPedidosCoaching,
+);
+
 /**
  * [PROTEGIDO: Professor] Lista de pedidos pendentes em que o professor autenticado
  * foi especificamente solicitado pelo Encarregado de Educação.

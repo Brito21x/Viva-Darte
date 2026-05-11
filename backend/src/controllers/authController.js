@@ -8,12 +8,6 @@ const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
 const utilizadorModel = require("../models/authModel");
 
-/**
- * Autentica um utilizador no sistema e gera um token JWT.
- * @param {Object} req - Objeto de requisição do Express.
- * @param {Object} res - Objeto de resposta do Express.
- * @param {Function} next - Middleware seguinte para tratamento de erros.
- */
 async function login(req, res, next) {
   try {
     const { email, password, tipo, perfil, captchaToken } = req.body;
@@ -33,11 +27,9 @@ async function login(req, res, next) {
       const recaptchaData = await recaptchaResponse.json();
 
       if (!recaptchaData.success) {
-        return res
-          .status(400)
-          .json({
-            mensagem: "A validação do reCAPTCHA falhou. Tenta novamente.",
-          });
+        return res.status(400).json({
+          mensagem: "A validação do reCAPTCHA falhou. Tenta novamente.",
+        });
       }
     }
 
@@ -50,11 +42,9 @@ async function login(req, res, next) {
       return res.status(401).json({ mensagem: "Credenciais inválidas." });
 
     if (!utilizador.ativo) {
-      return res
-        .status(403)
-        .json({
-          mensagem: "Conta desativada. Aguarde a aprovação da administração.",
-        });
+      return res.status(403).json({
+        mensagem: "Conta desativada. Aguarde a aprovação da administração.",
+      });
     }
 
     const passwordCorreta = await bcrypt.compare(password, utilizador.password);
@@ -89,12 +79,7 @@ async function login(req, res, next) {
         .status(403)
         .json({ mensagem: "Acesso negado. Nenhum perfil associado à conta." });
 
-    // Correção do Bug de permissões cruzadas
     if (!temPerfil) {
-      const perfilNome =
-        tipoUp === "PROF" || tipoUp === "PROFESSOR"
-          ? "Professor"
-          : "Encarregado de Educação";
       return res.status(403).json({ mensagem: `Acesso negado.` });
     }
 
@@ -139,16 +124,10 @@ async function login(req, res, next) {
   }
 }
 
-/**
- * Termina a sessão do utilizador (no lado do cliente, normalmente o token é descartado).
- */
 async function logout(req, res) {
   return res.status(200).json({ mensagem: "Sessão terminada com sucesso." });
 }
 
-/**
- * Solicita a recuperação da palavra-passe, gerando um token seguro enviado (ou para envio) ao utilizador.
- */
 async function solicitarRecuperacaoPassword(req, res, next) {
   try {
     const { email, captchaToken } = req.body;
@@ -165,23 +144,19 @@ async function solicitarRecuperacaoPassword(req, res, next) {
     const recaptchaData = await recaptchaResponse.json();
 
     if (!recaptchaData.success) {
-      return res
-        .status(400)
-        .json({
-          mensagem: "A validação do reCAPTCHA falhou. Tenta novamente.",
-        });
+      return res.status(400).json({
+        mensagem: "A validação do reCAPTCHA falhou. Tenta novamente.",
+      });
     }
 
     const utilizador = await utilizadorModel.getUtilizadorByEmail(email);
 
-    // Apenas utilizadores existentes e ativos podem recuperar a palavra-passe
     if (!utilizador || !utilizador.ativo) {
       return res
         .status(404)
         .json({ mensagem: "Email não encontrado ou inativo." });
     }
 
-    // Gera um token hexadecimal de 8 caracteres
     const token = crypto.randomBytes(4).toString("hex").toUpperCase();
     await utilizadorModel.guardarTokenRecuperacao(
       utilizador.id_utilizador,
@@ -194,9 +169,6 @@ async function solicitarRecuperacaoPassword(req, res, next) {
   }
 }
 
-/**
- * Redefine a palavra-passe utilizando o token de recuperação previamente gerado.
- */
 async function redefinirPassword(req, res, next) {
   try {
     const { token, novaPassword } = req.body;
@@ -206,12 +178,10 @@ async function redefinirPassword(req, res, next) {
         .json({ mensagem: "Token e password obrigatórios." });
     }
 
-    // Valida se o token existe e ainda é válido
     const tokenValido = await utilizadorModel.validarTokenRecuperacao(token);
     if (!tokenValido)
       return res.status(400).json({ mensagem: "Token inválido." });
 
-    // Aplica hash à nova palavra-passe antes de guardar
     const hash = await bcrypt.hash(novaPassword, 10);
     await utilizadorModel.atualizarPassword(
       tokenValido.UTILIZADORid_utilizador,
@@ -225,12 +195,8 @@ async function redefinirPassword(req, res, next) {
   }
 }
 
-/**
- * Regista um novo utilizador no sistema. O utilizador fica inativo até aprovação da administração.
- */
 async function register(req, res, next) {
   try {
-    // 1. Desestruturar o captchaToken
     const {
       nome,
       email,
@@ -246,11 +212,9 @@ async function register(req, res, next) {
       return res.status(400).json({ error: "Campos em falta." });
 
     if (tipo === "EE" && (!nomeAluno || !dataNascimentoAluno)) {
-      return res
-        .status(400)
-        .json({
-          error: "Nome e data de nascimento do aluno são obrigatórios.",
-        });
+      return res.status(400).json({
+        error: "Nome e data de nascimento do aluno são obrigatórios.",
+      });
     }
 
     if (!captchaToken) {
@@ -258,7 +222,6 @@ async function register(req, res, next) {
     }
 
     const chaveSecreta = process.env.RECAPTCHA_SECRET_KEY;
-
     const googleVerifyUrl = `https://www.google.com/recaptcha/api/siteverify?secret=${chaveSecreta}&response=${captchaToken}`;
     const recaptchaResponse = await fetch(googleVerifyUrl, { method: "POST" });
     const recaptchaData = await recaptchaResponse.json();
@@ -293,9 +256,6 @@ async function register(req, res, next) {
   }
 }
 
-/**
- * Lista todos os utilizadores registados no sistema.
- */
 async function listarUtilizadores(req, res, next) {
   try {
     const lista = await utilizadorModel.listarTodosUtilizadores();
@@ -305,20 +265,23 @@ async function listarUtilizadores(req, res, next) {
   }
 }
 
-/**
- * Permite a um Administrador criar um utilizador, definindo imediatamente o seu estado como ativo e associando modalidades.
- */
-async function criarUtilizadorAdmin(req, res, next) {
+async function adminCriarUtilizador(req, res, next) {
   try {
-    const { nome, email, telefone, password, tipo, idsModalidades } = req.body;
-
+    // Adicionados dados do Aluno para salvar quando o admin cria um EE
+    const {
+      nome,
+      email,
+      telefone,
+      password,
+      tipo,
+      idsModalidades,
+      nomeAluno,
+      dataNascimentoAluno,
+    } = req.body;
     if (!nome || !email || !password || !tipo) {
-      return res
-        .status(400)
-        .json({
-          mensagem:
-            "Nome, email, password e tipo (PROF ou EE) são obrigatórios.",
-        });
+      return res.status(400).json({
+        mensagem: "Nome, email, password e tipo (PROF ou EE) são obrigatórios.",
+      });
     }
 
     let nomePerfil = "Encarregado";
@@ -326,7 +289,6 @@ async function criarUtilizadorAdmin(req, res, next) {
     if (tipo === "ADMIN") nomePerfil = "Admin";
 
     let idsModalidadesProf;
-    // Validação estrita: Professores devem ter obrigatoriamente modalidades associadas
     if (tipo === "PROF") {
       idsModalidadesProf = Array.isArray(idsModalidades) ? idsModalidades : [];
       if (idsModalidadesProf.length === 0) {
@@ -339,7 +301,6 @@ async function criarUtilizadorAdmin(req, res, next) {
 
     const passwordHash = await bcrypt.hash(password, 10);
 
-    // Cria o utilizador já com estado ativo = 1
     const novo = await utilizadorModel.criarUtilizador({
       nome,
       email,
@@ -348,13 +309,14 @@ async function criarUtilizadorAdmin(req, res, next) {
       nomePerfil,
       ativo: 1,
       idsModalidades: idsModalidadesProf,
+      nomeAluno,
+      dataNascimentoAluno,
     });
 
     return res
       .status(201)
       .json({ mensagem: "Utilizador criado.", utilizador: novo });
   } catch (error) {
-    // Tratamento de erros específicos vindos do model
     if (error.message === "Já existe um utilizador com este email.") {
       return res.status(400).json({ mensagem: error.message });
     }
@@ -368,9 +330,6 @@ async function criarUtilizadorAdmin(req, res, next) {
   }
 }
 
-/**
- * Edita os dados de um utilizador existente.
- */
 async function editarUtilizador(req, res, next) {
   try {
     const id = parseInt(req.params.id, 10);
@@ -378,6 +337,7 @@ async function editarUtilizador(req, res, next) {
       return res.status(400).json({ mensagem: "ID inválido." });
     }
 
+    // O Frontend estava a enviar estes 2 campos, mas não estavam a ser lidos aqui. Corrigido!
     const {
       nome,
       email,
@@ -386,19 +346,20 @@ async function editarUtilizador(req, res, next) {
       nomePerfil,
       tipo,
       idsModalidades,
+      nomeAluno,
+      dataNascimentoAluno,
     } = req.body;
+
     if (!nome) {
       return res.status(400).json({ mensagem: "Nome é obrigatório." });
     }
 
-    // Determinação do perfil final com base nos inputs recebidos
     let perfilFinal = nomePerfil;
     if (!perfilFinal && tipo === "PROF") perfilFinal = "Professor";
     if (!perfilFinal && tipo === "ADMIN") perfilFinal = "Admin";
     if (!perfilFinal && tipo === "EE") perfilFinal = "Encarregado";
 
     let passwordHash = null;
-    // Apenas aplica hash e atualiza a password se uma nova for fornecida
     if (password && password.trim() !== "") {
       passwordHash = await bcrypt.hash(password, 10);
     }
@@ -410,6 +371,8 @@ async function editarUtilizador(req, res, next) {
       passwordHash,
       nomePerfil: perfilFinal,
       idsModalidades,
+      nomeAluno, // Agora é passado para o Model
+      dataNascimentoAluno, // Agora é passado para o Model
     });
 
     if (!ok) {
@@ -421,9 +384,6 @@ async function editarUtilizador(req, res, next) {
   }
 }
 
-/**
- * Altera o estado (ativo/inativo) de um utilizador.
- */
 async function alterarEstado(req, res, next) {
   try {
     const id = parseInt(req.params.id, 10);
@@ -454,9 +414,6 @@ async function alterarEstado(req, res, next) {
   }
 }
 
-/**
- * Ativa a conta de um utilizador (útil para aprovação de registos pendentes).
- */
 async function ativarUtilizador(req, res, next) {
   try {
     const { id } = req.params;
@@ -476,9 +433,6 @@ async function ativarUtilizador(req, res, next) {
   }
 }
 
-/**
- * Desativa a conta de um utilizador, revogando o seu acesso ao sistema.
- */
 async function desativarUtilizador(req, res, next) {
   try {
     const sucesso = await utilizadorModel.alterarEstadoUtilizador(
@@ -492,9 +446,6 @@ async function desativarUtilizador(req, res, next) {
   }
 }
 
-/**
- * Apaga permanentemente um utilizador do sistema.
- */
 async function eliminarUtilizador(req, res, next) {
   try {
     const sucesso = await utilizadorModel.apagarUtilizador(req.params.id);
@@ -528,60 +479,9 @@ async function atualizarModalidades(req, res, next) {
   }
 }
 
-/**
- * Criação de utilizador por um administrador.
- */
-async function adminCriarUtilizador(req, res, next) {
-  try {
-    const { nome, email, telefone, password, tipo, idsModalidades } = req.body;
-    if (!nome || !email || !password || !tipo) {
-      return res
-        .status(400)
-        .json({ mensagem: "Campos obrigatórios em falta." });
-    }
-
-    const passwordHash = await bcrypt.hash(password, 10);
-    let nomePerfil = "Encarregado";
-    if (tipo === "PROF") nomePerfil = "Professor";
-    if (tipo === "ADMIN") nomePerfil = "Admin";
-
-    if (
-      tipo === "PROF" &&
-      (!Array.isArray(idsModalidades) || idsModalidades.length === 0)
-    ) {
-      return res
-        .status(400)
-        .json({
-          mensagem: "Seleciona pelo menos uma modalidade para este professor.",
-        });
-    }
-
-    await utilizadorModel.criarUtilizador({
-      nome,
-      email,
-      passwordHash,
-      telefone,
-      nomePerfil,
-      ativo: 1,
-      idsModalidades,
-    });
-    return res
-      .status(201)
-      .json({ mensagem: "Utilizador criado e ativado com sucesso!" });
-  } catch (error) {
-    if (error.message.includes("Já existe"))
-      return res.status(400).json({ mensagem: error.message });
-    next(error);
-  }
-}
-
-/**
- * Edição Completa do Utilizador
- */
 async function editarUtilizadorCompleto(req, res, next) {
   try {
     const { id } = req.params;
-    // Adicionado: nomeAluno e dataNascimentoAluno no destructuring
     const {
       nome,
       email,
@@ -612,14 +512,11 @@ async function editarUtilizadorCompleto(req, res, next) {
       tipo === "PROF" &&
       (!Array.isArray(idsModalidades) || idsModalidades.length === 0)
     ) {
-      return res
-        .status(400)
-        .json({
-          mensagem: "Seleciona pelo menos uma modalidade para este professor.",
-        });
+      return res.status(400).json({
+        mensagem: "Seleciona pelo menos uma modalidade para este professor.",
+      });
     }
 
-    // Passando agora os dados do aluno para o model
     await utilizadorModel.atualizarUtilizadorCompleto(id, {
       nome,
       email,
@@ -637,10 +534,6 @@ async function editarUtilizadorCompleto(req, res, next) {
   }
 }
 
-/**
- * Obtém a lista de alunos associados ao Encarregado de Educação autenticado.
- * Depende da injeção do utilizador via middleware de autenticação (JWT).
- */
 async function getMeusAlunos(req, res, next) {
   try {
     const idEncarregado = req.utilizador?.id;
@@ -655,9 +548,6 @@ async function getMeusAlunos(req, res, next) {
   }
 }
 
-/**
- * Cria e associa um novo aluno ao Encarregado de Educação autenticado.
- */
 async function criarMeuAluno(req, res, next) {
   try {
     const idEncarregado = req.utilizador?.id;
@@ -684,7 +574,6 @@ async function criarMeuAluno(req, res, next) {
   }
 }
 
-// Exportação de todas as funções do controlador
 module.exports = {
   login,
   logout,
@@ -692,7 +581,6 @@ module.exports = {
   redefinirPassword,
   register,
   listarUtilizadores,
-  criarUtilizadorAdmin,
   editarUtilizador,
   alterarEstado,
   ativarUtilizador,

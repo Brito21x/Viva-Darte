@@ -61,7 +61,7 @@ async function getPerfisDoUtilizador(idUtilizador) {
 
 /**
  * Lista todos os utilizadores do sistema, agregando os seus perfis numa única string.
- * Útil para popular tabelas no painel de administração (Cordenação).
+ * Útil para popular tabelas no painel de administração (Coordenação).
  */
 async function listarTodosUtilizadores() {
   try {
@@ -110,7 +110,6 @@ async function listarTodosUtilizadores() {
  * Utiliza uma transação SQL para garantir que ambos os registos (utilizador e perfil)
  * só são guardados se não ocorrerem erros.
  */
-
 async function criarUtilizador({
   nome,
   email,
@@ -126,7 +125,6 @@ async function criarUtilizador({
   await transaction.begin();
 
   try {
-    // ... (Mesma lógica de verificação de email e perfil) ...
     const emailExiste = await transaction
       .request()
       .input("Email", sql.VarChar(255), email)
@@ -159,7 +157,7 @@ async function criarUtilizador({
 
     if (!idPerfil) throw new Error("Perfil não encontrado.");
 
-    // 3. Inserção do Utilizador
+    // Inserção do Utilizador
     const insertUserQuery = `
             INSERT INTO UTILIZADOR (nome, email, password, telefone, ativo, data_criacao)
             OUTPUT INSERTED.id_utilizador
@@ -176,7 +174,7 @@ async function criarUtilizador({
 
     const novoUtilizador = novoUserResult.recordset[0];
 
-    // 4. Ligação Perfil
+    // Ligação Perfil
     await transaction
       .request()
       .input("IdUser", sql.Int, novoUtilizador.id_utilizador)
@@ -185,7 +183,7 @@ async function criarUtilizador({
         `INSERT INTO UTILIZADOR_PERFIL (UTILIZADORid_utilizador, PERFILid_perfil) VALUES (@IdUser, @IdPerfil);`,
       );
 
-    // 5. Inserção do Aluno (Inativo se o EE for inativo)
+    // Inserção do Aluno (Inativo se o EE for inativo)
     if (nomePerfil !== "Professor" && nomePerfil !== "Admin" && nomeAluno) {
       const insertAlunoQuery = `
                 INSERT INTO ALUNO (nome, data_nascimento, ativo, data_criacao)
@@ -239,7 +237,6 @@ async function atualizarUtilizadorCompleto(
   await transaction.begin();
 
   try {
-    // Construção dinâmica da query: A password só é atualizada se for fornecido um novo hash
     let queryUpdate = `UPDATE UTILIZADOR SET nome = @Nome, email = @Email, telefone = @Telefone`;
     if (passwordHash) queryUpdate += `, password = @Password`;
     queryUpdate += ` WHERE id_utilizador = @Id`;
@@ -281,14 +278,12 @@ async function atualizarUtilizadorCompleto(
       }
 
       if (idPerfil) {
-        // Remove o perfil atual
         await transaction
           .request()
           .input("Id", sql.Int, id)
           .query(
             "DELETE FROM UTILIZADOR_PERFIL WHERE UTILIZADORid_utilizador = @Id",
           );
-        // Adiciona o novo perfil
         await transaction
           .request()
           .input("Id", sql.Int, id)
@@ -312,7 +307,6 @@ async function atualizarUtilizadorCompleto(
                     )
                 `);
     }
-    // ----------------------------------------
 
     await transaction.commit();
     return true;
@@ -327,7 +321,6 @@ async function atualizarModalidadesProfessor(idUtilizador, idsModalidades) {
   const transaction = pool.transaction();
   await transaction.begin();
   try {
-    // 1. Limpar associações atuais
     await transaction
       .request()
       .input("Id", sql.Int, idUtilizador)
@@ -335,7 +328,6 @@ async function atualizarModalidadesProfessor(idUtilizador, idsModalidades) {
         "DELETE FROM PROFESSOR_MODALIDADE WHERE UTILIZADORid_utilizador = @Id",
       );
 
-    // 2. Inserir novas
     if (Array.isArray(idsModalidades) && idsModalidades.length > 0) {
       for (const idMod of idsModalidades) {
         await transaction
@@ -357,8 +349,6 @@ async function atualizarModalidadesProfessor(idUtilizador, idsModalidades) {
 
 /**
  * Altera a flag booleana de estado (ativo/inativo) de um utilizador.
- * @param {number} idUtilizador - O ID do utilizador.
- * @param {boolean} estadoAtivo - true para ativar, false para suspender/reprovar.
  */
 async function alterarEstadoUtilizador(idUtilizador, estadoAtivo) {
   const pool = await poolPromise;
@@ -368,7 +358,6 @@ async function alterarEstadoUtilizador(idUtilizador, estadoAtivo) {
   try {
     const status = estadoAtivo ? 1 : 0;
 
-    // 1. Atualiza o estado do Utilizador
     await transaction
       .request()
       .input("EstadoAtivo", sql.Bit, status)
@@ -377,8 +366,6 @@ async function alterarEstadoUtilizador(idUtilizador, estadoAtivo) {
         `UPDATE UTILIZADOR SET ativo = @EstadoAtivo WHERE id_utilizador = @IdUtilizador;`,
       );
 
-    // 2. Atualiza o estado de todos os ALUNOS ligados a este Encarregado
-    // Esta query procura na tabela intermédia ENCARREGADO_ALUNO e atualiza a tabela ALUNO
     await transaction
       .request()
       .input("EstadoAtivo", sql.Bit, status)
@@ -402,7 +389,6 @@ async function alterarEstadoUtilizador(idUtilizador, estadoAtivo) {
 
 /**
  * Executa uma eliminação completa e segura de um utilizador da base de dados.
- * Remove primeiro as restrições de chaves estrangeiras (perfis e tokens).
  */
 async function apagarUtilizador(idUtilizador) {
   const pool = await poolPromise;
@@ -410,7 +396,6 @@ async function apagarUtilizador(idUtilizador) {
   await transaction.begin();
 
   try {
-    // 1. Limpar ligações de perfil
     await transaction
       .request()
       .input("Id", sql.Int, idUtilizador)
@@ -418,7 +403,6 @@ async function apagarUtilizador(idUtilizador) {
         "DELETE FROM UTILIZADOR_PERFIL WHERE UTILIZADORid_utilizador = @Id",
       );
 
-    // 2. Limpar possíveis tokens de recuperação
     await transaction
       .request()
       .input("Id", sql.Int, idUtilizador)
@@ -426,7 +410,6 @@ async function apagarUtilizador(idUtilizador) {
         "DELETE FROM TOKEN_RECUPERACAO WHERE UTILIZADORid_utilizador = @Id",
       );
 
-    // 3. Buscar os IDs dos alunos associados a este Encarregado (para os apagarmos a seguir)
     const alunosResult = await transaction
       .request()
       .input("Id", sql.Int, idUtilizador)
@@ -434,7 +417,6 @@ async function apagarUtilizador(idUtilizador) {
         "SELECT ALUNOid_aluno FROM ENCARREGADO_ALUNO WHERE UTILIZADORid_utilizador = @Id",
       );
 
-    // 4. Limpar a ligação na tabela intermédia ENCARREGADO_ALUNO
     await transaction
       .request()
       .input("Id", sql.Int, idUtilizador)
@@ -442,7 +424,6 @@ async function apagarUtilizador(idUtilizador) {
         "DELETE FROM ENCARREGADO_ALUNO WHERE UTILIZADORid_utilizador = @Id",
       );
 
-    // 5. Apagar os registos dos alunos órfãos (para não deixar "lixo" na tabela ALUNO)
     for (const row of alunosResult.recordset) {
       await transaction
         .request()
@@ -450,7 +431,6 @@ async function apagarUtilizador(idUtilizador) {
         .query("DELETE FROM ALUNO WHERE id_aluno = @IdAluno");
     }
 
-    // 6. Finalmente, apagar o registo raiz do utilizador
     const result = await transaction
       .request()
       .input("Id", sql.Int, idUtilizador)
@@ -459,7 +439,6 @@ async function apagarUtilizador(idUtilizador) {
     await transaction.commit();
     return result.rowsAffected[0] > 0;
   } catch (error) {
-    // Se der erro, desfaz tudo para não deixar a BD inconsistente
     if (transaction) await transaction.rollback();
     throw error;
   }
@@ -469,10 +448,6 @@ async function apagarUtilizador(idUtilizador) {
 // 3. RECUPERAÇÃO DE PALAVRA-PASSE
 // ============================================================================
 
-/**
- * Regista o token seguro (Hexadecimal) necessário para recuperar conta.
- * A query define matematicamente que a expiração é de 1 hora.
- */
 async function guardarTokenRecuperacao(idUtilizador, token) {
   try {
     const pool = await poolPromise;
@@ -489,14 +464,10 @@ async function guardarTokenRecuperacao(idUtilizador, token) {
   }
 }
 
-/**
- * Verifica se um token de recuperação submetido ainda é válido na BD.
- * Valida o conteúdo, a expiração de tempo (UNIX timestamp) e se já foi utilizado.
- */
 async function validarTokenRecuperacao(token) {
   try {
     const pool = await poolPromise;
-    const tempoAtualUnix = Math.floor(Date.now() / 1000); // Tempo atual em segundos Unix
+    const tempoAtualUnix = Math.floor(Date.now() / 1000);
 
     const result = await pool
       .request()
@@ -513,16 +484,11 @@ async function validarTokenRecuperacao(token) {
   }
 }
 
-/**
- * Altera definitivamente a password esquecida do utilizador.
- * Executado em transação para garantir que o token é inutilizado em simultâneo com o update.
- */
 async function atualizarPassword(idUtilizador, novaPasswordHash, idToken) {
   const pool = await poolPromise;
   const transaction = pool.transaction();
   await transaction.begin();
   try {
-    // Atualiza a password
     await transaction
       .request()
       .input("IdUtilizador", sql.Int, idUtilizador)
@@ -531,7 +497,6 @@ async function atualizarPassword(idUtilizador, novaPasswordHash, idToken) {
         "UPDATE UTILIZADOR SET password = @NovaPassword WHERE id_utilizador = @IdUtilizador",
       );
 
-    // Inutiliza o token usado para prevenir reutilização abusiva
     await transaction
       .request()
       .input("IdToken", sql.Int, idToken)
@@ -541,6 +506,82 @@ async function atualizarPassword(idUtilizador, novaPasswordHash, idToken) {
 
     await transaction.commit();
     return true;
+  } catch (error) {
+    await transaction.rollback();
+    throw error;
+  }
+}
+
+// ============================================================================
+// 4. GESTÃO DOS ALUNOS DO ENCARREGADO DE EDUCAÇÃO (EE)
+// ============================================================================
+
+/**
+ * Vai buscar à base de dados todos os alunos ativos que estão associados à conta de um Encarregado de Educação.
+ */
+async function getAlunosPorEncarregado(idEncarregado) {
+  try {
+    const pool = await poolPromise;
+    const result = await pool.request().input("IdEE", sql.Int, idEncarregado)
+      .query(`
+        SELECT 
+          a.id_aluno, 
+          a.nome AS nome_aluno, 
+          a.data_nascimento
+        FROM ALUNO a
+        JOIN ENCARREGADO_ALUNO ea ON a.id_aluno = ea.ALUNOid_aluno
+        WHERE ea.UTILIZADORid_utilizador = @IdEE 
+          AND a.ativo = 1
+        ORDER BY a.nome ASC;
+      `);
+    return result.recordset;
+  } catch (error) {
+    throw error;
+  }
+}
+
+/**
+ * Cria um novo aluno na tabela ALUNO e associa-o imediatamente à conta do Encarregado de Educação.
+ * Usa transação atómica para garantir que nada fica órfão em caso de erro.
+ */
+async function criarAlunoParaEncarregado(
+  idEncarregado,
+  { nome, dataNascimento },
+) {
+  const pool = await poolPromise;
+  const transaction = pool.transaction();
+  await transaction.begin();
+
+  try {
+    // Trata a string da data para prevenir erros de parsing do SQL Server se vier vazia
+    const dataNascStr =
+      dataNascimento && dataNascimento.trim() !== ""
+        ? dataNascimento.trim()
+        : null;
+
+    // 1. Inserir na Tabela ALUNO
+    const resultAluno = await transaction
+      .request()
+      .input("Nome", sql.VarChar(255), nome)
+      .input("DataNasc", sql.VarChar(10), dataNascStr).query(`
+        INSERT INTO ALUNO (nome, data_nascimento, ativo, data_criacao)
+        OUTPUT INSERTED.id_aluno, INSERTED.nome AS nome_aluno
+        VALUES (@Nome, TRY_CONVERT(date, @DataNasc), 1, GETDATE());
+      `);
+
+    const novoAluno = resultAluno.recordset[0];
+
+    // 2. Inserir na Tabela de Vínculo ENCARREGADO_ALUNO
+    await transaction
+      .request()
+      .input("IdEE", sql.Int, idEncarregado)
+      .input("IdAluno", sql.Int, novoAluno.id_aluno).query(`
+        INSERT INTO ENCARREGADO_ALUNO (UTILIZADORid_utilizador, ALUNOid_aluno)
+        VALUES (@IdEE, @IdAluno);
+      `);
+
+    await transaction.commit();
+    return novoAluno;
   } catch (error) {
     await transaction.rollback();
     throw error;
@@ -560,4 +601,6 @@ module.exports = {
   validarTokenRecuperacao,
   atualizarPassword,
   apagarUtilizador,
+  getAlunosPorEncarregado,
+  criarAlunoParaEncarregado,
 };

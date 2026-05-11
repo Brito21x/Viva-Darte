@@ -213,6 +213,12 @@ export default function MinhaAgendaProfessor({
   const [novoHoraFim, setNovoHoraFim] = useState("19:00");
   const [isSavingDispo, setIsSavingDispo] = useState(false);
 
+  // Estados Globais de Notificação
+  const [globalToast, setGlobalToast] = useState(null);
+
+  // Novo Estado para a janela central tipo "Imagem 1" de Sucesso
+  const [alertModal, setAlertModal] = useState({ isOpen: false, mensagem: "" });
+
   const [isPrecoModalOpen, setIsPrecoModalOpen] = useState(false);
   const [precoInfo, setPrecoInfo] = useState({
     isLoading: false,
@@ -223,15 +229,16 @@ export default function MinhaAgendaProfessor({
     duracaoMinutos: 60,
     custoEstimado: null,
   });
+
   const [pedidoErro, setPedidoErro] = useState("");
-  const [pedidoSucesso, setPedidoSucesso] = useState("");
-  const [pedidoIdCriado, setPedidoIdCriado] = useState(null);
   const [isSubmittingPedido, setIsSubmittingPedido] = useState(false);
+
   const [modalidadesPedido, setModalidadesPedido] = useState([]);
   const [anosLetivosPedido, setAnosLetivosPedido] = useState([]);
   const [professoresPedido, setProfessoresPedido] = useState([]);
   const [alunosPedido, setAlunosPedido] = useState([]);
   const [isLoadingAlunosPedido, setIsLoadingAlunosPedido] = useState(false);
+
   const [pedidoForm, setPedidoForm] = useState({
     idModalidade: "",
     idAnoLetivo: "",
@@ -284,6 +291,11 @@ export default function MinhaAgendaProfessor({
     { nome: "Contemporâneo", classe: "contemporaneo" },
   ];
 
+  function mostrarToast(texto, tipo = "sucesso") {
+    setGlobalToast({ texto, tipo });
+    setTimeout(() => setGlobalToast(null), 5000);
+  }
+
   useEffect(() => {
     const userRaw = localStorage.getItem("viva_user");
     if (!userRaw) {
@@ -298,7 +310,9 @@ export default function MinhaAgendaProfessor({
     }
   }, []);
 
+  // Carregar Modais e Anos Letivos
   useEffect(() => {
+    if (!utilizador) return; // Proteção extra
     let active = true;
     async function carregarDadosPedido() {
       try {
@@ -307,8 +321,17 @@ export default function MinhaAgendaProfessor({
           apiAuthFetch("/api/escola/anos-letivos"),
         ]);
         if (!active) return;
+
         setModalidadesPedido(Array.isArray(mods) ? mods : []);
-        setAnosLetivosPedido(Array.isArray(anos) ? anos : []);
+
+        const anosArray = Array.isArray(anos) ? anos : [];
+        setAnosLetivosPedido(anosArray);
+        if (anosArray.length > 0) {
+          setPedidoForm((prev) => ({
+            ...prev,
+            idAnoLetivo: anosArray[0].id_ano_letivo,
+          }));
+        }
       } catch {
         if (!active) return;
         setModalidadesPedido([]);
@@ -319,16 +342,29 @@ export default function MinhaAgendaProfessor({
     return () => {
       active = false;
     };
-  }, []);
+  }, [utilizador]);
 
+  // Carregar Alunos do EE
   useEffect(() => {
+    if (!utilizador) return; // Evita disparar pedidos antes de ler o token
     let active = true;
     async function carregarAlunosPedido() {
       setIsLoadingAlunosPedido(true);
       try {
-        const lista = await apiAuthFetch("/api/utilizadores/me/alunos");
+        const lista = await apiAuthFetch("/api/auth/me/alunos");
         if (!active) return;
-        setAlunosPedido(Array.isArray(lista) ? lista : []);
+
+        const listaArray = Array.isArray(lista) ? lista : [];
+        setAlunosPedido(listaArray);
+
+        if (listaArray.length === 1) {
+          setPedidoForm((prev) => ({
+            ...prev,
+            alunosIds: prev.alunosIds.length
+              ? prev.alunosIds
+              : [listaArray[0].id_aluno],
+          }));
+        }
       } catch {
         if (!active) return;
         setAlunosPedido([]);
@@ -340,9 +376,11 @@ export default function MinhaAgendaProfessor({
     return () => {
       active = false;
     };
-  }, []);
+  }, [utilizador]);
 
+  // Carregar Disponibilidades (Só se for Professor)
   useEffect(() => {
+    if (!utilizador) return; // Impede o erro 403 de ser disparado no primeiro render!
     let isMounted = true;
     async function carregarDisponibilidades() {
       if (isAgendaEE) {
@@ -369,23 +407,21 @@ export default function MinhaAgendaProfessor({
     return () => {
       isMounted = false;
     };
-  }, [isAgendaEE]);
+  }, [isAgendaEE, utilizador]);
 
-  useEffect(() => {
-    let isMounted = true;
-    async function carregarAgendaSemana() {
+  // Carregar Agenda Global (Se EE, carrega os seus pedidos todos)
+  async function carregarAgendaSemana() {
+    setIsLoadingAgenda(true);
+    setErroAgenda("");
+    const dataInicio = formatYMD(weekStart);
+    const dataFim = formatYMD(addDays(weekStart, 6));
+
+    try {
       if (isAgendaEE) {
+        const meusPedidos = await apiAuthFetch("/api/coaching/pedidos/meus");
+        setPedidosPendentesProf(Array.isArray(meusPedidos) ? meusPedidos : []);
         setAgenda([]);
-        setPedidosPendentesProf([]);
-        setErroAgenda("");
-        setIsLoadingAgenda(false);
-        return;
-      }
-      setErroAgenda("");
-      setIsLoadingAgenda(true);
-      const dataInicio = formatYMD(weekStart);
-      const dataFim = formatYMD(addDays(weekStart, 6));
-      try {
+      } else {
         const [dataAgenda, dataPedidos] = await Promise.all([
           apiAuthFetch(
             `/api/coaching/agenda?dataInicio=${dataInicio}&dataFim=${dataFim}`,
@@ -394,23 +430,24 @@ export default function MinhaAgendaProfessor({
             `/api/coaching/pedidos/atribuidos-professor?dataInicio=${dataInicio}&dataFim=${dataFim}`,
           ).catch(() => []),
         ]);
-        if (!isMounted) return;
         setAgenda(Array.isArray(dataAgenda) ? dataAgenda : []);
         setPedidosPendentesProf(Array.isArray(dataPedidos) ? dataPedidos : []);
-      } catch (e) {
-        if (!isMounted) return;
-        setAgenda([]);
-        setPedidosPendentesProf([]);
-        setErroAgenda(e?.message || "Erro ao carregar agenda");
-      } finally {
-        if (isMounted) setIsLoadingAgenda(false);
       }
+    } catch (e) {
+      setErroAgenda(e?.message || "Erro ao carregar agenda");
+    } finally {
+      setIsLoadingAgenda(false);
     }
+  }
+
+  useEffect(() => {
+    if (!utilizador) return;
+    let isMounted = true;
     carregarAgendaSemana();
     return () => {
       isMounted = false;
     };
-  }, [weekStart, isAgendaEE]);
+  }, [weekStart, isAgendaEE, utilizador]);
 
   const resumoMensal = useMemo(() => {
     const total = agenda.reduce(
@@ -427,6 +464,7 @@ export default function MinhaAgendaProfessor({
       map.get(key).push(event);
     };
 
+    // 1. Disponibilidades do Professor (apenas na vista Prof)
     for (const d of disponibilidades) {
       const diaName = abrevDiaSemana(d.dia_semana);
       if (!diaName) continue;
@@ -451,6 +489,7 @@ export default function MinhaAgendaProfessor({
       }
     }
 
+    // 2. Aulas Confirmadas (Professores)
     for (const row of agenda) {
       const diaKey = diaSemanaAbrevData(row.data_aula);
       const horaSlot = horaParaSlot(row.hora_inicio);
@@ -458,30 +497,68 @@ export default function MinhaAgendaProfessor({
       addEvent(`${diaKey}|${horaSlot}`, { ...row, origem: "coaching" });
     }
 
+    // 3. Integração de Pedidos e Aulas Confirmadas para o Encarregado (EE) e Profs
     for (const p of pedidosPendentesProf) {
-      const est = String(p.estado || "").toLowerCase();
-      if (est !== "pendente") continue;
-      const diaKey = diaSemanaAbrevData(p.data_aula_pretendida);
-      const horaSlot = horaParaSlot(p.hora_inicio_pretendida);
-      if (!diaKey || !horaSlot) continue;
-      const k = `${diaKey}|${horaSlot}`;
-      if (
-        !map.has(k) ||
-        !map.get(k).find((x) => x.id_pedido_coaching === p.id_pedido_coaching)
-      ) {
-        addEvent(k, {
-          origem: "pedido_pendente",
+      const isFromEE = p.hasOwnProperty("estado_coaching");
+
+      if (isFromEE) {
+        const isAgendado =
+          p.id_coaching &&
+          p.estado_coaching &&
+          p.estado_coaching !== "Cancelado";
+        const diaReal = isAgendado
+          ? p.data_aula_coaching
+          : p.data_aula_pretendida;
+        const horaReal = isAgendado
+          ? p.hora_inicio_coaching
+          : p.hora_inicio_pretendida;
+
+        const diaKey = diaSemanaAbrevData(diaReal);
+        const horaSlot = horaParaSlot(horaReal);
+        if (!diaKey || !horaSlot) continue;
+
+        addEvent(`${diaKey}|${horaSlot}`, {
+          origem: isAgendado ? "coaching" : "pedido_pendente",
           id_pedido_coaching: p.id_pedido_coaching,
-          data_aula: p.data_aula_pretendida,
-          hora_inicio: p.hora_inicio_pretendida,
+          id_coaching: p.id_coaching,
+          data_aula: diaReal,
+          hora_inicio: horaReal,
           duracao_minutos: p.duracao_minutos,
           formato_aula: p.formato_aula,
           modalidade: p.modalidade,
-          encarregado: p.encarregado,
-          estado: p.estado,
-          sala: null,
-          id_coaching: null,
+          encarregado: utilizador?.nome || "Eu",
+          estado: isAgendado ? p.estado_coaching : p.estado,
+          sala: p.nome_sala,
+          nome_professor: isAgendado ? p.nome_professor_agendado : p.professor,
         });
+      } else {
+        const est = String(p.estado || "").toLowerCase();
+        if (est !== "pendente") continue;
+
+        const diaKey = diaSemanaAbrevData(p.data_aula_pretendida);
+        const horaSlot = horaParaSlot(p.hora_inicio_pretendida);
+        if (!diaKey || !horaSlot) continue;
+
+        if (
+          !map.has(`${diaKey}|${horaSlot}`) ||
+          !map
+            .get(`${diaKey}|${horaSlot}`)
+            .find((x) => x.id_pedido_coaching === p.id_pedido_coaching)
+        ) {
+          addEvent(`${diaKey}|${horaSlot}`, {
+            origem: "pedido_pendente",
+            id_pedido_coaching: p.id_pedido_coaching,
+            data_aula: p.data_aula_pretendida,
+            hora_inicio: p.hora_inicio_pretendida,
+            duracao_minutos: p.duracao_minutos,
+            formato_aula: p.formato_aula,
+            modalidade: p.modalidade,
+            encarregado: p.encarregado,
+            estado: p.estado,
+            sala: null,
+            id_coaching: null,
+          });
+        }
       }
     }
     return map;
@@ -512,6 +589,7 @@ export default function MinhaAgendaProfessor({
       const data = await apiAuthFetch("/api/coaching/disponibilidades");
       setDisponibilidades(Array.isArray(data) ? data : []);
       setIsDispoModalOpen(false);
+      mostrarToast("Horário adicionado com sucesso!", "sucesso");
     } catch (e) {
       setErroDispo(e?.message || "Erro ao guardar disponibilidade");
     } finally {
@@ -529,6 +607,7 @@ export default function MinhaAgendaProfessor({
       setDisponibilidades((prev) =>
         prev.filter((r) => r.id_disponibilidade !== id),
       );
+      mostrarToast("Horário removido.", "sucesso");
     } catch (e) {
       setErroDispo(e?.message || "Erro ao remover disponibilidade");
     }
@@ -541,18 +620,8 @@ export default function MinhaAgendaProfessor({
         method: "POST",
         body: { estadoValidacao: "Confirmado", observacoes: null },
       });
-      const dataInicio = formatYMD(weekStart);
-      const dataFim = formatYMD(addDays(weekStart, 6));
-      const [dataAgenda, dataPedidos] = await Promise.all([
-        apiAuthFetch(
-          `/api/coaching/agenda?dataInicio=${dataInicio}&dataFim=${dataFim}`,
-        ),
-        apiAuthFetch(
-          `/api/coaching/pedidos/atribuidos-professor?dataInicio=${dataInicio}&dataFim=${dataFim}`,
-        ).catch(() => []),
-      ]);
-      setAgenda(Array.isArray(dataAgenda) ? dataAgenda : []);
-      setPedidosPendentesProf(Array.isArray(dataPedidos) ? dataPedidos : []);
+      mostrarToast("Realização da aula validada!", "sucesso");
+      carregarAgendaSemana();
     } catch (e) {
       alert(e?.message || "Não foi possível validar esta aula.");
     }
@@ -602,6 +671,10 @@ export default function MinhaAgendaProfessor({
 
   const verPrecoEstimado = async ({ dataAulaYmd, horaInicio }) => {
     if (!podePedirAula) return;
+
+    // Limpar estados de erro antes de abrir o modal
+    setPedidoErro("");
+
     setPrecoInfo((p) => ({
       ...p,
       isLoading: true,
@@ -610,18 +683,19 @@ export default function MinhaAgendaProfessor({
       horaInicio,
       custoEstimado: null,
     }));
-    setPedidoErro("");
-    setPedidoSucesso("");
-    setPedidoIdCriado(null);
+
     setPedidoForm({
       idModalidade: "",
-      idAnoLetivo: "",
-      alunosIds: [],
+      idAnoLetivo:
+        anosLetivosPedido.length > 0 ? anosLetivosPedido[0].id_ano_letivo : "",
+      alunosIds: alunosPedido.length === 1 ? [alunosPedido[0].id_aluno] : [],
       numeroParticipantes: 1,
       idProfessor: "",
     });
+
     setProfessoresPedido([]);
     setIsPrecoModalOpen(true);
+
     try {
       await carregarPrecoEstimado({
         dataAula: dataAulaYmd,
@@ -702,8 +776,6 @@ export default function MinhaAgendaProfessor({
       return;
     }
     setPedidoErro("");
-    setPedidoSucesso("");
-    setPedidoIdCriado(null);
 
     const alunosIds = (pedidoForm.alunosIds || [])
       .map(Number)
@@ -737,7 +809,7 @@ export default function MinhaAgendaProfessor({
 
     setIsSubmittingPedido(true);
     try {
-      const res = await apiAuthFetch("/api/coaching/pedidos", {
+      await apiAuthFetch("/api/coaching/pedidos", {
         method: "POST",
         body: {
           idModalidade: Number(pedidoForm.idModalidade),
@@ -753,30 +825,14 @@ export default function MinhaAgendaProfessor({
           numeroParticipantes: Number(pedidoForm.numeroParticipantes || 1),
         },
       });
-      const novoId = res?.idPedido ?? null;
-      setPedidoIdCriado(novoId);
-      setPedidoSucesso(
-        novoId
-          ? `Pedido #${novoId} enviado com sucesso para a coordenação.`
-          : "Pedido enviado para coordenação com sucesso.",
-      );
 
-      if (!isAgendaEE) {
-        const di = formatYMD(weekStart);
-        const df = formatYMD(addDays(weekStart, 6));
-        try {
-          const [dataAgenda, dataPedidos] = await Promise.all([
-            apiAuthFetch(`/api/coaching/agenda?dataInicio=${di}&dataFim=${df}`),
-            apiAuthFetch(
-              `/api/coaching/pedidos/atribuidos-professor?dataInicio=${di}&dataFim=${df}`,
-            ).catch(() => []),
-          ]);
-          setAgenda(Array.isArray(dataAgenda) ? dataAgenda : []);
-          setPedidosPendentesProf(
-            Array.isArray(dataPedidos) ? dataPedidos : [],
-          );
-        } catch {}
-      }
+      setIsPrecoModalOpen(false);
+      setAlertModal({
+        isOpen: true,
+        mensagem: `Pedido de ${formatoAtual} enviado! A aguardar aprovação da coordenação.`,
+      });
+
+      carregarAgendaSemana();
     } catch (e) {
       setPedidoErro(
         traduzErroCoaching(e, "Não foi possível submeter o pedido."),
@@ -841,7 +897,7 @@ export default function MinhaAgendaProfessor({
                 irParaEmprestimos?.();
               }}
             >
-              Empréstimos de peças
+              Empréstimos
             </a>
           </li>
           <li>
@@ -852,7 +908,7 @@ export default function MinhaAgendaProfessor({
                 irParaVendaFigurinos?.();
               }}
             >
-              Venda de figurinos
+              Figurinos
             </a>
           </li>
         </ul>
@@ -932,11 +988,18 @@ export default function MinhaAgendaProfessor({
                           }
 
                           if (row.origem === "pedido_pendente") {
+                            const isRejeitado =
+                              String(row.estado).toLowerCase() === "rejeitado";
                             return (
                               <div
                                 key={`pend-${rIdx}`}
-                                className={`event-block ${classeModalidade} pendente-coordenacao`}
+                                className={`event-block ${classeModalidade} ${isRejeitado ? "rejeitado-block" : "pendente-coordenacao"}`}
                                 onClick={(e) => e.stopPropagation()}
+                                title={
+                                  isRejeitado
+                                    ? "Este pedido foi rejeitado"
+                                    : "A aguardar aprovação da coordenação"
+                                }
                               >
                                 <div className="event-info">
                                   <span className="event-time">
@@ -945,15 +1008,31 @@ export default function MinhaAgendaProfessor({
                                       row.duracao_minutos,
                                     )}
                                   </span>
-                                  <span className="event-label">
-                                    À espera da coordenação
+                                  <span
+                                    className="event-label"
+                                    style={
+                                      isRejeitado
+                                        ? { backgroundColor: "#d9534f" }
+                                        : {}
+                                    }
+                                  >
+                                    {isRejeitado
+                                      ? "Rejeitado"
+                                      : "A aguardar..."}
                                   </span>
                                   <h4 className="event-title">
                                     {row.modalidade} ({row.formato_aula})
                                   </h4>
-                                  <p className="event-student">
-                                    EE: {row.encarregado}
-                                  </p>
+                                  {isAgendaEE && (
+                                    <p className="event-student">
+                                      Prof: {row.nome_professor || "Qualquer"}
+                                    </p>
+                                  )}
+                                  {!isAgendaEE && (
+                                    <p className="event-student">
+                                      EE: {row.encarregado}
+                                    </p>
+                                  )}
                                 </div>
                               </div>
                             );
@@ -986,7 +1065,10 @@ export default function MinhaAgendaProfessor({
                                   {row.modalidade} ({row.formato_aula})
                                 </h4>
                                 <p className="event-student">
-                                  Sala: {row.sala} • EE: {row.encarregado}
+                                  Sala: {row.sala || "A definir"} •{" "}
+                                  {isAgendaEE
+                                    ? `Prof: ${row.nome_professor}`
+                                    : `EE: ${row.encarregado}`}
                                 </p>
                               </div>
                               {pendente && (
@@ -1066,9 +1148,6 @@ export default function MinhaAgendaProfessor({
               )}
               {!!pedidoErro && (
                 <div className="modal-error-msg">{pedidoErro}</div>
-              )}
-              {!!pedidoSucesso && (
-                <div className="modal-success-msg">{pedidoSucesso}</div>
               )}
 
               <div className="modern-form-grid">
@@ -1189,30 +1268,53 @@ export default function MinhaAgendaProfessor({
 
               <div className="form-group">
                 <label>Selecionar Alunos da Minha Conta</label>
-                <select
-                  className="form-control student-multi-select"
-                  multiple
-                  value={(pedidoForm.alunosIds || []).map(String)}
-                  onChange={(e) => {
-                    const selected = Array.from(e.target.selectedOptions).map(
-                      (o) => Number(o.value),
-                    );
-                    setPedidoForm((p) => ({ ...p, alunosIds: selected }));
-                  }}
-                >
-                  {alunosPedido.map((a) => (
-                    <option key={a.id_aluno} value={a.id_aluno}>
-                      {a.nome_aluno}
-                    </option>
-                  ))}
-                </select>
-                <small style={{ color: "#888", marginTop: 4 }}>
-                  {isLoadingAlunosPedido
-                    ? "A carregar alunos..."
-                    : alunosPedido.length > 0
-                      ? "Dica: usa Ctrl/Cmd para selecionar múltiplos alunos caso a aula não seja Solo."
-                      : "Não existem alunos associados à tua conta."}
-                </small>
+                {isLoadingAlunosPedido ? (
+                  <div
+                    className="form-control"
+                    style={{
+                      textAlign: "center",
+                      padding: "20px",
+                      color: "#888",
+                    }}
+                  >
+                    A carregar alunos...
+                  </div>
+                ) : alunosPedido.length === 0 ? (
+                  <div
+                    className="empty-dispo"
+                    style={{
+                      padding: "15px",
+                      color: "#d9534f",
+                      backgroundColor: "#fff0f0",
+                      border: "1px dashed #d9534f",
+                    }}
+                  >
+                    <strong>Aviso:</strong> Não tens educandos associados à tua
+                    conta.
+                    <br />
+                    Não é possível requisitar coaching.
+                  </div>
+                ) : (
+                  <>
+                    <select
+                      className="form-control student-multi-select"
+                      multiple
+                      value={(pedidoForm.alunosIds || []).map(String)}
+                      onChange={(e) => {
+                        const selected = Array.from(
+                          e.target.selectedOptions,
+                        ).map((o) => Number(o.value));
+                        setPedidoForm((p) => ({ ...p, alunosIds: selected }));
+                      }}
+                    >
+                      {alunosPedido.map((a) => (
+                        <option key={a.id_aluno} value={a.id_aluno}>
+                          {a.nome_aluno}
+                        </option>
+                      ))}
+                    </select>
+                  </>
+                )}
               </div>
 
               <div className="modal-actions-footer">
@@ -1229,13 +1331,36 @@ export default function MinhaAgendaProfessor({
                   disabled={
                     precoInfo.isLoading ||
                     !!precoInfo.erro ||
-                    isSubmittingPedido
+                    isSubmittingPedido ||
+                    alunosPedido.length === 0
                   }
                   onClick={submeterPedidoCoachingDireto}
                 >
                   {isSubmittingPedido ? "A processar..." : "Confirmar Pedido"}
                 </button>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* ALERTA MODAL (SUCESSO) */}
+        {alertModal.isOpen && (
+          <div
+            className="modal-overlay"
+            style={{ zIndex: 9999 }}
+            onClick={() => setAlertModal({ isOpen: false, mensagem: "" })}
+          >
+            <div
+              className="alert-modal-box"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <p>{alertModal.mensagem}</p>
+              <button
+                className="btn-dark"
+                onClick={() => setAlertModal({ isOpen: false, mensagem: "" })}
+              >
+                OK
+              </button>
             </div>
           </div>
         )}
@@ -1361,6 +1486,12 @@ export default function MinhaAgendaProfessor({
           </div>
         </aside>
       </div>
+
+      {globalToast && (
+        <div className={`global-toast global-toast--${globalToast.tipo}`}>
+          {globalToast.tipo === "sucesso" ? "✅" : "❌"} {globalToast.texto}
+        </div>
+      )}
 
       {!isAgendaEE && isDispoModalOpen && (
         <div

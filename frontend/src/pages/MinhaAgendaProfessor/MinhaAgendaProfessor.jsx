@@ -5,7 +5,6 @@ import { apiAuthFetch } from "../../services/api";
 
 const FORMATOS_AULA = ["Solo", "Dueto", "Trio", "Ensemble"];
 const DURACOES_AULA = [30, 60, 90, 120];
-const PARTICIPANTES_FIXOS_POR_FORMATO = { Solo: 1, Dueto: 2, Trio: 3 };
 
 function traduzErroCoaching(err, fallback) {
   const msg = String(err?.message || "").trim();
@@ -166,12 +165,16 @@ function coachingJaTerminou(dataAula, horaInicio, duracaoMinutos) {
 }
 
 function modalidadeParaClasse(modalidade) {
-  const s = String(modalidade || "").toLowerCase();
+  const s = String(modalidade || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
   if (s.includes("ballet")) return "ballet";
   if (s.includes("jazz")) return "jazz";
   if (s.includes("acrobat")) return "acrobatica";
   if (s.includes("acrodance")) return "acrodance";
-  if (s.includes("hip hop") || s.includes("hiphop")) return "hiphop";
+  if (s.includes("hip")) return "hiphop";
   if (s.includes("contempor")) return "contemporaneo";
   return "ballet";
 }
@@ -213,10 +216,8 @@ export default function MinhaAgendaProfessor({
   const [novoHoraFim, setNovoHoraFim] = useState("19:00");
   const [isSavingDispo, setIsSavingDispo] = useState(false);
 
-  // Estados Globais de Notificação
   const [globalToast, setGlobalToast] = useState(null);
 
-  // Novo Estado para a janela central tipo "Imagem 1" de Sucesso
   const [alertModal, setAlertModal] = useState({ isOpen: false, mensagem: "" });
 
   const [isPrecoModalOpen, setIsPrecoModalOpen] = useState(false);
@@ -243,7 +244,6 @@ export default function MinhaAgendaProfessor({
     idModalidade: "",
     idAnoLetivo: "",
     alunosIds: [],
-    numeroParticipantes: 1,
     idProfessor: "",
   });
 
@@ -282,19 +282,15 @@ export default function MinhaAgendaProfessor({
     "21:00",
   ];
   const dias = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
-  const modalidades = [
-    { nome: "Ballet", classe: "ballet" },
-    { nome: "Jazz", classe: "jazz" },
-    { nome: "Acrodance", classe: "acrodance" },
-    { nome: "Acrobática", classe: "acrobatica" },
-    { nome: "Hip Hop", classe: "hiphop" },
-    { nome: "Contemporâneo", classe: "contemporaneo" },
-  ];
 
   function mostrarToast(texto, tipo = "sucesso") {
     setGlobalToast({ texto, tipo });
     setTimeout(() => setGlobalToast(null), 5000);
   }
+
+  useEffect(() => {
+    document.title = "Minha agenda | Viva D'arte";
+  }, []);
 
   useEffect(() => {
     const userRaw = localStorage.getItem("viva_user");
@@ -310,9 +306,8 @@ export default function MinhaAgendaProfessor({
     }
   }, []);
 
-  // Carregar Modais e Anos Letivos
   useEffect(() => {
-    if (!utilizador) return; // Proteção extra
+    if (!utilizador) return;
     let active = true;
     async function carregarDadosPedido() {
       try {
@@ -344,9 +339,8 @@ export default function MinhaAgendaProfessor({
     };
   }, [utilizador]);
 
-  // Carregar Alunos do EE
   useEffect(() => {
-    if (!utilizador) return; // Evita disparar pedidos antes de ler o token
+    if (!utilizador) return;
     let active = true;
     async function carregarAlunosPedido() {
       setIsLoadingAlunosPedido(true);
@@ -378,9 +372,8 @@ export default function MinhaAgendaProfessor({
     };
   }, [utilizador]);
 
-  // Carregar Disponibilidades (Só se for Professor)
   useEffect(() => {
-    if (!utilizador) return; // Impede o erro 403 de ser disparado no primeiro render!
+    if (!utilizador) return;
     let isMounted = true;
     async function carregarDisponibilidades() {
       if (isAgendaEE) {
@@ -409,7 +402,6 @@ export default function MinhaAgendaProfessor({
     };
   }, [isAgendaEE, utilizador]);
 
-  // Carregar Agenda Global (Se EE, carrega os seus pedidos todos)
   async function carregarAgendaSemana() {
     setIsLoadingAgenda(true);
     setErroAgenda("");
@@ -464,7 +456,6 @@ export default function MinhaAgendaProfessor({
       map.get(key).push(event);
     };
 
-    // 1. Disponibilidades do Professor (apenas na vista Prof)
     for (const d of disponibilidades) {
       const diaName = abrevDiaSemana(d.dia_semana);
       if (!diaName) continue;
@@ -489,7 +480,6 @@ export default function MinhaAgendaProfessor({
       }
     }
 
-    // 2. Aulas Confirmadas (Professores)
     for (const row of agenda) {
       const diaKey = diaSemanaAbrevData(row.data_aula);
       const horaSlot = horaParaSlot(row.hora_inicio);
@@ -497,7 +487,6 @@ export default function MinhaAgendaProfessor({
       addEvent(`${diaKey}|${horaSlot}`, { ...row, origem: "coaching" });
     }
 
-    // 3. Integração de Pedidos e Aulas Confirmadas para o Encarregado (EE) e Profs
     for (const p of pedidosPendentesProf) {
       const isFromEE = p.hasOwnProperty("estado_coaching");
 
@@ -672,7 +661,6 @@ export default function MinhaAgendaProfessor({
   const verPrecoEstimado = async ({ dataAulaYmd, horaInicio }) => {
     if (!podePedirAula) return;
 
-    // Limpar estados de erro antes de abrir o modal
     setPedidoErro("");
 
     setPrecoInfo((p) => ({
@@ -689,7 +677,6 @@ export default function MinhaAgendaProfessor({
       idAnoLetivo:
         anosLetivosPedido.length > 0 ? anosLetivosPedido[0].id_ano_letivo : "",
       alunosIds: alunosPedido.length === 1 ? [alunosPedido[0].id_aluno] : [],
-      numeroParticipantes: 1,
       idProfessor: "",
     });
 
@@ -716,12 +703,6 @@ export default function MinhaAgendaProfessor({
 
   const atualizarFormatoAula = (formatoAula) => {
     setPrecoInfo((p) => ({ ...p, formatoAula }));
-    const participantesFixos = PARTICIPANTES_FIXOS_POR_FORMATO[formatoAula];
-    setPedidoForm((p) => ({
-      ...p,
-      numeroParticipantes:
-        participantesFixos || Math.max(Number(p.numeroParticipantes || 4), 4),
-    }));
     if (precoInfo.dataAula && precoInfo.horaInicio) {
       carregarPrecoEstimado({
         dataAula: precoInfo.dataAula,
@@ -785,27 +766,13 @@ export default function MinhaAgendaProfessor({
       setPedidoErro("Preenche a modalidade e o ano letivo.");
       return;
     }
+
     if (isPerfilEE && alunosIds.length === 0) {
       setPedidoErro("Seleciona pelo menos 1 aluno da tua lista.");
       return;
     }
 
     const formatoAtual = precoInfo.formatoAula || "Solo";
-    const participantesFixos = PARTICIPANTES_FIXOS_POR_FORMATO[formatoAtual];
-    if (
-      isPerfilEE &&
-      participantesFixos &&
-      alunosIds.length !== participantesFixos
-    ) {
-      setPedidoErro(
-        `O formato ${formatoAtual} exige exatamente ${participantesFixos} aluno(s).`,
-      );
-      return;
-    }
-    if (isPerfilEE && formatoAtual === "Ensemble" && alunosIds.length < 4) {
-      setPedidoErro("O formato Ensemble exige 4 ou mais alunos.");
-      return;
-    }
 
     setIsSubmittingPedido(true);
     try {
@@ -815,14 +782,13 @@ export default function MinhaAgendaProfessor({
           idModalidade: Number(pedidoForm.idModalidade),
           idProfessor: pedidoForm.idProfessor
             ? Number(pedidoForm.idProfessor)
-            : undefined,
+            : null,
           formatoAula: precoInfo.formatoAula || "Solo",
           duracaoMinutos: Number(precoInfo.duracaoMinutos || 60),
           dataAula: precoInfo.dataAula,
           horaInicio: normalizeTime(precoInfo.horaInicio),
           idAnoLetivo: Number(pedidoForm.idAnoLetivo),
           alunosIds,
-          numeroParticipantes: Number(pedidoForm.numeroParticipantes || 1),
         },
       });
 
@@ -897,7 +863,7 @@ export default function MinhaAgendaProfessor({
                 irParaEmprestimos?.();
               }}
             >
-              Empréstimos
+              Empréstimos de peças
             </a>
           </li>
           <li>
@@ -908,7 +874,7 @@ export default function MinhaAgendaProfessor({
                 irParaVendaFigurinos?.();
               }}
             >
-              Figurinos
+              Venda de figurinos
             </a>
           </li>
         </ul>
@@ -1009,12 +975,7 @@ export default function MinhaAgendaProfessor({
                                     )}
                                   </span>
                                   <span
-                                    className="event-label"
-                                    style={
-                                      isRejeitado
-                                        ? { backgroundColor: "#d9534f" }
-                                        : {}
-                                    }
+                                    className={`event-label ${isRejeitado ? "label-rejeitado" : ""}`}
                                   >
                                     {isRejeitado
                                       ? "Rejeitado"
@@ -1117,19 +1078,9 @@ export default function MinhaAgendaProfessor({
                 </div>
                 <div className="price-value-col">
                   {precoInfo.isLoading ? (
-                    <span style={{ fontSize: "1.2rem", color: "#b38b59" }}>
-                      A calcular...
-                    </span>
+                    <span className="loading-text-gold">A calcular...</span>
                   ) : precoInfo.erro ? (
-                    <span
-                      style={{
-                        color: "#d9534f",
-                        fontSize: "1rem",
-                        fontWeight: 700,
-                      }}
-                    >
-                      Indisponível
-                    </span>
+                    <span className="error-text-red">Indisponível</span>
                   ) : (
                     <>
                       <span className="price-tag">
@@ -1137,7 +1088,7 @@ export default function MinhaAgendaProfessor({
                           ? `${Number(precoInfo.custoEstimado).toFixed(2)}`
                           : "—"}
                       </span>
-                      <span style={{ marginLeft: 4 }}>EUR</span>
+                      <span className="margin-left-4">EUR</span>
                     </>
                   )}
                 </div>
@@ -1213,10 +1164,7 @@ export default function MinhaAgendaProfessor({
                 </div>
                 <div className="form-group">
                   <label>
-                    Professor{" "}
-                    <span style={{ textTransform: "none", fontWeight: 500 }}>
-                      (Opcional)
-                    </span>
+                    Professor <span className="text-optional">(Opcional)</span>
                   </label>
                   <select
                     className="form-control"
@@ -1245,7 +1193,7 @@ export default function MinhaAgendaProfessor({
                 </div>
               </div>
 
-              <div className="form-group" style={{ marginBottom: 20 }}>
+              <div className="form-group margin-bottom-20">
                 <label>Ano Letivo</label>
                 <select
                   className="form-control"
@@ -1269,26 +1217,11 @@ export default function MinhaAgendaProfessor({
               <div className="form-group">
                 <label>Selecionar Alunos da Minha Conta</label>
                 {isLoadingAlunosPedido ? (
-                  <div
-                    className="form-control"
-                    style={{
-                      textAlign: "center",
-                      padding: "20px",
-                      color: "#888",
-                    }}
-                  >
+                  <div className="form-control loading-alunos">
                     A carregar alunos...
                   </div>
                 ) : alunosPedido.length === 0 ? (
-                  <div
-                    className="empty-dispo"
-                    style={{
-                      padding: "15px",
-                      color: "#d9534f",
-                      backgroundColor: "#fff0f0",
-                      border: "1px dashed #d9534f",
-                    }}
-                  >
+                  <div className="empty-dispo warning-alunos">
                     <strong>Aviso:</strong> Não tens educandos associados à tua
                     conta.
                     <br />
@@ -1346,8 +1279,7 @@ export default function MinhaAgendaProfessor({
         {/* ALERTA MODAL (SUCESSO) */}
         {alertModal.isOpen && (
           <div
-            className="modal-overlay"
-            style={{ zIndex: 9999 }}
+            className="modal-overlay modal-overlay-high-z"
             onClick={() => setAlertModal({ isOpen: false, mensagem: "" })}
           >
             <div
@@ -1366,37 +1298,27 @@ export default function MinhaAgendaProfessor({
         )}
 
         <aside className="sidebar">
+          {/* CARTÃO NAVEGAÇÃO */}
           <div className="sidebar-card">
-            <h3 style={{ margin: 0 }}>Navegação</h3>
-            <p
-              style={{
-                margin: "8px 0 16px",
-                opacity: 0.75,
-                fontSize: "0.85rem",
-              }}
-            >
-              {semanaLabel}
-            </p>
-            <div style={{ display: "flex", gap: 8 }}>
+            <h3 className="m-0">Navegação</h3>
+            <p className="sidebar-subtitle">{semanaLabel}</p>
+            <div className="sidebar-nav-header">
               <button
-                className="btn-today"
-                style={{ flex: 1 }}
+                className="btn-today flex-1"
                 type="button"
                 onClick={irParaSemanaAnterior}
               >
                 ←
               </button>
               <button
-                className="btn-today"
-                style={{ flex: 2 }}
+                className="btn-today flex-2"
                 type="button"
                 onClick={irParaHoje}
               >
                 Hoje
               </button>
               <button
-                className="btn-today"
-                style={{ flex: 1 }}
+                className="btn-today flex-1"
                 type="button"
                 onClick={irParaSemanaSeguinte}
               >
@@ -1405,18 +1327,23 @@ export default function MinhaAgendaProfessor({
             </div>
           </div>
 
+          {/* CARTÃO DE INFORMAÇÃO PARA EE */}
+          {isAgendaEE && (
+            <div className="sidebar-card info-card">
+              <h3>Informação</h3>
+              <p>
+                Para requisitar o seu coaching, por favor clique no quadrado do
+                horário pretendido na agenda.
+              </p>
+            </div>
+          )}
+
+          {/* HORÁRIOS E RESUMO (SÓ PROFESSORES) */}
           {!isAgendaEE && (
             <>
               <div className="sidebar-card">
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    marginBottom: 12,
-                  }}
-                >
-                  <h3 style={{ margin: 0, color: "#2a2724" }}>Meus Horários</h3>
+                <div className="sidebar-header-flex">
+                  <h3>Meus Horários</h3>
                 </div>
 
                 <div className="dispo-list-hud">
@@ -1439,8 +1366,7 @@ export default function MinhaAgendaProfessor({
                   )}
                 </div>
                 <button
-                  className="btn-outline"
-                  style={{ width: "100%", marginTop: 14 }}
+                  className="btn-outline btn-full-margin"
                   type="button"
                   onClick={() => setIsDispoModalOpen(true)}
                 >
@@ -1449,13 +1375,7 @@ export default function MinhaAgendaProfessor({
               </div>
 
               <div className="sidebar-card resumo-card">
-                <h3
-                  style={{
-                    margin: 0,
-                    borderBottom: "1px solid rgba(255,255,255,0.1)",
-                    paddingBottom: 10,
-                  }}
-                >
+                <h3 className="resumo-title">
                   Resumo de{" "}
                   {new Date(weekStart).toLocaleString("pt-PT", {
                     month: "long",
@@ -1473,25 +1393,79 @@ export default function MinhaAgendaProfessor({
             </>
           )}
 
-          <div className="sidebar-card">
-            <div className="modalidade-legend">
-              <h4>Legenda</h4>
-              {modalidades.map((m) => (
-                <div key={m.nome} className="legend-item">
-                  <span className={`color-dot ${m.classe}`}></span>
-                  {m.nome}
-                </div>
-              ))}
+          {/* LISTA SIMPLIFICADA DE PEDIDOS (SÓ EE) */}
+          {isAgendaEE && (
+            <div className="sidebar-card">
+              <div className="sidebar-header-flex">
+                <h3 className="m-0" style={{ color: "var(--primary-dark)" }}>
+                  Os Meus Pedidos
+                </h3>
+              </div>
+              <div
+                className="dispo-list-hud"
+                style={{ maxHeight: "400px", marginTop: "10px" }}
+              >
+                {pedidosPendentesProf.length === 0 ? (
+                  <div className="empty-dispo">
+                    Ainda não tem pedidos de coaching.
+                  </div>
+                ) : (
+                  pedidosPendentesProf.map((p) => {
+                    let badgeClass = "pendente";
+                    let badgeText = "Pendente";
+
+                    if (p.estado === "Aprovado") {
+                      badgeClass = "aprovado";
+                      badgeText = p.estado_coaching || "Agendado";
+                      if (badgeText === "Cancelado") badgeClass = "rejeitado";
+                    } else if (
+                      p.estado === "Rejeitado" ||
+                      p.estado === "Cancelado"
+                    ) {
+                      badgeClass = "rejeitado";
+                      badgeText = p.estado;
+                    }
+
+                    const diaReal =
+                      p.estado === "Aprovado" && p.data_aula_coaching
+                        ? p.data_aula_coaching
+                        : p.data_aula_pretendida;
+                    const horaReal =
+                      p.estado === "Aprovado" && p.hora_inicio_coaching
+                        ? p.hora_inicio_coaching
+                        : p.hora_inicio_pretendida;
+
+                    return (
+                      <div
+                        key={p.id_pedido_coaching}
+                        className="pedido-item-simples"
+                      >
+                        <div className="pedido-simples-info">
+                          <strong>{p.modalidade}</strong> ({p.formato_aula})
+                          <br />
+                          <span
+                            style={{
+                              fontSize: "0.8rem",
+                              color: "#888",
+                              display: "inline-block",
+                              marginTop: "4px",
+                            }}
+                          >
+                            {formatDM(diaReal)} às {formatHoraCurta(horaReal)}
+                          </span>
+                        </div>
+                        <span className={`badge-simples badge-${badgeClass}`}>
+                          {badgeText}
+                        </span>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
             </div>
-          </div>
+          )}
         </aside>
       </div>
-
-      {globalToast && (
-        <div className={`global-toast global-toast--${globalToast.tipo}`}>
-          {globalToast.tipo === "sucesso" ? "✅" : "❌"} {globalToast.texto}
-        </div>
-      )}
 
       {!isAgendaEE && isDispoModalOpen && (
         <div
@@ -1509,7 +1483,7 @@ export default function MinhaAgendaProfessor({
 
             {!!erroDispo && <div className="modal-error-msg">{erroDispo}</div>}
 
-            <div className="dispo-form-grid">
+            <div className="dispo-form-grid grid-align-end">
               <div className="form-group full-mobile">
                 <label>Dia da Semana</label>
                 <select

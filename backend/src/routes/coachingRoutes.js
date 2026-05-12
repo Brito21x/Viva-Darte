@@ -237,4 +237,10 @@ router.post(
   coachingController.concluirCoaching,
 );
 
+router.get(
+  "/historico",
+  autorizar("Admin"),
+  coachingController.listarHistorico,
+); //
+
 module.exports = router;

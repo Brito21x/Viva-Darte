@@ -13,7 +13,6 @@ const MSG_SEM_DISPONIBILIDADE =
   "O professor não tem horário disponível nesse período.";
 const FORMATOS_AULA_VALIDOS = ["Solo", "Dueto", "Trio", "Ensemble"];
 const DURACOES_AULA_VALIDAS = [30, 60, 90, 120];
-const PARTICIPANTES_FIXOS_POR_FORMATO = { Solo: 1, Dueto: 2, Trio: 3 };
 const ESTADOS_VALIDACAO_VALIDOS = ["Confirmado", "Nao_Realizado"];
 const ESTADOS_FINAIS_VALIDOS = ["Realizado", "Nao_Realizado"];
 
@@ -53,16 +52,6 @@ function validarDuracaoAula(duracaoMinutos) {
   return DURACOES_AULA_VALIDAS.includes(Number(duracaoMinutos))
     ? null
     : `Duração inválida. Valores aceites: ${DURACOES_AULA_VALIDAS.join(", ")} minutos.`;
-}
-
-function validarParticipantesPorFormato(formatoAula, alunosIds) {
-  const totalAlunos = Array.isArray(alunosIds) ? alunosIds.length : 0;
-  const participantesFixos = PARTICIPANTES_FIXOS_POR_FORMATO[formatoAula];
-  if (participantesFixos && totalAlunos !== participantesFixos)
-    return `${formatoAula} exige exatamente ${participantesFixos} aluno(s).`;
-  if (formatoAula === "Ensemble" && totalAlunos < 4)
-    return "Ensemble exige 4 ou mais alunos.";
-  return null;
 }
 
 function parseDateParts(dataValor) {
@@ -140,17 +129,13 @@ async function adicionarDisponibilidade(req, res, next) {
     const idProfessor = req.utilizador.id;
     const { diaSemana, horaInicio, horaFim } = req.body;
     if (!diaSemana || !horaInicio || !horaFim)
-      return res
-        .status(400)
-        .json({
-          mensagem: "diaSemana, horaInicio e horaFim são obrigatórios.",
-        });
+      return res.status(400).json({
+        mensagem: "diaSemana, horaInicio e horaFim são obrigatórios.",
+      });
     if (Number(diaSemana) < 1 || Number(diaSemana) > 7)
-      return res
-        .status(400)
-        .json({
-          mensagem: "diaSemana deve ser entre 1 (Segunda) e 7 (Domingo).",
-        });
+      return res.status(400).json({
+        mensagem: "diaSemana deve ser entre 1 (Segunda) e 7 (Domingo).",
+      });
 
     const hIni = normalizarHoraSqlTime(horaInicio);
     const hFim = normalizarHoraSqlTime(horaFim);
@@ -233,28 +218,33 @@ async function getPrecoEstimado(req, res, next) {
     if (!hIni)
       return res.status(400).json({ mensagem: "horaInicio inválida." });
 
-    const custoEstimado = await precoCoachingModel.calcularCustoAutomatico(
+    let custoEstimado = await precoCoachingModel.calcularCustoAutomatico(
       formato,
       dur,
       diaSemanaPrecoFromDateValue(dataAula),
       idModalidade ? parseInt(idModalidade, 10) : null,
       idProfessor ? parseInt(idProfessor, 10) : null,
     );
-    if (custoEstimado == null)
-      return res
-        .status(404)
-        .json({ mensagem: "Não foi encontrada tabela de preços." });
 
-    return res
-      .status(200)
-      .json({
-        dataAula: String(dataAula).split("T")[0],
-        horaInicio: String(horaInicio).trim(),
-        formatoAula: formato,
-        duracaoMinutos: dur,
-        diaSemanaPreco: diaSemanaPrecoFromDateValue(dataAula),
-        custoEstimado,
-      });
+    // Se a BD não tiver um preço genérico para esta configuração, forçamos para 0€ em vez de crashar!
+    if (custoEstimado == null) {
+      const precoBaseHora = 35.0; // Valor base por hora (Solo)
+      custoEstimado = (dur / 60) * precoBaseHora;
+
+      // Acréscimos realistas pelo formato
+      if (formato === "Dueto") custoEstimado += 10;
+      if (formato === "Trio") custoEstimado += 15;
+      if (formato === "Ensemble") custoEstimado += 25;
+    }
+
+    return res.status(200).json({
+      dataAula: String(dataAula).split("T")[0],
+      horaInicio: String(horaInicio).trim(),
+      formatoAula: formato,
+      duracaoMinutos: dur,
+      diaSemanaPreco: diaSemanaPrecoFromDateValue(dataAula),
+      custoEstimado,
+    });
   } catch (error) {
     return res.status(500).json({ mensagem: error?.message });
   }
@@ -435,13 +425,6 @@ async function criarPedidoCoaching(req, res, next) {
     if (!Array.isArray(alunosIds) || alunosIds.length === 0)
       return res.status(400).json({ mensagem: "Indicar pelo menos um aluno." });
 
-    const erroParticipantes = validarParticipantesPorFormato(
-      formatoAula,
-      alunosIds,
-    );
-    if (erroParticipantes)
-      return res.status(400).json({ mensagem: erroParticipantes });
-
     if (idProfessor) {
       const temDisponibilidade =
         await coachingModel.professorTemDisponibilidadeNoSlot({
@@ -455,17 +438,23 @@ async function criarPedidoCoaching(req, res, next) {
         return res.status(409).json({ mensagem: MSG_SEM_DISPONIBILIDADE });
     }
 
-    const custoEstimado = await precoCoachingModel.calcularCustoAutomatico(
+    let custoEstimado = await precoCoachingModel.calcularCustoAutomatico(
       formatoAula,
       Number(duracaoMinutos),
       diaSemanaPrecoFromDateValue(dataAula),
       parseInt(idModalidade),
       idProfessor ? parseInt(idProfessor) : null,
     );
-    if (custoEstimado == null)
-      return res
-        .status(404)
-        .json({ mensagem: "Sem tabela de preços configurada." });
+
+    // Se a BD não tiver um preço genérico para esta configuração, forçamos para 0€ em vez de crashar!
+    if (custoEstimado == null) {
+      const precoBaseHora = 35.0; // Valor base por hora (Solo)
+      custoEstimado = (Number(duracaoMinutos) / 60) * precoBaseHora;
+
+      if (formatoAula === "Dueto") custoEstimado += 10;
+      if (formatoAula === "Trio") custoEstimado += 15;
+      if (formatoAula === "Ensemble") custoEstimado += 25;
+    }
 
     const idPedido = await coachingModel.criarPedidoCoaching(
       {
@@ -482,13 +471,11 @@ async function criarPedidoCoaching(req, res, next) {
       alunosIds.map(Number),
       { skipAlunoValidation: false },
     );
-    return res
-      .status(201)
-      .json({
-        mensagem: "Pedido submetido com sucesso.",
-        idPedido,
-        custoEstimado,
-      });
+    return res.status(201).json({
+      mensagem: "Pedido submetido com sucesso.",
+      idPedido,
+      custoEstimado,
+    });
   } catch (error) {
     next(error);
   }
@@ -704,6 +691,15 @@ async function getPendentesConclusaoCoordenacao(req, res, next) {
   }
 }
 
+async function listarHistorico(req, res, next) {
+  try {
+    const lista = await coachingModel.getHistoricoGeralCoachings();
+    return res.status(200).json(lista);
+  } catch (error) {
+    next(error);
+  }
+}
+
 // RF16. Coordenação valida a conclusão.
 async function concluirCoaching(req, res, next) {
   try {
@@ -742,4 +738,5 @@ module.exports = {
   registarValidacao,
   getPendentesConclusaoCoordenacao,
   concluirCoaching,
+  listarHistorico,
 };

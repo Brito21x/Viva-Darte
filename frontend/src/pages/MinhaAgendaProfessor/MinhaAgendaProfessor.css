@@ -320,6 +320,9 @@
   font-weight: 900;
   color: #fff;
 }
+.label-rejeitado {
+  background-color: #d9534f !important;
+}
 .event-student {
   margin: 2px 0 0;
   font-size: 0.65rem;
@@ -367,6 +370,37 @@
   font-weight: 800;
 }
 
+.sidebar-subtitle {
+  margin: 8px 0 16px;
+  opacity: 0.75;
+  font-size: 0.85rem;
+}
+.sidebar-nav-header {
+  display: flex;
+  gap: 8px;
+}
+.sidebar-nav-header .flex-1 {
+  flex: 1;
+}
+.sidebar-nav-header .flex-2 {
+  flex: 2;
+}
+
+.sidebar-header-flex {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.sidebar-header-flex h3 {
+  margin: 0;
+  color: var(--primary-dark);
+}
+.btn-full-margin {
+  width: 100%;
+  margin-top: 14px;
+}
+
 .resumo-card {
   background-color: var(--primary-dark);
   color: white;
@@ -391,6 +425,11 @@
   font-size: 1.15rem;
   font-weight: 700;
 }
+.resumo-title {
+  margin: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding-bottom: 10px;
+}
 
 .modalidade-legend h4 {
   margin: 0 0 12px;
@@ -411,6 +450,19 @@
   width: 10px;
   height: 10px;
   border-radius: 50%;
+}
+
+.info-card h3 {
+  color: var(--accent-gold);
+  margin-bottom: 10px;
+  margin-top: 0;
+}
+.info-card p {
+  font-size: 0.9rem;
+  line-height: 1.4;
+  font-weight: 600;
+  color: var(--primary-dark);
+  margin: 0;
 }
 
 .btn-today {
@@ -475,7 +527,62 @@
   font-weight: 600;
 }
 
-/* BOTOES GERAIS */
+/* OS MEUS PEDIDOS (EE HUD) - REDESENHADO */
+.pedido-item-simples {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  padding: 10px 14px;
+  border-radius: 8px;
+  margin-bottom: 8px;
+  transition: border-color 0.2s;
+}
+.pedido-item-simples:hover {
+  border-color: rgba(0, 0, 0, 0.15);
+}
+.pedido-simples-info {
+  font-size: 0.85rem;
+  color: var(--primary-dark);
+  line-height: 1.4;
+}
+.badge-simples {
+  font-size: 0.65rem;
+  font-weight: 800;
+  padding: 4px 8px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.badge-pendente {
+  background: #e6a23c;
+  color: #fff;
+}
+.badge-aprovado {
+  background: #1f7a3f;
+  color: #fff;
+}
+.badge-rejeitado {
+  background: #d9534f;
+  color: #fff;
+}
+
+/* BOTOES GERAIS E UTILITÁRIOS */
+.m-0 {
+  margin: 0;
+}
+.margin-bottom-20 {
+  margin-bottom: 20px;
+}
+.margin-left-4 {
+  margin-left: 4px;
+}
+.text-optional {
+  text-transform: none;
+  font-weight: 500;
+}
+
 .btn-text {
   background: none;
   border: none;
@@ -577,7 +684,6 @@
   }
 }
 
-/* NOVO: Modal Centralizado de Sucesso estilo "Imagem 1" */
 .alert-modal-box {
   background: #f1eee9;
   border-radius: 16px;
@@ -612,6 +718,9 @@
   z-index: 3000;
   backdrop-filter: blur(4px);
   padding: 20px;
+}
+.modal-overlay-high-z {
+  z-index: 9999;
 }
 .modal-modern {
   background: #fff;
@@ -702,6 +811,16 @@
   line-height: 1;
 }
 
+.loading-text-gold {
+  font-size: 1.2rem;
+  color: var(--accent-gold);
+}
+.error-text-red {
+  color: #d9534f;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
 .modern-form-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -756,6 +875,23 @@
   font-weight: 600;
 }
 
+.loading-alunos {
+  text-align: center;
+  padding: 20px;
+  color: #888;
+}
+.warning-alunos {
+  padding: 15px;
+  color: #d9534f;
+  background-color: #fff0f0;
+  border: 1px dashed #d9534f;
+}
+.hint-text {
+  color: #888;
+  margin-top: 4px;
+  display: block;
+}
+
 .modal-actions-footer {
   display: flex;
   justify-content: flex-end;
@@ -772,6 +908,10 @@
   margin-bottom: 20px;
   align-items: end;
 }
+.grid-align-end {
+  align-items: flex-end;
+}
+
 @media (max-width: 600px) {
   .dispo-form-grid {
     grid-template-columns: 1fr 1fr;

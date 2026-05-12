@@ -289,11 +289,34 @@ async function getPedidosAtribuidosAoProfessorNoPeriodo(
 
 async function getPedidosPendentes() {
   const pool = await poolPromise;
-  const result = await pool
-    .request()
-    .query(
-      `SELECT pc.id_pedido_coaching, pc.MODALIDADEid_modalidade AS id_modalidade, pc.UTILIZADORid_utilizador2 AS id_professor_desejado, pc.data_aula_pretendida, pc.hora_inicio_pretendida, pc.formato_aula, pc.duracao_minutos, pc.estado, pc.custo_estimado, m.nome AS modalidade, ee.nome AS requisitante, ee.email AS email_requisitante, prof.nome AS professor_desejado FROM PEDIDO_COACHING pc JOIN UTILIZADOR ee ON pc.UTILIZADORid_utilizador = ee.id_utilizador LEFT JOIN UTILIZADOR prof ON pc.UTILIZADORid_utilizador2 = prof.id_utilizador JOIN MODALIDADE m ON pc.MODALIDADEid_modalidade = m.id_modalidade WHERE pc.estado = 'Pendente' ORDER BY pc.data_aula_pretendida ASC;`,
-    );
+  const result = await pool.request().query(
+    `SELECT 
+          pc.id_pedido_coaching, 
+          pc.MODALIDADEid_modalidade AS id_modalidade, 
+          pc.UTILIZADORid_utilizador2 AS id_professor_desejado, 
+          pc.data_aula_pretendida, 
+          pc.hora_inicio_pretendida, 
+          pc.formato_aula, 
+          pc.duracao_minutos, 
+          pc.estado, 
+          pc.custo_estimado, 
+          m.nome AS modalidade, 
+          ee.nome AS encarregado, 
+          ee.email AS email_requisitante, 
+          prof.nome AS professor,
+          (
+            SELECT STRING_AGG(a.nome, ', ') 
+            FROM PEDIDO_COACHING_PARTICIPANTE pcp 
+            JOIN ALUNO a ON pcp.ALUNOid_aluno = a.id_aluno 
+            WHERE pcp.PEDIDO_COACHINGid_pedido_coaching = pc.id_pedido_coaching
+          ) AS alunos
+      FROM PEDIDO_COACHING pc 
+      JOIN UTILIZADOR ee ON pc.UTILIZADORid_utilizador = ee.id_utilizador 
+      LEFT JOIN UTILIZADOR prof ON pc.UTILIZADORid_utilizador2 = prof.id_utilizador 
+      JOIN MODALIDADE m ON pc.MODALIDADEid_modalidade = m.id_modalidade 
+      WHERE pc.estado = 'Pendente' 
+      ORDER BY pc.data_aula_pretendida ASC;`,
+  );
   return result.recordset;
 }
 
@@ -545,6 +568,24 @@ async function coachingPertenceAProfessorAtivo(idCoaching, idProfessor) {
   return result.recordset.length > 0;
 }
 
+async function getHistoricoGeralCoachings() {
+  const pool = await poolPromise;
+  const result = await pool.request().query(`
+    SELECT 
+      c.id_coaching, c.data_aula, c.hora_inicio, c.duracao_minutos, c.estado, c.valor_final,
+      m.nome AS modalidade, s.nome AS sala, prof.nome AS nome_professor, ee.nome AS encarregado,
+      (SELECT STRING_AGG(a.nome, ', ') FROM PEDIDO_COACHING_PARTICIPANTE pcp JOIN ALUNO a ON pcp.ALUNOid_aluno = a.id_aluno WHERE pcp.PEDIDO_COACHINGid_pedido_coaching = c.PEDIDO_COACHINGid_pedido_coaching) AS alunos
+    FROM COACHING c
+    JOIN MODALIDADE m ON c.MODALIDADEid_modalidade = m.id_modalidade
+    JOIN SALA s ON c.SALAid_sala = s.id_sala
+    JOIN UTILIZADOR prof ON c.UTILIZADORid_utilizador = prof.id_utilizador
+    JOIN PEDIDO_COACHING pc ON c.PEDIDO_COACHINGid_pedido_coaching = pc.id_pedido_coaching
+    JOIN UTILIZADOR ee ON pc.UTILIZADORid_utilizador = ee.id_utilizador
+    ORDER BY c.data_aula DESC, c.hora_inicio DESC;
+  `);
+  return result.recordset;
+}
+
 module.exports = {
   adicionarDisponibilidadeProfessor,
   getDisponibilidadesProfessor,
@@ -568,4 +609,5 @@ module.exports = {
   listarCoachingsAbertosParaCoordenacao,
   coachingPertenceAEncarregado,
   coachingPertenceAProfessorAtivo,
+  getHistoricoGeralCoachings,
 };

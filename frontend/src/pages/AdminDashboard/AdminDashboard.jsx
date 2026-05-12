@@ -125,15 +125,6 @@ export default function AdminDashboard({ irParaLanding }) {
   const [allModalidades, setAllModalidades] = useState([]);
   const [pedidosPendentes, setPedidosPendentes] = useState([]);
   const [historicoCoachings, setHistoricoCoachings] = useState([]);
-  const coachingsEspera = historicoCoachings.filter(
-    (c) => c.estado === "Agendado" || c.estado === "Confirmado",
-  );
-  const coachingsConcluidos = historicoCoachings.filter(
-    (c) => c.estado === "Realizado" || c.estado === "Nao_Realizado",
-  );
-  const coachingsCancelados = historicoCoachings.filter(
-    (c) => c.estado === "Cancelado",
-  );
   const [salas, setSalas] = useState([]);
   const [modalAprovar, setModalAprovar] = useState({
     isOpen: false,
@@ -155,7 +146,6 @@ export default function AdminDashboard({ irParaLanding }) {
     selectedIds: [],
   });
 
-  // ESTADO PARA OS FILTROS DO COACHING
   const [filtroCoaching, setFiltroCoaching] = useState({
     encarregado: "",
     aluno: "",
@@ -242,7 +232,7 @@ export default function AdminDashboard({ irParaLanding }) {
       const [usersData, modalidadesData, salasData] = await Promise.all([
         apiFetch("/api/auth/utilizadores", token).catch(() => []),
         apiFetch("/api/escola/modalidades", token).catch(() => []),
-        apiFetch("/api/escola/salas", token).catch(() => []), // Vai buscar as salas
+        apiFetch("/api/escola/salas", token).catch(() => []),
       ]);
       if (Array.isArray(usersData)) setUtilizadores(usersData);
       if (Array.isArray(modalidadesData)) setAllModalidades(modalidadesData);
@@ -321,7 +311,7 @@ export default function AdminDashboard({ irParaLanding }) {
   async function handleEliminarUtilizador(id) {
     if (
       !window.confirm(
-        "Tens a certeza ABSOLUTA que queres ELIMINAR PERMANENTEMENTE este pedido?",
+        "Tens a certeza ABSOLUTA que queres ELIMINAR PERMANENTEMENTE este registo?",
       )
     )
       return;
@@ -393,35 +383,31 @@ export default function AdminDashboard({ irParaLanding }) {
     e.preventDefault();
     const { email, telefone, password } = modalUser.data;
 
-    if (!email.includes("@")) {
+    if (!email.includes("@"))
       return mostrarMsg("O email tem de conter um '@'.", "erro");
-    }
 
     let telLimpo = "";
     if (telefone) {
       telLimpo = telefone.replace(/\D/g, "");
-      if (telLimpo.length !== 9) {
+      if (telLimpo.length !== 9)
         return mostrarMsg(
           "O número de telefone tem de ter exatamente 9 dígitos.",
           "erro",
         );
-      }
     }
 
     if (password && password.trim() !== "") {
       const regexEspecial = /[!@#$%^&*(),.?":{}|<>]/;
-      if (password.length < 8) {
+      if (password.length < 8)
         return mostrarMsg(
           "A password tem de ter no mínimo 8 caracteres.",
           "erro",
         );
-      }
-      if (!regexEspecial.test(password)) {
+      if (!regexEspecial.test(password))
         return mostrarMsg(
-          "A password tem de conter pelo menos 1 carácter especial (ex: ! @ # $).",
+          "A password tem de conter pelo menos 1 carácter especial.",
           "erro",
         );
-      }
     } else if (modalUser.mode === "create") {
       return mostrarMsg(
         "A password é obrigatória na criação de conta.",
@@ -467,7 +453,6 @@ export default function AdminDashboard({ irParaLanding }) {
     const preSelected = allModalidades
       .filter((m) => uMods.includes(m.nome))
       .map((m) => m.id_modalidade);
-
     setModalMods({
       isOpen: true,
       userId: u.id_utilizador,
@@ -563,14 +548,11 @@ export default function AdminDashboard({ irParaLanding }) {
     const justificacao = window.prompt(
       "Por favor, introduza a justificação para rejeitar este pedido:",
     );
-
-    // O backend obriga a ter uma justificação, por isso cancelamos se o admin deixar em branco
-    if (!justificacao) {
+    if (!justificacao)
       return mostrarMsg(
         "A justificação é obrigatória para cancelar a rejeição.",
         "erro",
       );
-    }
 
     try {
       const res = await fetch(
@@ -588,7 +570,7 @@ export default function AdminDashboard({ irParaLanding }) {
 
       if (res.ok) {
         mostrarMsg("Pedido rejeitado com sucesso.", "ok");
-        carregarDados(); // Atualiza a tabela para remover o pedido da lista de pendentes
+        carregarDados();
       } else {
         mostrarMsg(data.mensagem || "Erro ao rejeitar o pedido.", "erro");
       }
@@ -614,7 +596,7 @@ export default function AdminDashboard({ irParaLanding }) {
 
       if (res.ok) {
         mostrarMsg("Coaching cancelado com sucesso.", "ok");
-        carregarDados(); // Atualiza a tabela do histórico
+        carregarDados();
       } else {
         mostrarMsg(data.mensagem || "Erro ao cancelar o coaching.", "erro");
       }
@@ -623,13 +605,11 @@ export default function AdminDashboard({ irParaLanding }) {
     }
   }
 
-  // Lógica de Filtragem dos Pedidos de Coaching
+  // Cálculos de Filtros e Separação de Listas
   const pedidosCoachingFiltrados = pedidosPendentes.filter((p) => {
     const encarregado = p.encarregado || "";
     const modalidade = p.modalidade || "";
     const professor = p.professor || "Qualquer";
-
-    // O backend precisa enviar o nome do aluno no endpoint getPedidosPendentes (ex: p.nome_aluno ou p.alunos)
     const aluno = p.nome_aluno || p.alunos || "";
 
     const matchEncarregado = encarregado
@@ -648,12 +628,10 @@ export default function AdminDashboard({ irParaLanding }) {
     let matchHora = true;
     const horaPedido = formatHoraCurta(p.hora_inicio_pretendida);
 
-    if (filtroCoaching.horaInicio && horaPedido < filtroCoaching.horaInicio) {
+    if (filtroCoaching.horaInicio && horaPedido < filtroCoaching.horaInicio)
       matchHora = false;
-    }
-    if (filtroCoaching.horaFim && horaPedido > filtroCoaching.horaFim) {
+    if (filtroCoaching.horaFim && horaPedido > filtroCoaching.horaFim)
       matchHora = false;
-    }
 
     return (
       matchEncarregado &&
@@ -664,57 +642,10 @@ export default function AdminDashboard({ irParaLanding }) {
     );
   });
 
-  if (!isAuthorized) {
-    return (
-      <div className="admin-login-wrapper">
-        <div className="admin-login-box">
-          <img src={logoImg} alt="Logo" className="admin-login-logo" />
-          <h2 className="admin-login-title">Painel Restrito</h2>
-          <p className="admin-login-subtitle">
-            Acesso exclusivo à Administração
-          </p>
-
-          <form className="admin-form" onSubmit={handleAdminLogin}>
-            {loginError && (
-              <div className="info-note info-note--error">{loginError}</div>
-            )}
-            <div className="field">
-              <label>Email / Username</label>
-              <input
-                type="text"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                autoComplete="username"
-              />
-            </div>
-            <div className="field">
-              <label>Palavra-passe</label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-              />
-            </div>
-            <button type="submit" className="btn-primary w-full p-14">
-              Entrar
-            </button>
-          </form>
-
-          <button className="btn-text-link" onClick={irParaLanding}>
-            Voltar ao site
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   const pendentes = utilizadores.filter(
     (u) => u.ativo === false || u.ativo === 0,
   );
   const aceites = utilizadores.filter((u) => u.ativo === true || u.ativo === 1);
-
   const profs = aceites.filter(
     (u) => u.perfis && u.perfis.toLowerCase().includes("prof"),
   );
@@ -734,6 +665,18 @@ export default function AdminDashboard({ irParaLanding }) {
       u.perfis !== "EE",
   );
 
+  // Divisão do Histórico em 3 Tabelas
+  const coachingsEspera = historicoCoachings.filter(
+    (c) => c.estado === "Agendado" || c.estado === "Confirmado",
+  );
+  const coachingsConcluidos = historicoCoachings.filter(
+    (c) => c.estado === "Realizado" || c.estado === "Nao_Realizado",
+  );
+  const coachingsCancelados = historicoCoachings.filter(
+    (c) => c.estado === "Cancelado",
+  );
+
+  // Função Renderizadora Tabela Utilizadores (Agora 100% segura com a variável 'u')
   const renderTabelaUtilizadores = (listaUtilizadores, tipoTabela) => (
     <table className="admin-table">
       <thead>
@@ -742,11 +685,9 @@ export default function AdminDashboard({ irParaLanding }) {
           <th>Nome</th>
           <th>Email</th>
           <th>Telefone</th>
-
           {tipoTabela === "PENDENTES" && <th>Educando / Modalidades</th>}
           {tipoTabela === "PROF" && <th>Modalidades</th>}
           {tipoTabela === "EE" && <th>Educando</th>}
-
           <th>Estado</th>
           <th>Criação</th>
           <th className="text-center">Ações</th>
@@ -828,28 +769,12 @@ export default function AdminDashboard({ irParaLanding }) {
                     Modalidades
                   </button>
                 )}
-
                 <button
                   className="btn-sm btn-sm--primary"
                   onClick={() => abrirModalEditar(u)}
                 >
                   Editar
                 </button>
-              </td>
-              <td className="text-center whitespace-nowrap">
-                {/* APENAS POSSÍVEL CANCELAR SE ESTIVER À ESPERA (Agendado ou Confirmado) */}
-                {c.estado === "Agendado" || c.estado === "Confirmado" ? (
-                  <button
-                    className="btn-sm btn-sm--danger"
-                    onClick={() => handleCancelarCoaching(c.id_coaching)}
-                  >
-                    Cancelar
-                  </button>
-                ) : (
-                  <span style={{ color: "#888", fontSize: "0.85rem" }}>
-                    Fechado
-                  </span>
-                )}
               </td>
             </tr>
           );
@@ -865,11 +790,111 @@ export default function AdminDashboard({ irParaLanding }) {
     </table>
   );
 
+  // Função Renderizadora Linha de Coaching Enriquecida
+  const renderLinhaCoaching = (c, permiteCancelar = false) => (
+    <tr key={c.id_coaching}>
+      <td>
+        <strong>{formatDataApi(c.data_aula)}</strong>
+        <div style={{ fontSize: "0.8rem", color: "#666" }}>
+          {formatHoraCurta(c.hora_inicio)} ({c.duracao_minutos} min)
+        </div>
+      </td>
+      <td>
+        <div style={{ fontWeight: "600" }}>{c.alunos || "—"}</div>
+        <small style={{ display: "block", color: "#555" }}>
+          EE: {c.encarregado}
+        </small>
+      </td>
+      <td>
+        <strong>{c.nome_professor}</strong>
+        <div style={{ fontSize: "0.8rem", color: "var(--primary-color)" }}>
+          📍 {c.sala || "Sem sala"}
+        </div>
+      </td>
+      <td>
+        {c.modalidade}
+        <div style={{ fontSize: "0.75rem", color: "#777" }}>
+          {c.formato_aula}
+        </div>
+      </td>
+      <td style={{ fontWeight: "bold" }}>
+        {c.valor_final != null ? `${Number(c.valor_final).toFixed(2)}€` : "—"}
+      </td>
+      <td>
+        <span
+          className={`badge badge--${c.estado === "Realizado" ? "green" : c.estado === "Cancelado" ? "danger" : "blue"}`}
+        >
+          {c.estado}
+        </span>
+      </td>
+      {permiteCancelar ? (
+        <td className="text-center">
+          <button
+            className="btn-sm btn-sm--danger"
+            onClick={() => handleCancelarCoaching(c.id_coaching)}
+          >
+            Cancelar
+          </button>
+        </td>
+      ) : (
+        <td className="text-center">
+          <span style={{ color: "#888", fontSize: "0.85rem" }}>🔒 Fechado</span>
+        </td>
+      )}
+    </tr>
+  );
+
+  if (!isAuthorized) {
+    return (
+      <div className="admin-login-wrapper">
+        <div className="admin-login-box">
+          <img src={logoImg} alt="Logo" className="admin-login-logo" />
+          <h2 className="admin-login-title">Painel Restrito</h2>
+          <p className="admin-login-subtitle">
+            Acesso exclusivo à Administração
+          </p>
+
+          <form className="admin-form" onSubmit={handleAdminLogin}>
+            {loginError && (
+              <div className="info-note info-note--error">{loginError}</div>
+            )}
+            <div className="field">
+              <label>Email / Username</label>
+              <input
+                type="text"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                autoComplete="username"
+              />
+            </div>
+            <div className="field">
+              <label>Palavra-passe</label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              />
+            </div>
+            <button type="submit" className="btn-primary w-full p-14">
+              Entrar
+            </button>
+          </form>
+
+          <button className="btn-text-link" onClick={irParaLanding}>
+            Voltar ao site
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   const tabs = [
     { id: "overview", label: "🏠 Visão Geral" },
     { id: "utilizadores", label: "👥 Utilizadores" },
-    { id: "historico_coaching", label: "📚 Histórico de Coachings" },
     { id: "coaching", label: "🗓️ Pedidos Coaching" },
+    { id: "historico_coaching", label: "📚 Histórico de Coachings" },
   ];
 
   return (
@@ -954,14 +979,12 @@ export default function AdminDashboard({ irParaLanding }) {
         {activeTab === "utilizadores" && (
           <div className="tab-content">
             <h1 className="page-title">👥 Gestão de Utilizadores</h1>
-
             <Section
               title={`Pendentes (${pendentes.length})`}
               defaultOpen={true}
             >
               {renderTabelaUtilizadores(pendentes, "PENDENTES")}
             </Section>
-
             <Section
               title={`Encarregados de Educação (${encarregados.length})`}
               defaultOpen={true}
@@ -979,7 +1002,6 @@ export default function AdminDashboard({ irParaLanding }) {
             >
               {renderTabelaUtilizadores(encarregados, "EE")}
             </Section>
-
             <Section
               title={`Professores (${profs.length})`}
               defaultOpen={true}
@@ -997,7 +1019,6 @@ export default function AdminDashboard({ irParaLanding }) {
             >
               {renderTabelaUtilizadores(profs, "PROF")}
             </Section>
-
             <Section
               title={`Administração (${adminsEOutros.length})`}
               defaultOpen={true}
@@ -1025,7 +1046,6 @@ export default function AdminDashboard({ irParaLanding }) {
               Gestão de pedidos a aguardar aprovação da coordenação
             </p>
 
-            {/* BARRA DE FILTROS */}
             <div
               className="admin-section"
               style={{ padding: "20px", marginBottom: "20px" }}
@@ -1215,7 +1235,7 @@ export default function AdminDashboard({ irParaLanding }) {
                   {pedidosCoachingFiltrados.length === 0 && (
                     <tr>
                       <td colSpan="9" className="empty-row">
-                        Nenhum pedido encontrado com estes filtros.
+                        Nenhum pedido encontrado.
                       </td>
                     </tr>
                   )}
@@ -1225,145 +1245,109 @@ export default function AdminDashboard({ irParaLanding }) {
           </div>
         )}
 
+        {/* NOVA ABA DE HISTÓRICO COM AS 3 SECÇÕES */}
         {activeTab === "historico_coaching" && (
           <div className="tab-content">
             <h1 className="page-title">📚 Histórico de Coachings</h1>
             <p className="page-subtitle">
-              Acompanhamento de aulas agendadas, realizadas ou canceladas.
+              Acompanhamento detalhado de aulas agendadas, realizadas ou
+              canceladas.
             </p>
 
-            {/* SEPARAÇÃO DAS LISTAS POR ESTADO */}
-            {(() => {
-              // 1. Filtrar os dados
-              const espera = historicoCoachings.filter(
-                (c) => c.estado === "Agendado" || c.estado === "Confirmado",
-              );
-              const concluidas = historicoCoachings.filter(
-                (c) => c.estado === "Realizado" || c.estado === "Nao_Realizado",
-              );
-              const canceladas = historicoCoachings.filter(
-                (c) => c.estado === "Cancelado",
-              );
-
-              // 2. Função auxiliar para desenhar a tabela igual para todas as secções
-              const renderTabelaHistorico = (lista) => (
-                <table className="admin-table">
-                  <thead>
+            <Section
+              title={`⏳ À Espera de Conclusão (${coachingsEspera.length})`}
+              defaultOpen={true}
+            >
+              <table className="admin-table">
+                <thead>
+                  <tr>
+                    <th>Data/Hora</th>
+                    <th>Aluno(s) / EE</th>
+                    <th>Professor / Sala</th>
+                    <th>Modalidade</th>
+                    <th>Valor</th>
+                    <th>Estado</th>
+                    <th className="text-center">Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {coachingsEspera.map((c) => renderLinhaCoaching(c, true))}
+                  {coachingsEspera.length === 0 && (
                     <tr>
-                      <th>Data/Hora</th>
-                      <th>Aluno(s) / EE</th>
-                      <th>Professor / Sala</th>
-                      <th>Modalidade</th>
-                      <th>Preço Final</th>
-                      <th>Estado</th>
-                      <th className="text-center">Ações</th>
+                      <td colSpan="7" className="text-center empty-row">
+                        Nenhuma aula pendente.
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {lista.map((c) => (
-                      <tr key={c.id_coaching}>
-                        <td>
-                          <strong>{formatDataApi(c.data_aula)}</strong> <br />
-                          <small>
-                            {formatHoraCurta(c.hora_inicio)} (
-                            {c.duracao_minutos} min)
-                          </small>
-                        </td>
-                        <td>
-                          <strong>{c.alunos || "—"}</strong> <br />
-                          <small>EE: {c.encarregado || "—"}</small>
-                        </td>
-                        <td>
-                          {c.nome_professor || "—"} <br />
-                          <small>Sala: {c.sala || "—"}</small>
-                        </td>
-                        <td>{c.modalidade || "—"}</td>
-                        <td>
-                          {c.valor_final != null
-                            ? `${Number(c.valor_final).toFixed(2)} €`
-                            : "—"}
-                        </td>
-                        <td>
-                          <span
-                            className={`badge badge--${
-                              c.estado === "Realizado"
-                                ? "green"
-                                : c.estado === "Cancelado"
-                                  ? "danger"
-                                  : "blue"
-                            }`}
-                          >
-                            {c.estado === "Nao_Realizado"
-                              ? "Não Realizado"
-                              : c.estado}
-                          </span>
-                        </td>
-                        <td className="text-center whitespace-nowrap">
-                          {(c.estado === "Agendado" ||
-                            c.estado === "Confirmado") && (
-                            <button
-                              className="btn-sm btn-sm--danger"
-                              onClick={() =>
-                                handleCancelarCoaching(c.id_coaching)
-                              }
-                            >
-                              Cancelar
-                            </button>
-                          )}
-                          {(c.estado === "Cancelado" ||
-                            c.estado === "Realizado" ||
-                            c.estado === "Nao_Realizado") && (
-                            <span
-                              style={{ color: "#888", fontSize: "0.85rem" }}
-                            >
-                              Fechado
-                            </span>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                    {lista.length === 0 && (
-                      <tr>
-                        <td colSpan="7" className="empty-row">
-                          Nenhum registo encontrado nesta categoria.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              );
+                  )}
+                </tbody>
+              </table>
+            </Section>
 
-              // 3. Renderizar as 3 secções
-              return (
-                <>
-                  <Section
-                    title={` À Espera de Conclusão do Professor (${espera.length})`}
-                    defaultOpen={true}
-                  >
-                    {renderTabelaHistorico(espera)}
-                  </Section>
+            <Section
+              title={`✅ Concluídas (${coachingsConcluidos.length})`}
+              defaultOpen={true}
+            >
+              <table className="admin-table">
+                <thead>
+                  <tr>
+                    <th>Data/Hora</th>
+                    <th>Aluno(s) / EE</th>
+                    <th>Professor / Sala</th>
+                    <th>Modalidade</th>
+                    <th>Valor</th>
+                    <th>Estado</th>
+                    <th className="text-center">Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {coachingsConcluidos.map((c) =>
+                    renderLinhaCoaching(c, false),
+                  )}
+                  {coachingsConcluidos.length === 0 && (
+                    <tr>
+                      <td colSpan="7" className="text-center empty-row">
+                        Nenhuma aula concluída.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </Section>
 
-                  <Section
-                    title={` Concluídas (${concluidas.length})`}
-                    defaultOpen={true}
-                  >
-                    {renderTabelaHistorico(concluidas)}
-                  </Section>
-
-                  <Section
-                    title={` Canceladas (${canceladas.length})`}
-                    defaultOpen={false}
-                  >
-                    {renderTabelaHistorico(canceladas)}
-                  </Section>
-                </>
-              );
-            })()}
+            <Section
+              title={`❌ Canceladas (${coachingsCancelados.length})`}
+              defaultOpen={false}
+            >
+              <table className="admin-table">
+                <thead>
+                  <tr>
+                    <th>Data/Hora</th>
+                    <th>Aluno(s) / EE</th>
+                    <th>Professor / Sala</th>
+                    <th>Modalidade</th>
+                    <th>Valor</th>
+                    <th>Estado</th>
+                    <th className="text-center">Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {coachingsCancelados.map((c) =>
+                    renderLinhaCoaching(c, false),
+                  )}
+                  {coachingsCancelados.length === 0 && (
+                    <tr>
+                      <td colSpan="7" className="text-center empty-row">
+                        Nenhuma aula cancelada.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </Section>
           </div>
         )}
       </main>
 
-      {/* Modal de Criar/Editar Utilizador */}
       {modalUser.isOpen && (
         <div className="admin-modal-overlay">
           <div className="admin-modal-content">
@@ -1372,7 +1356,6 @@ export default function AdminDashboard({ irParaLanding }) {
                 ? "Criar Novo Utilizador"
                 : "Editar Utilizador"}
             </h2>
-
             <form className="admin-form" onSubmit={submeterModal}>
               {modalUser.data.tipo === "EE" && (
                 <div className="form-group-row">
@@ -1411,7 +1394,6 @@ export default function AdminDashboard({ irParaLanding }) {
                   </div>
                 </div>
               )}
-
               <div className="field">
                 <label>Nome Completo (Encarregado/Prof)</label>
                 <input
@@ -1426,7 +1408,6 @@ export default function AdminDashboard({ irParaLanding }) {
                   required
                 />
               </div>
-
               <div className="field">
                 <label>Email *</label>
                 <input
@@ -1442,7 +1423,6 @@ export default function AdminDashboard({ irParaLanding }) {
                   required
                 />
               </div>
-
               <div className="form-group-row">
                 <div className="field form-col-1">
                   <label>Telefone</label>
@@ -1475,10 +1455,9 @@ export default function AdminDashboard({ irParaLanding }) {
                   </select>
                 </div>
               </div>
-
               <div className="field">
                 <label>
-                  Palavra-passe
+                  Palavra-passe{" "}
                   {modalUser.mode === "edit" && (
                     <span className="password-hint">
                       (Deixe em branco para manter)
@@ -1501,7 +1480,6 @@ export default function AdminDashboard({ irParaLanding }) {
                   }
                 />
               </div>
-
               <div className="modal-actions">
                 <button
                   type="button"
@@ -1519,7 +1497,6 @@ export default function AdminDashboard({ irParaLanding }) {
         </div>
       )}
 
-      {/* Modal de Associação de Modalidades */}
       {modalMods.isOpen && (
         <div className="admin-modal-overlay">
           <div className="admin-modal-content admin-modal-content--sm">
@@ -1529,7 +1506,6 @@ export default function AdminDashboard({ irParaLanding }) {
             <p className="admin-modal-subtitle">
               Selecione as modalidades que este professor leciona:
             </p>
-
             <div className="modalities-grid">
               {allModalidades.map((m) => (
                 <label key={m.id_modalidade} className="check-label-styled">
@@ -1554,7 +1530,6 @@ export default function AdminDashboard({ irParaLanding }) {
                 </span>
               )}
             </div>
-
             <div className="modal-actions">
               <button
                 type="button"
@@ -1575,14 +1550,12 @@ export default function AdminDashboard({ irParaLanding }) {
         </div>
       )}
 
-      {/* Modal de Aprovação de Coaching */}
       {modalAprovar.isOpen && modalAprovar.pedido && (
         <div className="admin-modal-overlay">
           <div className="admin-modal-content">
             <h2 className="admin-modal-title">
               Aprovar Pedido #{modalAprovar.pedido.id_pedido_coaching}
             </h2>
-
             <div
               style={{
                 backgroundColor: "#f4f4f4",
@@ -1612,7 +1585,6 @@ export default function AdminDashboard({ irParaLanding }) {
                 {modalAprovar.pedido.custo_estimado} €
               </p>
             </div>
-
             <form className="admin-form" onSubmit={submeterAprovacao}>
               <div className="field">
                 <label>Professor a Atribuir *</label>
@@ -1634,7 +1606,6 @@ export default function AdminDashboard({ irParaLanding }) {
                   ))}
                 </select>
               </div>
-
               <div className="form-group-row">
                 <div className="field form-col-1">
                   <label>Atribuir Sala *</label>
@@ -1656,7 +1627,6 @@ export default function AdminDashboard({ irParaLanding }) {
                     ))}
                   </select>
                 </div>
-
                 <div className="field form-col-1">
                   <label>Valor a Cobrar (€) *</label>
                   <input
@@ -1673,7 +1643,6 @@ export default function AdminDashboard({ irParaLanding }) {
                   />
                 </div>
               </div>
-
               <div className="modal-actions">
                 <button
                   type="button"

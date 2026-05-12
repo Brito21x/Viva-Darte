@@ -484,17 +484,40 @@ async function registarValidacaoAula(
   observacoes = null,
 ) {
   const pool = await poolPromise;
-  const result = await pool
-    .request()
-    .input("TipoValidador", sql.VarChar(50), tipoValidador)
-    .input("EstadoValidacao", sql.VarChar(50), estadoValidacao)
-    .input("Observacoes", sql.VarChar(255), observacoes)
-    .input("IdUtilizador", sql.Int, idUtilizador)
-    .input("IdCoaching", sql.Int, idCoaching)
-    .query(
-      `INSERT INTO VALIDACAO_COACHING (tipo_validador, estado_validacao, data_validacao, observacoes, UTILIZADORid_utilizador, COACHINGid_coaching) VALUES (@TipoValidador, @EstadoValidacao, GETDATE(), @Observacoes, @IdUtilizador, @IdCoaching);`,
-    );
-  return result.rowsAffected[0] > 0;
+  const transaction = pool.transaction();
+  await transaction.begin();
+
+  try {
+    // 1. Guarda a validação na tabela de histórico de validações
+    await transaction
+      .request()
+      .input("TipoValidador", sql.VarChar(50), tipoValidador)
+      .input("EstadoValidacao", sql.VarChar(50), estadoValidacao)
+      .input("Observacoes", sql.VarChar(255), observacoes)
+      .input("IdUtilizador", sql.Int, idUtilizador)
+      .input("IdCoaching", sql.Int, idCoaching)
+      .query(
+        `INSERT INTO VALIDACAO_COACHING (tipo_validador, estado_validacao, data_validacao, observacoes, UTILIZADORid_utilizador, COACHINGid_coaching) VALUES (@TipoValidador, @EstadoValidacao, GETDATE(), @Observacoes, @IdUtilizador, @IdCoaching);`,
+      );
+
+    // 2. Atualiza imediatamente o estado da aula para a Coordenação ver!
+    const novoEstado =
+      estadoValidacao === "Confirmado" ? "Realizado" : "Nao_Realizado";
+
+    await transaction
+      .request()
+      .input("NovoEstado", sql.VarChar(50), novoEstado)
+      .input("IdCoaching", sql.Int, idCoaching)
+      .query(
+        `UPDATE COACHING SET estado = @NovoEstado WHERE id_coaching = @IdCoaching;`,
+      );
+
+    await transaction.commit();
+    return true;
+  } catch (error) {
+    await transaction.rollback();
+    throw error;
+  }
 }
 
 async function concluirCoachingPelaCoordenacao(

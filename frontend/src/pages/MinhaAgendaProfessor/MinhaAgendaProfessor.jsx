@@ -577,7 +577,8 @@ export default function MinhaAgendaProfessor({
       });
       const data = await apiAuthFetch("/api/coaching/disponibilidades");
       setDisponibilidades(Array.isArray(data) ? data : []);
-      setIsDispoModalOpen(false);
+
+      // Mostrar mensagem de sucesso sem fechar a janela!
       mostrarToast("Horário adicionado com sucesso!", "sucesso");
     } catch (e) {
       setErroDispo(e?.message || "Erro ao guardar disponibilidade");
@@ -881,7 +882,7 @@ export default function MinhaAgendaProfessor({
         <div className="nav-actions">
           <div className="user-profile">
             <span className="welcome-text">
-              Olá, <strong>{utilizador?.nome?.split(" ")[0] || ""}</strong>
+              Olá, <strong>{utilizador?.nome || ""}</strong>
             </span>
             <button className="btn-logout" onClick={handleLogout}>
               Sair

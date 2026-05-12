@@ -295,17 +295,55 @@ async function atualizarUtilizadorCompleto(
     }
 
     if (nomeAluno) {
-      await transaction
+      // Tratar a data corretamente para evitar que strings vazias causem erro no SQL
+      const dataNascTratada =
+        dataNascimentoAluno && dataNascimentoAluno.trim() !== ""
+          ? dataNascimentoAluno
+          : null;
+
+      // 1. Verifica se este EE já tem algum aluno associado
+      const checkAluno = await transaction
         .request()
         .input("IdUtilizador", sql.Int, id)
-        .input("NomeAluno", sql.VarChar(255), nomeAluno)
-        .input("DataNasc", sql.Date, dataNascimentoAluno || null).query(`
-                    UPDATE ALUNO 
-                    SET nome = @NomeAluno, data_nascimento = @DataNasc 
-                    WHERE id_aluno IN (
-                        SELECT ALUNOid_aluno FROM ENCARREGADO_ALUNO WHERE UTILIZADORid_utilizador = @IdUtilizador
-                    )
-                `);
+        .query(
+          "SELECT ALUNOid_aluno FROM ENCARREGADO_ALUNO WHERE UTILIZADORid_utilizador = @IdUtilizador",
+        );
+
+      if (checkAluno.recordset.length > 0) {
+        // Já tem aluno associado -> Atualiza o registo existente
+        await transaction
+          .request()
+          .input("IdUtilizador", sql.Int, id)
+          .input("NomeAluno", sql.VarChar(255), nomeAluno)
+          .input("DataNasc", sql.Date, dataNascTratada).query(`
+            UPDATE ALUNO 
+            SET nome = @NomeAluno, data_nascimento = @DataNasc 
+            WHERE id_aluno IN (
+                SELECT ALUNOid_aluno FROM ENCARREGADO_ALUNO WHERE UTILIZADORid_utilizador = @IdUtilizador
+            )
+          `);
+      } else {
+        // Não tem aluno -> Cria um novo aluno na tabela ALUNO
+        const insertResult = await transaction
+          .request()
+          .input("NomeAluno", sql.VarChar(255), nomeAluno)
+          .input("DataNasc", sql.Date, dataNascTratada).query(`
+            INSERT INTO ALUNO (nome, data_nascimento, ativo, data_criacao)
+            OUTPUT INSERTED.id_aluno
+            VALUES (@NomeAluno, @DataNasc, 1, GETDATE());
+          `);
+
+        const novoAlunoId = insertResult.recordset[0].id_aluno;
+
+        // Cria o vínculo entre o EE e este novo aluno
+        await transaction
+          .request()
+          .input("IdUtilizador", sql.Int, id)
+          .input("IdAlunoNovo", sql.Int, novoAlunoId).query(`
+            INSERT INTO ENCARREGADO_ALUNO (UTILIZADORid_utilizador, ALUNOid_aluno)
+            VALUES (@IdUtilizador, @IdAlunoNovo);
+          `);
+      }
     }
 
     await transaction.commit();

@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import './LoginRegisto.css'; 
+import React, { useState, useEffect, useRef } from 'react';
+import './LoginRegisto.css';
+import ReCAPTCHA from 'react-google-recaptcha';
 
 export default function Registo({ irParaLogin, irParaLanding }) {
   const [tipo, setTipo] = useState('EE'); 
@@ -8,6 +9,11 @@ export default function Registo({ irParaLogin, irParaLanding }) {
   const [email, setEmail] = useState('');
   const [telefone, setTelefone] = useState('');
   const [password, setPassword] = useState('');
+  const [nomeAluno, setNomeAluno] = useState('');
+  const [dataNascimentoAluno, setDataNascimentoAluno] = useState(''); 
+
+  const [captchaToken, setCaptchaToken] = useState(null); // <-- 2. Estado para o token do CAPTCHA
+  const recaptchaRef = useRef(null);
 
   const [customAlert, setCustomAlert] = useState({ show: false, message: '', redirectOnClose: false });
 
@@ -39,6 +45,11 @@ export default function Registo({ irParaLogin, irParaLanding }) {
   const lidarComRegisto = async (e) => {
     e.preventDefault();
 
+    if (!captchaToken) {
+        mostrarAlerta("Por favor, confirma que não és um robô marcando a caixa do reCAPTCHA.");
+        return;
+    }
+
     const regexEspecial = /[!@#$%^&*(),.?":{}|<>]/;
     
     if (password.length < 8) {
@@ -57,20 +68,30 @@ export default function Registo({ irParaLogin, irParaLanding }) {
         const response = await fetch('http://localhost:3000/api/auth/register', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ nome, email, telefone: telefoneLimpo, password, tipo })
+            body: JSON.stringify({ 
+                nome, email, telefone: telefoneLimpo, password, tipo, 
+                nomeAluno, dataNascimentoAluno, captchaToken 
+            })
         });
 
         const resultado = await response.json();
 
         if (response.ok) {
-            // AQUI ESTÁ A MENSAGEM ATUALIZADA
             mostrarAlerta(resultado.mensagem || "A sua conta foi enviada para aprovação. Aguarde a confirmação da coordenação.", true);
         } else {
             mostrarAlerta(resultado.error || "Erro ao criar conta.");
+            if (recaptchaRef.current) recaptchaRef.current.reset();
+            setCaptchaToken(null);
         }
     } catch (error) {
         mostrarAlerta("Erro ao ligar ao servidor! Verifica a tua ligação.");
+        if (recaptchaRef.current) recaptchaRef.current.reset();
+        setCaptchaToken(null);
     }
+  };
+
+  const onCaptchaChange = (token) => {
+      setCaptchaToken(token);
   };
 
   return (
@@ -90,7 +111,7 @@ export default function Registo({ irParaLogin, irParaLanding }) {
       <div className="right-side">
         <div className="form-box">
           <header className="form-header">
-            <h2>Criar Conta ✨</h2>
+            <h2>Criar Conta </h2>
             <p>Preenche os teus dados abaixo</p>
           </header>
 
@@ -100,10 +121,35 @@ export default function Registo({ irParaLogin, irParaLanding }) {
           </div>
 
           <form onSubmit={lidarComRegisto}>
+
             <div className="input-container">
-              <label>Nome Completo</label>
+              <label>Seu Nome Completo (Encarregado)</label>
               <input type="text" placeholder="Insira o seu nome" value={nome} onChange={(e) => setNome(e.target.value)} required />
             </div>
+
+            {tipo === 'EE' && (
+              <div className="input-row" style={{ display: 'flex', gap: '15px', marginBottom: '15px' }}>
+                <div className="input-container" style={{ flex: 2, marginBottom: 0 }}>
+                  <label>Nome do Educando </label>
+                  <input 
+                    type="text" 
+                    placeholder="Nome completo do aluno" 
+                    value={nomeAluno} 
+                    onChange={(e) => setNomeAluno(e.target.value)} 
+                    required={tipo === 'EE'} 
+                  />
+                </div>
+                <div className="input-container" style={{ flex: 1, marginBottom: 0 }}>
+                  <label>Data Nascimento </label>
+                  <input 
+                    type="date" 
+                    value={dataNascimentoAluno} 
+                    onChange={(e) => setDataNascimentoAluno(e.target.value)} 
+                    required={tipo === 'EE'} 
+                  />
+                </div>
+              </div>
+            )}
 
             <div className="input-container">
               <label>Email</label>
@@ -124,6 +170,14 @@ export default function Registo({ irParaLogin, irParaLanding }) {
             <div className="input-container">
               <label>Palavra-passe</label>
               <input type="password" placeholder="Crie uma senha forte" value={password} onChange={(e) => setPassword(e.target.value)} required />
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '5px', transform: 'scale(0.90)', transformOrigin: 'center' }}>
+              <ReCAPTCHA
+                ref={recaptchaRef}
+                sitekey="6LesTOIsAAAAACw0jFqhrje-SuCVR_HNRo3WhD2e"
+                onChange={onCaptchaChange}
+              />
             </div>
 
             <button type="submit" className="btn-login">Finalizar Registo</button>

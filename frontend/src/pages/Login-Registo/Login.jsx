@@ -1,10 +1,21 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import './LoginRegisto.css'; 
+import ReCAPTCHA from 'react-google-recaptcha';
 
-export default function Login({ irParaRegisto, irParaLanding, irParaRecuperar }) {
+export default function Login({
+  irParaRegisto,
+  irParaLanding,
+  irParaRecuperar,
+  irParaMinhaAgendaProfessor,
+  irParaMinhaAgendaEE
+}) {
   const [tipo, setTipo] = useState('EE'); 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+
+  const [tentativasFalhadas, setTentativasFalhadas] = useState(0);
+  const [captchaToken, setCaptchaToken] = useState(null);
+  const recaptchaRef = useRef(null);
   
   const [customAlert, setCustomAlert] = useState({ show: false, message: '' });
 
@@ -23,27 +34,43 @@ export default function Login({ irParaRegisto, irParaLanding, irParaRecuperar })
   const lidarComLogin = async (e) => {
     e.preventDefault();
 
+    if (tentativasFalhadas >= 3 && !captchaToken) {
+        mostrarAlerta("Demasiadas tentativas falhadas. Por favor, confirma que não és um robô.");
+        return;
+    }
+
     try {
       const response = await fetch('http://localhost:3000/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        // AGORA ENVIAMOS O "tipo" PARA O BACKEND VALIDAR
-        body: JSON.stringify({ email, password, tipo }) 
+        body: JSON.stringify({ email, password, tipo, captchaToken }) 
       });
 
       const resultado = await response.json();
 
       if (response.ok) {
-        // Grava o objeto que o backend envia (inclui o perfil ativo validado)
+        setTentativasFalhadas(0);
         localStorage.setItem('viva_user', JSON.stringify(resultado.utilizador));
         localStorage.setItem('viva_token', resultado.token);
-        irParaLanding(); 
+        
+        // Redireciona sempre para a Landing Page após o login
+        irParaLanding?.();
       } else {
-        mostrarAlerta(resultado.mensagem || "Dados de acesso incorretos.");
+        setTentativasFalhadas(prev => prev + 1);
+        mostrarAlerta(resultado.mensagem || "Credenciais incorretas.");
+
+        if (recaptchaRef.current) recaptchaRef.current.reset();
+        setCaptchaToken(null);
       }
     } catch (error) {
-      mostrarAlerta("Erro ao ligar ao servidor. Verifica a tua ligação.");
+      mostrarAlerta("Erro ao ligar ao servidor! Verifica a tua ligação.");
+      if (recaptchaRef.current) recaptchaRef.current.reset();
+      setCaptchaToken(null);
     }
+  };
+
+  const onCaptchaChange = (token) => {
+      setCaptchaToken(token);
   };
 
   return (
@@ -63,7 +90,7 @@ export default function Login({ irParaRegisto, irParaLanding, irParaRecuperar })
       <div className="right-side">
         <div className="form-box">
           <header className="form-header">
-            <h2>Iniciar Sessão ✨</h2>
+            <h2>Iniciar Sessão </h2>
             <p>Selecione o seu perfil</p>
           </header>
 
@@ -86,6 +113,16 @@ export default function Login({ irParaRegisto, irParaLanding, irParaRecuperar })
             <div className="forgot-password-link">
               <a href="#" onClick={(e) => { e.preventDefault(); irParaRecuperar(); }}>Esqueceu-se da palavra-passe?</a>
             </div>
+
+            {tentativasFalhadas >= 3 && (
+                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '15px', marginTop: '15px', transform: 'scale(0.90)', transformOrigin: 'center' }}>
+                    <ReCAPTCHA
+                        ref={recaptchaRef}
+                        sitekey="6LesTOIsAAAAACw0jFqhrje-SuCVR_HNRo3WhD2e" 
+                        onChange={onCaptchaChange}
+                    />
+                </div>
+            )}
 
             <button type="submit" className="btn-login">Entrar</button>
           </form>

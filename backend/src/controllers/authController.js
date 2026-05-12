@@ -1,243 +1,590 @@
 /**
- * Controlador de Autenticação e Gestão de Utilizadores
- * Este ficheiro gere o login, registo, recuperação de passwords e operações de administração.
+ * @fileoverview Controlador de Autenticação e Gestão de Utilizadores.
+ * Lida com o login, registo, recuperação de palavra-passe e gestão CRUD de utilizadores e alunos associados.
  */
 
-const bcrypt = require('bcryptjs'); // Biblioteca para encriptação de passwords (hashing)
-const jwt = require('jsonwebtoken'); // Biblioteca para gerar e validar JSON Web Tokens (JWT)
-const crypto = require('crypto'); // Módulo nativo do Node.js para operações criptográficas (ex: gerar tokens)
-
-const utilizadorModel = require('../models/authModel'); // Modelo de dados do utilizador
-
-// ============================================================================
-// AUTENTICAÇÃO E RECUPERAÇÃO DE CONTA
-// ============================================================================
+const bcrypt = require("bcryptjs");
+const jwt = require("jsonwebtoken");
+const crypto = require("crypto");
+const utilizadorModel = require("../models/authModel");
 
 async function login(req, res, next) {
-    try {
-        const { email, password, tipo, perfil } = req.body;
-        
-        // 1. Validação dos campos obrigatórios
-        if (!email || !password) return res.status(400).json({ mensagem: 'Email e palavra-passe são obrigatórios.' });
+  try {
+    const { email, password, tipo, perfil, captchaToken } = req.body;
 
-        const tipoFornecido = tipo || perfil || 'PROF';
-        /** Normaliza para comparações (ex.: Postman com `"tipo": "admin"`). */
-        const tipoUp = String(tipoFornecido).trim().toUpperCase();
-        const utilizador = await utilizadorModel.getUtilizadorByEmail(email);
+    if (!email || !password) {
+      return res
+        .status(400)
+        .json({ mensagem: "Email e palavra-passe são obrigatórios." });
+    }
 
-        // 2. Verificação de existência do utilizador
-        if (!utilizador) return res.status(401).json({ mensagem: 'Credenciais inválidas.' });
-        
-        // 3. Verificação do estado da conta (Aprovação pendente ou conta suspensa)
-        if (!utilizador.ativo) return res.status(403).json({ mensagem: 'Conta desativada. Aguarde a aprovação da administração.' });
+    if (captchaToken) {
+      const chaveSecreta = process.env.RECAPTCHA_SECRET_KEY;
+      const googleVerifyUrl = `https://www.google.com/recaptcha/api/siteverify?secret=${chaveSecreta}&response=${captchaToken}`;
+      const recaptchaResponse = await fetch(googleVerifyUrl, {
+        method: "POST",
+      });
+      const recaptchaData = await recaptchaResponse.json();
 
-        // 4. Verificação de segurança da password (comparação de hashes)
-        const passwordCorreta = await bcrypt.compare(password, utilizador.password);
-        if (!passwordCorreta) return res.status(401).json({ mensagem: 'Credenciais inválidas.' });
+      if (!recaptchaData.success) {
+        return res.status(400).json({
+          mensagem: "A validação do reCAPTCHA falhou. Tenta novamente.",
+        });
+      }
+    }
 
-        // 5. Validação de Perfis e Autorização
-        const perfis = await utilizadorModel.getPerfisDoUtilizador(utilizador.id_utilizador);
-        let temPerfil = false;
-        
-        // Verifica se o perfil fornecido corresponde aos perfis associados ao utilizador na base de dados
-        if (tipoUp === 'ADMIN') temPerfil = perfis.some(p => p.toLowerCase().includes('admin') || p.toLowerCase().includes('coord'));
-        else if (tipoUp === 'PROF' || tipoUp === 'PROFESSOR') temPerfil = perfis.some(p => p.toLowerCase().includes('prof'));
-        else temPerfil = perfis.some(p => p.toLowerCase().includes('encarregado') || p.toLowerCase().includes('educação') || p.toLowerCase().includes('educacao') || p.toLowerCase() === 'ee');
+    const tipoFornecido = tipo || perfil || "PROF";
+    const tipoUp = String(tipoFornecido).trim().toUpperCase();
 
-        if (!temPerfil) return res.status(403).json({ mensagem: `Acesso negado.` });
+    const utilizador = await utilizadorModel.getUtilizadorByEmail(email);
 
-        // Normalização do nome do perfil para envio no token
-        let perfilFinal = 'Encarregado de Educação';
-        if (tipoUp === 'PROF' || tipoUp === 'PROFESSOR') perfilFinal = 'Professor';
-        if (tipoUp === 'ADMIN') perfilFinal = 'Admin';
+    if (!utilizador)
+      return res.status(401).json({ mensagem: "Credenciais inválidas." });
 
-        // 6. Geração do JSON Web Token (JWT) com os dados de sessão do utilizador
-        const token = jwt.sign(
-            { id: utilizador.id_utilizador, nome: utilizador.nome, email: utilizador.email, perfis, perfil: perfilFinal, id_perfil: tipoUp === 'ADMIN' ? 1 : null },
-            process.env.JWT_SECRET || 'segredo_super_seguro_123',
-            { expiresIn: '8h' } // O token expira em 8 horas
-        );
+    if (!utilizador.ativo) {
+      return res.status(403).json({
+        mensagem: "Conta desativada. Aguarde a aprovação da administração.",
+      });
+    }
 
-        return res.status(200).json({ mensagem: 'Login efetuado', token, utilizador: { id: utilizador.id_utilizador, nome: utilizador.nome, email: utilizador.email, perfis, perfil: perfilFinal } });
-    } catch (error) { next(error); }
+    const passwordCorreta = await bcrypt.compare(password, utilizador.password);
+    if (!passwordCorreta)
+      return res.status(401).json({ mensagem: "Credenciais inválidas." });
+
+    const perfis = await utilizadorModel.getPerfisDoUtilizador(
+      utilizador.id_utilizador,
+    );
+    let temPerfil = false;
+
+    if (tipoUp === "ADMIN") {
+      temPerfil = perfis.some(
+        (p) =>
+          p.toLowerCase().includes("admin") ||
+          p.toLowerCase().includes("coord"),
+      );
+    } else if (tipoUp === "PROF" || tipoUp === "PROFESSOR") {
+      temPerfil = perfis.some((p) => p.toLowerCase().includes("prof"));
+    } else {
+      temPerfil = perfis.some(
+        (p) =>
+          p.toLowerCase().includes("encarregado") ||
+          p.toLowerCase().includes("educação") ||
+          p.toLowerCase().includes("educacao") ||
+          p.toLowerCase() === "ee",
+      );
+    }
+
+    if (perfis.length === 0)
+      return res
+        .status(403)
+        .json({ mensagem: "Acesso negado. Nenhum perfil associado à conta." });
+
+    if (!temPerfil) {
+      return res.status(403).json({ mensagem: `Acesso negado.` });
+    }
+
+    let perfilFinal = "Encarregado de Educação";
+    if (perfis.some((p) => p.toLowerCase().includes("prof")))
+      perfilFinal = "Professor";
+    if (
+      perfis.some(
+        (p) =>
+          p.toLowerCase().includes("admin") ||
+          p.toLowerCase().includes("coord"),
+      )
+    )
+      perfilFinal = "Admin";
+
+    const token = jwt.sign(
+      {
+        id: utilizador.id_utilizador,
+        nome: utilizador.nome,
+        email: utilizador.email,
+        perfis,
+        perfil: perfilFinal,
+        id_perfil: perfilFinal === "Admin" ? 1 : null,
+      },
+      process.env.JWT_SECRET || "segredo_super_seguro_123",
+      { expiresIn: "8h" },
+    );
+
+    return res.status(200).json({
+      mensagem: "Login efetuado",
+      token,
+      utilizador: {
+        id: utilizador.id_utilizador,
+        nome: utilizador.nome,
+        email: utilizador.email,
+        perfis,
+        perfil: perfilFinal,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
 }
 
-/**
- * Termina a sessão do utilizador.
- * (Numa arquitetura JWT stateless, o logout é maioritariamente tratado no lado do cliente apagando o token).
- */
-async function logout(req, res) { 
-    return res.status(200).json({ mensagem: 'Sessão terminada com sucesso.' }); 
+async function logout(req, res) {
+  return res.status(200).json({ mensagem: "Sessão terminada com sucesso." });
 }
 
-/**
- * Gera um token seguro para iniciar o processo de recuperação de password.
- */
 async function solicitarRecuperacaoPassword(req, res, next) {
-    try {
-        const { email } = req.body;
-        const utilizador = await utilizadorModel.getUtilizadorByEmail(email);
-        
-        // Proteção: Apenas contas ativas e existentes podem recuperar a password
-        if (!utilizador || !utilizador.ativo) return res.status(404).json({ mensagem: 'Email não encontrado ou inativo.' });
-        
-        // Geração de um token hexadecimal aleatório (ex: 8A4F1D)
-        const token = crypto.randomBytes(4).toString('hex').toUpperCase();
-        await utilizadorModel.guardarTokenRecuperacao(utilizador.id_utilizador, token);
-        
-        return res.status(200).json({ mensagem: 'Token gerado.', token });
-    } catch (error) { next(error); }
+  try {
+    const { email, captchaToken } = req.body;
+
+    if (!captchaToken) {
+      return res
+        .status(400)
+        .json({ mensagem: "Validação reCAPTCHA em falta." });
+    }
+
+    const chaveSecreta = process.env.RECAPTCHA_SECRET_KEY;
+    const googleVerifyUrl = `https://www.google.com/recaptcha/api/siteverify?secret=${chaveSecreta}&response=${captchaToken}`;
+    const recaptchaResponse = await fetch(googleVerifyUrl, { method: "POST" });
+    const recaptchaData = await recaptchaResponse.json();
+
+    if (!recaptchaData.success) {
+      return res.status(400).json({
+        mensagem: "A validação do reCAPTCHA falhou. Tenta novamente.",
+      });
+    }
+
+    const utilizador = await utilizadorModel.getUtilizadorByEmail(email);
+
+    if (!utilizador || !utilizador.ativo) {
+      return res
+        .status(404)
+        .json({ mensagem: "Email não encontrado ou inativo." });
+    }
+
+    const token = crypto.randomBytes(4).toString("hex").toUpperCase();
+    await utilizadorModel.guardarTokenRecuperacao(
+      utilizador.id_utilizador,
+      token,
+    );
+
+    return res.status(200).json({ mensagem: "Token gerado.", token });
+  } catch (error) {
+    next(error);
+  }
 }
 
-/**
- * Redefine a password do utilizador mediante um token de recuperação válido.
- */
 async function redefinirPassword(req, res, next) {
-    try {
-        const { token, novaPassword } = req.body;
-        if (!token || !novaPassword) return res.status(400).json({ mensagem: 'Token e password obrigatórios.' });
-        
-        const tokenValido = await utilizadorModel.validarTokenRecuperacao(token);
-        if (!tokenValido) return res.status(400).json({ mensagem: 'Token inválido.' });
-        
-        // Encripta a nova password antes de a guardar na base de dados
-        const hash = await bcrypt.hash(novaPassword, 10);
-        await utilizadorModel.atualizarPassword(tokenValido.UTILIZADORid_utilizador, hash, tokenValido.id_token_recuperacao);
-        
-        return res.status(200).json({ mensagem: 'Palavra-passe atualizada.' });
-    } catch (error) { next(error); }
+  try {
+    const { token, novaPassword } = req.body;
+    if (!token || !novaPassword) {
+      return res
+        .status(400)
+        .json({ mensagem: "Token e password obrigatórios." });
+    }
+
+    const tokenValido = await utilizadorModel.validarTokenRecuperacao(token);
+    if (!tokenValido)
+      return res.status(400).json({ mensagem: "Token inválido." });
+
+    const hash = await bcrypt.hash(novaPassword, 10);
+    await utilizadorModel.atualizarPassword(
+      tokenValido.UTILIZADORid_utilizador,
+      hash,
+      tokenValido.id_token_recuperacao,
+    );
+
+    return res.status(200).json({ mensagem: "Palavra-passe atualizada." });
+  } catch (error) {
+    next(error);
+  }
 }
 
-/**
- * Registo de novos utilizadores
- * Nota: Os utilizadores criados por esta via ficam pendentes de aprovação (ativo: 0).
- */
 async function register(req, res, next) {
-    try {
-        const { nome, email, telefone, password, tipo } = req.body;
-        if (!nome || !email || !password || !tipo) return res.status(400).json({ error: 'Campos em falta.' });
+  try {
+    const {
+      nome,
+      email,
+      telefone,
+      password,
+      tipo,
+      nomeAluno,
+      dataNascimentoAluno,
+      captchaToken,
+    } = req.body;
 
-        // Encriptação da password
-        const passwordHash = await bcrypt.hash(password, 10);
-        const nomePerfil = tipo === 'PROF' ? 'Professor' : 'Encarregado';
+    if (!nome || !email || !password || !tipo)
+      return res.status(400).json({ error: "Campos em falta." });
 
-        // Cria o utilizador com estado inativo por omissão
-        await utilizadorModel.criarUtilizador({ nome, email, passwordHash, telefone, nomePerfil, ativo: 0 });
-        return res.status(201).json({ mensagem: 'Registo concluído! Aguarde aprovação.' });
-    } catch (error) {
-        // Tratamento de erro específico para emails já registados
-        if (error.message.includes('Já existe')) return res.status(400).json({ error: error.message });
-        next(error);
+    if (tipo === "EE" && (!nomeAluno || !dataNascimentoAluno)) {
+      return res.status(400).json({
+        error: "Nome e data de nascimento do aluno são obrigatórios.",
+      });
     }
+
+    if (!captchaToken) {
+      return res.status(400).json({ error: "Validação reCAPTCHA em falta." });
+    }
+
+    const chaveSecreta = process.env.RECAPTCHA_SECRET_KEY;
+    const googleVerifyUrl = `https://www.google.com/recaptcha/api/siteverify?secret=${chaveSecreta}&response=${captchaToken}`;
+    const recaptchaResponse = await fetch(googleVerifyUrl, { method: "POST" });
+    const recaptchaData = await recaptchaResponse.json();
+
+    if (!recaptchaData.success) {
+      return res
+        .status(400)
+        .json({ error: "A validação do reCAPTCHA falhou. Tenta novamente." });
+    }
+
+    const passwordHash = await bcrypt.hash(password, 10);
+    const nomePerfil = tipo === "PROF" ? "Professor" : "Encarregado";
+
+    await utilizadorModel.criarUtilizador({
+      nome,
+      email,
+      passwordHash,
+      telefone,
+      nomePerfil,
+      ativo: 0,
+      nomeAluno,
+      dataNascimentoAluno,
+    });
+
+    return res
+      .status(201)
+      .json({ mensagem: "Registo concluído! Aguarde aprovação." });
+  } catch (error) {
+    if (error.message.includes("Já existe"))
+      return res.status(400).json({ error: error.message });
+    next(error);
+  }
 }
 
-// ============================================================================
-// FUNÇÕES DE ADMINISTRAÇÃO (Acesso restrito a Admins)
-// ============================================================================
-
-/**
- * Lista todos os utilizadores registados na plataforma.
- */
 async function listarUtilizadores(req, res, next) {
-    try {
-        const users = await utilizadorModel.listarTodosUtilizadores();
-        return res.status(200).json(users);
-    } catch (error) { next(error); }
+  try {
+    const lista = await utilizadorModel.listarTodosUtilizadores();
+    return res.status(200).json(lista);
+  } catch (error) {
+    next(error);
+  }
 }
 
-/**
- * Ativa uma conta de utilizador que estava pendente ou suspensa.
- */
-async function ativarUtilizador(req, res, next) {
-    try {
-        const sucesso = await utilizadorModel.alterarEstadoUtilizador(req.params.id, true);
-        if (sucesso) return res.status(200).json({ mensagem: 'Utilizador aceite!' });
-        return res.status(400).json({ mensagem: 'Erro ao aceitar.' });
-    } catch (error) { next(error); }
-}
-
-/**
- * Desativa/Suspende a conta de um utilizador, revogando o seu acesso.
- */
-async function desativarUtilizador(req, res, next) {
-    try {
-        const sucesso = await utilizadorModel.alterarEstadoUtilizador(req.params.id, false);
-        if (sucesso) return res.status(200).json({ mensagem: 'Acesso revogado!' });
-        return res.status(400).json({ mensagem: 'Erro ao revogar.' });
-    } catch (error) { next(error); }
-}
-
-/**
- * Apaga permanentemente o registo de um utilizador do sistema.
- */
-async function eliminarUtilizador(req, res, next) {
-    try {
-        const sucesso = await utilizadorModel.apagarUtilizador(req.params.id);
-        if (sucesso) return res.status(200).json({ mensagem: 'Pedido eliminado com sucesso!' });
-        return res.status(400).json({ mensagem: 'Erro ao eliminar utilizador.' });
-    } catch (error) { next(error); }
-}
-
-/**
- * Permite a um Administrador criar diretamente um novo utilizador.
- * Diferente do registo público, o utilizador fica imediatamente ativo.
- */
 async function adminCriarUtilizador(req, res, next) {
-    try {
-        const { nome, email, telefone, password, tipo } = req.body;
-        if (!nome || !email || !password || !tipo) return res.status(400).json({ mensagem: 'Campos obrigatórios em falta.' });
-
-        const passwordHash = await bcrypt.hash(password, 10);
-        let nomePerfil = 'Encarregado';
-        if (tipo === 'PROF') nomePerfil = 'Professor';
-        if (tipo === 'ADMIN') nomePerfil = 'Admin';
-
-        // O Admin cria utilizadores já ativos (ativo: 1)
-        await utilizadorModel.criarUtilizador({ nome, email, passwordHash, telefone, nomePerfil, ativo: 1 });
-        return res.status(201).json({ mensagem: 'Utilizador criado e ativado com sucesso!' });
-    } catch (error) {
-        if (error.message.includes('Já existe')) return res.status(400).json({ mensagem: error.message });
-        next(error);
+  try {
+    // Adicionados dados do Aluno para salvar quando o admin cria um EE
+    const {
+      nome,
+      email,
+      telefone,
+      password,
+      tipo,
+      idsModalidades,
+      nomeAluno,
+      dataNascimentoAluno,
+    } = req.body;
+    if (!nome || !email || !password || !tipo) {
+      return res.status(400).json({
+        mensagem: "Nome, email, password e tipo (PROF ou EE) são obrigatórios.",
+      });
     }
+
+    let nomePerfil = "Encarregado";
+    if (tipo === "PROF") nomePerfil = "Professor";
+    if (tipo === "ADMIN") nomePerfil = "Admin";
+
+    let idsModalidadesProf;
+    if (tipo === "PROF") {
+      idsModalidadesProf = Array.isArray(idsModalidades) ? idsModalidades : [];
+      if (idsModalidadesProf.length === 0) {
+        return res.status(400).json({
+          mensagem:
+            "Para professor, indica pelo menos uma modalidade (idsModalidades).",
+        });
+      }
+    }
+
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    const novo = await utilizadorModel.criarUtilizador({
+      nome,
+      email,
+      passwordHash,
+      telefone,
+      nomePerfil,
+      ativo: 1,
+      idsModalidades: idsModalidadesProf,
+      nomeAluno,
+      dataNascimentoAluno,
+    });
+
+    return res
+      .status(201)
+      .json({ mensagem: "Utilizador criado.", utilizador: novo });
+  } catch (error) {
+    if (error.message === "Já existe um utilizador com este email.") {
+      return res.status(400).json({ mensagem: error.message });
+    }
+    if (error.message && error.message.startsWith("PERFIL_NAO_ENCONTRADO")) {
+      const perfisNaBd = error.message.split(":")[1];
+      return res.status(400).json({
+        mensagem: `Perfil não encontrado na BD. Perfis existentes: ${perfisNaBd}`,
+      });
+    }
+    next(error);
+  }
 }
 
-/**
- * Permite editar todos os dados de um utilizador existente.
- * A password só é alterada se for fornecida uma nova no pedido.
- */
+async function editarUtilizador(req, res, next) {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (Number.isNaN(id)) {
+      return res.status(400).json({ mensagem: "ID inválido." });
+    }
+
+    // O Frontend estava a enviar estes 2 campos, mas não estavam a ser lidos aqui. Corrigido!
+    const {
+      nome,
+      email,
+      telefone,
+      password,
+      nomePerfil,
+      tipo,
+      idsModalidades,
+      nomeAluno,
+      dataNascimentoAluno,
+    } = req.body;
+
+    if (!nome) {
+      return res.status(400).json({ mensagem: "Nome é obrigatório." });
+    }
+
+    let perfilFinal = nomePerfil;
+    if (!perfilFinal && tipo === "PROF") perfilFinal = "Professor";
+    if (!perfilFinal && tipo === "ADMIN") perfilFinal = "Admin";
+    if (!perfilFinal && tipo === "EE") perfilFinal = "Encarregado";
+
+    let passwordHash = null;
+    if (password && password.trim() !== "") {
+      passwordHash = await bcrypt.hash(password, 10);
+    }
+
+    const ok = await utilizadorModel.atualizarUtilizadorCompleto(id, {
+      nome,
+      email,
+      telefone,
+      passwordHash,
+      nomePerfil: perfilFinal,
+      idsModalidades,
+      nomeAluno, // Agora é passado para o Model
+      dataNascimentoAluno, // Agora é passado para o Model
+    });
+
+    if (!ok) {
+      return res.status(404).json({ mensagem: "Utilizador não encontrado." });
+    }
+    return res.status(200).json({ mensagem: "Utilizador atualizado." });
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function alterarEstado(req, res, next) {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (Number.isNaN(id)) {
+      return res.status(400).json({ mensagem: "ID inválido." });
+    }
+
+    const { ativo } = req.body;
+    if (typeof ativo !== "boolean") {
+      return res
+        .status(400)
+        .json({ mensagem: 'Campo "ativo" (boolean) é obrigatório.' });
+    }
+
+    const ok = await utilizadorModel.alterarEstadoUtilizador(
+      id,
+      ativo,
+      req.body.idsModalidades,
+    );
+    if (!ok) {
+      return res.status(404).json({ mensagem: "Utilizador não encontrado." });
+    }
+    return res
+      .status(200)
+      .json({ mensagem: ativo ? "Conta ativada." : "Conta desativada." });
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function ativarUtilizador(req, res, next) {
+  try {
+    const { id } = req.params;
+    const { idsModalidades } = req.body;
+
+    const sucesso = await utilizadorModel.alterarEstadoUtilizador(id, true);
+
+    if (sucesso && Array.isArray(idsModalidades)) {
+      await utilizadorModel.atualizarModalidadesProfessor(id, idsModalidades);
+    }
+
+    if (sucesso)
+      return res.status(200).json({ mensagem: "Utilizador aceite!" });
+    return res.status(400).json({ mensagem: "Erro ao aceitar." });
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function desativarUtilizador(req, res, next) {
+  try {
+    const sucesso = await utilizadorModel.alterarEstadoUtilizador(
+      req.params.id,
+      false,
+    );
+    if (sucesso) return res.status(200).json({ mensagem: "Acesso revogado!" });
+    return res.status(400).json({ mensagem: "Erro ao revogar." });
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function eliminarUtilizador(req, res, next) {
+  try {
+    const sucesso = await utilizadorModel.apagarUtilizador(req.params.id);
+    if (sucesso)
+      return res
+        .status(200)
+        .json({ mensagem: "Pedido eliminado com sucesso!" });
+    return res.status(400).json({ mensagem: "Erro ao eliminar utilizador." });
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function atualizarModalidades(req, res, next) {
+  try {
+    const { id } = req.params;
+    const { idsModalidades } = req.body;
+
+    if (!Array.isArray(idsModalidades)) {
+      return res
+        .status(400)
+        .json({ mensagem: "Lista de modalidades inválida." });
+    }
+
+    await utilizadorModel.atualizarModalidadesProfessor(id, idsModalidades);
+    return res
+      .status(200)
+      .json({ mensagem: "Modalidades atualizadas com sucesso." });
+  } catch (error) {
+    next(error);
+  }
+}
+
 async function editarUtilizadorCompleto(req, res, next) {
-    try {
-        const { id } = req.params;
-        const { nome, email, telefone, password, tipo } = req.body;
-        
-        if (!nome || !email) return res.status(400).json({ mensagem: 'Nome e email são obrigatórios.' });
+  try {
+    const { id } = req.params;
+    const {
+      nome,
+      email,
+      telefone,
+      password,
+      tipo,
+      idsModalidades,
+      nomeAluno,
+      dataNascimentoAluno,
+    } = req.body;
 
-        let passwordHash = null;
-        // Verifica se uma nova password foi submetida e não está em branco
-        if (password && password.trim() !== '') {
-            passwordHash = await bcrypt.hash(password, 10);
-        }
+    if (!nome || !email) {
+      return res
+        .status(400)
+        .json({ mensagem: "Nome e email são obrigatórios." });
+    }
 
-        let nomePerfil = 'Encarregado';
-        if (tipo === 'PROF') nomePerfil = 'Professor';
-        if (tipo === 'ADMIN') nomePerfil = 'Admin';
+    let passwordHash = null;
+    if (password && password.trim() !== "") {
+      passwordHash = await bcrypt.hash(password, 10);
+    }
 
-        await utilizadorModel.atualizarUtilizadorCompleto(id, { nome, email, telefone, passwordHash, nomePerfil });
-        return res.status(200).json({ mensagem: 'Dados atualizados com sucesso!' });
-    } catch (error) { next(error); }
+    let nomePerfil = "Encarregado";
+    if (tipo === "PROF") nomePerfil = "Professor";
+    if (tipo === "ADMIN") nomePerfil = "Admin";
+
+    /* A VALIDAÇÃO RÍGIDA DAS MODALIDADES FOI REMOVIDA DAQUI! 
+      Como o Frontend tem um modal à parte só para as Modalidades (botão dourado), 
+      esta função já não vai bloquear a edição se quiseres apenas alterar um nome ou telefone.
+    */
+
+    await utilizadorModel.atualizarUtilizadorCompleto(id, {
+      nome,
+      email,
+      telefone,
+      passwordHash,
+      nomePerfil,
+      idsModalidades,
+      nomeAluno,
+      dataNascimentoAluno,
+    });
+
+    return res.status(200).json({ mensagem: "Dados atualizados com sucesso!" });
+  } catch (error) {
+    next(error);
+  }
 }
 
-// Exportação dos métodos do controlador para uso nas rotas (Routes)
+async function getMeusAlunos(req, res, next) {
+  try {
+    const idEncarregado = req.utilizador?.id;
+    if (idEncarregado == null) {
+      return res.status(401).json({ mensagem: "Sessão inválida." });
+    }
+
+    const alunos = await utilizadorModel.getAlunosPorEncarregado(idEncarregado);
+    return res.status(200).json(alunos);
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function criarMeuAluno(req, res, next) {
+  try {
+    const idEncarregado = req.utilizador?.id;
+    const { nome, dataNascimento } = req.body;
+
+    if (idEncarregado == null) {
+      return res.status(401).json({ mensagem: "Sessão inválida." });
+    }
+    if (!nome || !String(nome).trim()) {
+      return res.status(400).json({ mensagem: "Nome do aluno é obrigatório." });
+    }
+
+    const aluno = await utilizadorModel.criarAlunoParaEncarregado(
+      idEncarregado,
+      {
+        nome: String(nome).trim(),
+        dataNascimento: dataNascimento || null,
+      },
+    );
+
+    return res.status(201).json(aluno);
+  } catch (error) {
+    next(error);
+  }
+}
+
 module.exports = {
-    login, 
-    logout, 
-    solicitarRecuperacaoPassword, 
-    redefinirPassword, 
-    register,
-    listarUtilizadores, 
-    ativarUtilizador, 
-    desativarUtilizador, 
-    adminCriarUtilizador, 
-    editarUtilizadorCompleto,
-    eliminarUtilizador
+  login,
+  logout,
+  solicitarRecuperacaoPassword,
+  redefinirPassword,
+  register,
+  listarUtilizadores,
+  editarUtilizador,
+  alterarEstado,
+  ativarUtilizador,
+  desativarUtilizador,
+  adminCriarUtilizador,
+  editarUtilizadorCompleto,
+  eliminarUtilizador,
+  atualizarModalidades,
+  getMeusAlunos,
+  criarMeuAluno,
 };

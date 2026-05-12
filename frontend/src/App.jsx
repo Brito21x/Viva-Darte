@@ -1,107 +1,131 @@
-import React, { useState, useEffect } from 'react';
-import Landing from './pages/LandingPage/Landing';
-import Login from './pages/Login-Registo/Login';
-import Registo from './pages/Login-Registo/Registo';
-import RecoverPassword from './pages/Login-Registo/RecoverPassword';
-import VendaFigurinos from './pages/VendaFigurinos/VendaFigurinos';
-import EmprestimosPecas from './pages/EmprestimosPecas/EmprestimosPecas';
-import AdminDashboard from './pages/AdminDashboard/AdminDashboard';
-import MinhaAgendaProfessor from './pages/MinhaAgendaProfessor/MinhaAgendaProfessor';
+import React, { useEffect } from "react";
+import {
+  BrowserRouter as Router,
+  Routes,
+  Route,
+  useNavigate,
+  useLocation,
+} from "react-router-dom";
+import Landing from "./pages/LandingPage/Landing";
+import Login from "./pages/Login-Registo/Login";
+import Registo from "./pages/Login-Registo/Registo";
+import RecoverPassword from "./pages/Login-Registo/RecoverPassword";
+import VendaFigurinos from "./pages/VendaFigurinos/VendaFigurinos";
+import EmprestimosPecas from "./pages/EmprestimosPecas/EmprestimosPecas";
+import AdminDashboard from "./pages/AdminDashboard/AdminDashboard";
+import MinhaAgendaProfessor from "./pages/MinhaAgendaProfessor/MinhaAgendaProfessor";
 
-function App() {
-  const [paginaAtual, setPaginaAtual] = useState(() => {
-    if (window.location.pathname === '/admin') {
-      return 'admin';
-    }
-    return 'landing';
-  });
+function AppRoutes() {
+  const navigate = useNavigate();
+  const location = useLocation();
 
   useEffect(() => {
-    if (paginaAtual !== 'admin' && window.location.pathname === '/admin') {
-      window.history.pushState({}, '', '/');
+    if (location.pathname === "/admin") {
     }
-    
-    localStorage.setItem('ultimaPagina', paginaAtual);
-  }, [paginaAtual]);
+  }, [location]);
 
+  // Objeto de navegação que passas para os teus componentes
   const nav = {
-    landing: () => setPaginaAtual('landing'),
-    login: () => setPaginaAtual('login'),
-    registo: () => setPaginaAtual('registo'),
-    recuperar: () => setPaginaAtual('recuperar'),
-    venda_figurinos: () => setPaginaAtual('venda_figurinos'),
-    emprestimos_pecas: () => setPaginaAtual('emprestimos_pecas'),
-    minha_agenda_professor: () => setPaginaAtual('minha_agenda_professor'),
+    landing: () => navigate("/"),
+    login: () => navigate("/login"),
+    registo: () => navigate("/registo"),
+    recuperar: () => navigate("/recuperar"),
+    venda_figurinos: () => navigate("/vendas-de-figurinos"),
+    emprestimos_pecas: () => navigate("/emprestimos"),
+    minha_agenda_professor: () => navigate("/agenda"),
+    minha_agenda_ee: () => navigate("/agenda"),
+    admin: () => navigate("/admin"),
   };
 
   return (
-    <div className="App">
-      
-      {/* LANDING PAGE */}
-      {paginaAtual === 'landing' && (
-        <Landing 
-          irParaLogin={nav.login} 
-          irParaRegisto={nav.registo} 
-          irParaVendaFigurinos={nav.venda_figurinos} 
-          irParaEmprestimos={nav.emprestimos_pecas}
-          irParaMinhaAgendaProfessor={nav.minha_agenda_professor}
-        />
-      )}
-      
-      {/* LOGIN */}
-      {paginaAtual === 'login' && (
-        <Login 
-          irParaRegisto={nav.registo} 
-          irParaLanding={nav.landing} 
-          irParaRecuperar={nav.recuperar} 
-        />
-      )}
-      
-      {/* REGISTO */}
-      {paginaAtual === 'registo' && (
-        <Registo 
-          irParaLogin={nav.login} 
-          irParaLanding={nav.landing} 
-        />
-      )}
+    <Routes>
+      <Route
+        path="/"
+        element={
+          <Landing
+            irParaLogin={nav.login}
+            irParaRegisto={nav.registo}
+            irParaVendaFigurinos={nav.venda_figurinos}
+            irParaEmprestimos={nav.emprestimos_pecas}
+            irParaMinhaAgendaProfessor={nav.minha_agenda_professor}
+            irParaMinhaAgendaEE={nav.minha_agenda_ee}
+          />
+        }
+      />
 
-      {/* RECUPERAR PASSWORD */}
-      {paginaAtual === 'recuperar' && (
-        <RecoverPassword 
-          irParaLogin={nav.login} 
-          irParaLanding={nav.landing} 
-        />
-      )}
+      <Route
+        path="/login"
+        element={
+          <Login
+            irParaLanding={nav.landing}
+            irParaRegisto={nav.registo}
+            irParaRecuperar={nav.recuperar}
+          />
+        }
+      />
+      <Route
+        path="/registo"
+        element={
+          <Registo irParaLogin={nav.login} irParaLanding={nav.landing} />
+        }
+      />
+      <Route
+        path="/recuperar"
+        element={<RecoverPassword irParaLogin={nav.login} />}
+      />
 
-      {/* VENDA DE FIGURINOS */}
-      {paginaAtual === 'venda_figurinos' && (
-        <VendaFigurinos 
-          irParaLanding={nav.landing} 
-          irParaEmprestimos={nav.emprestimos_pecas}
-        />
-      )}
+      <Route
+        path="/vendas-de-figurinos"
+        element={
+          <VendaFigurinos
+            irParaLanding={nav.landing}
+            irParaEmprestimos={nav.emprestimos_pecas}
+            irParaVendaFigurinos={nav.venda_figurinos}
+            irParaMinhaAgendaProfessor={nav.minha_agenda_professor}
+            irParaMinhaAgendaEE={nav.minha_agenda_ee}
+          />
+        }
+      />
 
-      {/* EMPRÉSTIMO DE PEÇAS */}
-      {paginaAtual === 'emprestimos_pecas' && (
-        <EmprestimosPecas 
-          irParaLanding={nav.landing} 
-          irParaVendaFigurinos={nav.venda_figurinos}
-        />
-      )}
+      <Route
+        path="/emprestimos"
+        element={
+          <EmprestimosPecas
+            irParaLanding={nav.landing}
+            irParaEmprestimos={nav.emprestimos_pecas}
+            irParaVendaFigurinos={nav.venda_figurinos}
+            irParaMinhaAgendaProfessor={nav.minha_agenda_professor}
+            irParaMinhaAgendaEE={nav.minha_agenda_ee}
+          />
+        }
+      />
 
-      {/* MINHA AGENDA PROFESSOR */}
-      {paginaAtual === 'minha_agenda_professor' && (
-        <MinhaAgendaProfessor irParaLanding={nav.landing} />
-      )}
+      <Route
+        path="/agenda"
+        element={
+          <MinhaAgendaProfessor
+            irParaLanding={nav.landing}
+            irParaEmprestimos={nav.emprestimos_pecas}
+            irParaVendaFigurinos={nav.venda_figurinos}
+            irParaMinhaAgendaProfessor={nav.minha_agenda_professor}
+            irParaMinhaAgendaEE={nav.minha_agenda_ee}
+          />
+        }
+      />
 
-      {/* ADMIN DASHBOARD */}
-      {paginaAtual === 'admin' && (
-        <AdminDashboard 
-          irParaLanding={nav.landing}
-        />
-      )}
+      <Route
+        path="/admin"
+        element={<AdminDashboard irParaLanding={nav.landing} />}
+      />
+    </Routes>
+  );
+}
 
-    </div>
+function App() {
+  return (
+    <Router>
+      <AppRoutes />
+    </Router>
   );
 }
 

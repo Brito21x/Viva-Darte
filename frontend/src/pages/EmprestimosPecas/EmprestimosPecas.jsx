@@ -719,7 +719,7 @@ export default function EmprestimosPecas({
           {utilizador ? (
             <div className="user-profile">
               <span className="welcome-text">
-                Olá, <strong>{utilizador.nome?.split(" ")[0]}</strong>
+                Olá, <strong>{utilizador?.nome || ""}</strong>
               </span>
               <button className="btn-logout" onClick={handleLogout}>
                 Sair

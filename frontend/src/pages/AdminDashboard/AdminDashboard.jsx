@@ -124,6 +124,15 @@ export default function AdminDashboard({ irParaLanding }) {
   const [utilizadores, setUtilizadores] = useState([]);
   const [allModalidades, setAllModalidades] = useState([]);
   const [pedidosPendentes, setPedidosPendentes] = useState([]);
+  const [historicoCoachings, setHistoricoCoachings] = useState([]);
+  const [salas, setSalas] = useState([]);
+  const [modalAprovar, setModalAprovar] = useState({
+    isOpen: false,
+    pedido: null,
+    idSala: "",
+    idProfessor: "",
+    valorFinal: "",
+  });
   const [msg, setMsg] = useState("");
 
   const [modalUser, setModalUser] = useState({
@@ -135,6 +144,15 @@ export default function AdminDashboard({ irParaLanding }) {
     isOpen: false,
     userId: null,
     selectedIds: [],
+  });
+
+  const [filtroCoaching, setFiltroCoaching] = useState({
+    encarregado: "",
+    aluno: "",
+    modalidade: "",
+    professor: "",
+    horaInicio: "",
+    horaFim: "",
   });
 
   useEffect(() => {
@@ -211,12 +229,14 @@ export default function AdminDashboard({ irParaLanding }) {
 
   async function carregarDados() {
     try {
-      const [usersData, modalidadesData] = await Promise.all([
+      const [usersData, modalidadesData, salasData] = await Promise.all([
         apiFetch("/api/auth/utilizadores", token).catch(() => []),
         apiFetch("/api/escola/modalidades", token).catch(() => []),
+        apiFetch("/api/escola/salas", token).catch(() => []),
       ]);
       if (Array.isArray(usersData)) setUtilizadores(usersData);
       if (Array.isArray(modalidadesData)) setAllModalidades(modalidadesData);
+      if (Array.isArray(salasData)) setSalas(salasData);
 
       const pedidos = await apiFetch(
         "/api/coaching/pedidos/pendentes",
@@ -226,6 +246,11 @@ export default function AdminDashboard({ irParaLanding }) {
     } catch (e) {
       mostrarMsg("Erro ao carregar dados.", "erro");
     }
+
+    const histData = await apiFetch("/api/coaching/historico", token).catch(
+      () => [],
+    );
+    if (Array.isArray(histData)) setHistoricoCoachings(histData);
   }
 
   function mostrarMsg(texto, tipo = "ok") {
@@ -286,7 +311,7 @@ export default function AdminDashboard({ irParaLanding }) {
   async function handleEliminarUtilizador(id) {
     if (
       !window.confirm(
-        "Tens a certeza ABSOLUTA que queres ELIMINAR PERMANENTEMENTE este pedido?",
+        "Tens a certeza ABSOLUTA que queres ELIMINAR PERMANENTEMENTE este registo?",
       )
     )
       return;
@@ -358,35 +383,31 @@ export default function AdminDashboard({ irParaLanding }) {
     e.preventDefault();
     const { email, telefone, password } = modalUser.data;
 
-    if (!email.includes("@")) {
+    if (!email.includes("@"))
       return mostrarMsg("O email tem de conter um '@'.", "erro");
-    }
 
     let telLimpo = "";
     if (telefone) {
       telLimpo = telefone.replace(/\D/g, "");
-      if (telLimpo.length !== 9) {
+      if (telLimpo.length !== 9)
         return mostrarMsg(
           "O número de telefone tem de ter exatamente 9 dígitos.",
           "erro",
         );
-      }
     }
 
     if (password && password.trim() !== "") {
       const regexEspecial = /[!@#$%^&*(),.?":{}|<>]/;
-      if (password.length < 8) {
+      if (password.length < 8)
         return mostrarMsg(
           "A password tem de ter no mínimo 8 caracteres.",
           "erro",
         );
-      }
-      if (!regexEspecial.test(password)) {
+      if (!regexEspecial.test(password))
         return mostrarMsg(
-          "A password tem de conter pelo menos 1 carácter especial (ex: ! @ # $).",
+          "A password tem de conter pelo menos 1 carácter especial.",
           "erro",
         );
-      }
     } else if (modalUser.mode === "create") {
       return mostrarMsg(
         "A password é obrigatória na criação de conta.",
@@ -432,7 +453,6 @@ export default function AdminDashboard({ irParaLanding }) {
     const preSelected = allModalidades
       .filter((m) => uMods.includes(m.nome))
       .map((m) => m.id_modalidade);
-
     setModalMods({
       isOpen: true,
       userId: u.id_utilizador,
@@ -465,57 +485,167 @@ export default function AdminDashboard({ irParaLanding }) {
     }
   }
 
-  if (!isAuthorized) {
-    return (
-      <div className="admin-login-wrapper">
-        <div className="admin-login-box">
-          <img src={logoImg} alt="Logo" className="admin-login-logo" />
-          <h2 className="admin-login-title">Painel Restrito</h2>
-          <p className="admin-login-subtitle">
-            Acesso exclusivo à Administração
-          </p>
-
-          <form className="admin-form" onSubmit={handleAdminLogin}>
-            {loginError && (
-              <div className="info-note info-note--error">{loginError}</div>
-            )}
-            <div className="field">
-              <label>Email / Username</label>
-              <input
-                type="text"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                autoComplete="username"
-              />
-            </div>
-            <div className="field">
-              <label>Palavra-passe</label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-              />
-            </div>
-            <button type="submit" className="btn-primary w-full p-14">
-              Entrar
-            </button>
-          </form>
-
-          <button className="btn-text-link" onClick={irParaLanding}>
-            Voltar ao site
-          </button>
-        </div>
-      </div>
-    );
+  function abrirModalAprovarPedido(p) {
+    setModalAprovar({
+      isOpen: true,
+      pedido: p,
+      idSala: "",
+      idProfessor: p.id_professor_desejado || "",
+      valorFinal: p.custo_estimado || "",
+    });
   }
+
+  async function submeterAprovacao(e) {
+    e.preventDefault();
+    if (
+      !modalAprovar.idSala ||
+      !modalAprovar.idProfessor ||
+      !modalAprovar.valorFinal
+    ) {
+      return mostrarMsg(
+        "Preencha sala, professor e preço para aprovar.",
+        "erro",
+      );
+    }
+
+    try {
+      const res = await fetch(
+        `${API_URL}/api/coaching/pedidos/${modalAprovar.pedido.id_pedido_coaching}/aprovar`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            idSala: modalAprovar.idSala,
+            idProfessor: modalAprovar.idProfessor,
+            valorFinal: modalAprovar.valorFinal,
+          }),
+        },
+      );
+      const data = await res.json();
+
+      if (res.ok) {
+        mostrarMsg("Coaching Agendado! A sala foi atribuída.", "ok");
+        setModalAprovar({
+          isOpen: false,
+          pedido: null,
+          idSala: "",
+          idProfessor: "",
+          valorFinal: "",
+        });
+        carregarDados();
+      } else {
+        mostrarMsg(data.mensagem || "Erro ao aprovar o pedido.", "erro");
+      }
+    } catch (err) {
+      mostrarMsg("Erro de comunicação.", "erro");
+    }
+  }
+
+  async function handleRejeitarPedido(idPedido) {
+    const justificacao = window.prompt(
+      "Por favor, introduza a justificação para rejeitar este pedido:",
+    );
+    if (!justificacao)
+      return mostrarMsg(
+        "A justificação é obrigatória para cancelar a rejeição.",
+        "erro",
+      );
+
+    try {
+      const res = await fetch(
+        `${API_URL}/api/coaching/pedidos/${idPedido}/rejeitar`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ justificacao }),
+        },
+      );
+      const data = await res.json();
+
+      if (res.ok) {
+        mostrarMsg("Pedido rejeitado com sucesso.", "ok");
+        carregarDados();
+      } else {
+        mostrarMsg(data.mensagem || "Erro ao rejeitar o pedido.", "erro");
+      }
+    } catch (err) {
+      mostrarMsg("Erro de comunicação com o servidor.", "erro");
+    }
+  }
+
+  async function handleCancelarCoaching(idCoaching) {
+    if (
+      !window.confirm(
+        "Tens a certeza que queres cancelar esta aula? A sala e o professor ficarão novamente livres.",
+      )
+    )
+      return;
+
+    try {
+      const res = await fetch(`${API_URL}/api/coaching/${idCoaching}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+
+      if (res.ok) {
+        mostrarMsg("Coaching cancelado com sucesso.", "ok");
+        carregarDados();
+      } else {
+        mostrarMsg(data.mensagem || "Erro ao cancelar o coaching.", "erro");
+      }
+    } catch (err) {
+      mostrarMsg("Erro de comunicação com o servidor.", "erro");
+    }
+  }
+
+  // Cálculos de Filtros e Separação de Listas
+  const pedidosCoachingFiltrados = pedidosPendentes.filter((p) => {
+    const encarregado = p.encarregado || "";
+    const modalidade = p.modalidade || "";
+    const professor = p.professor || "Qualquer";
+    const aluno = p.nome_aluno || p.alunos || "";
+
+    const matchEncarregado = encarregado
+      .toLowerCase()
+      .includes(filtroCoaching.encarregado.toLowerCase());
+    const matchModalidade = modalidade
+      .toLowerCase()
+      .includes(filtroCoaching.modalidade.toLowerCase());
+    const matchProfessor = professor
+      .toLowerCase()
+      .includes(filtroCoaching.professor.toLowerCase());
+    const matchAluno = aluno
+      .toLowerCase()
+      .includes(filtroCoaching.aluno.toLowerCase());
+
+    let matchHora = true;
+    const horaPedido = formatHoraCurta(p.hora_inicio_pretendida);
+
+    if (filtroCoaching.horaInicio && horaPedido < filtroCoaching.horaInicio)
+      matchHora = false;
+    if (filtroCoaching.horaFim && horaPedido > filtroCoaching.horaFim)
+      matchHora = false;
+
+    return (
+      matchEncarregado &&
+      matchModalidade &&
+      matchProfessor &&
+      matchAluno &&
+      matchHora
+    );
+  });
 
   const pendentes = utilizadores.filter(
     (u) => u.ativo === false || u.ativo === 0,
   );
   const aceites = utilizadores.filter((u) => u.ativo === true || u.ativo === 1);
-
   const profs = aceites.filter(
     (u) => u.perfis && u.perfis.toLowerCase().includes("prof"),
   );
@@ -535,6 +665,18 @@ export default function AdminDashboard({ irParaLanding }) {
       u.perfis !== "EE",
   );
 
+  // Divisão do Histórico em 3 Tabelas
+  const coachingsEspera = historicoCoachings.filter(
+    (c) => c.estado === "Agendado" || c.estado === "Confirmado",
+  );
+  const coachingsConcluidos = historicoCoachings.filter(
+    (c) => c.estado === "Realizado" || c.estado === "Nao_Realizado",
+  );
+  const coachingsCancelados = historicoCoachings.filter(
+    (c) => c.estado === "Cancelado",
+  );
+
+  // Função Renderizadora Tabela Utilizadores (Agora 100% segura com a variável 'u')
   const renderTabelaUtilizadores = (listaUtilizadores, tipoTabela) => (
     <table className="admin-table">
       <thead>
@@ -543,11 +685,9 @@ export default function AdminDashboard({ irParaLanding }) {
           <th>Nome</th>
           <th>Email</th>
           <th>Telefone</th>
-
           {tipoTabela === "PENDENTES" && <th>Educando / Modalidades</th>}
           {tipoTabela === "PROF" && <th>Modalidades</th>}
           {tipoTabela === "EE" && <th>Educando</th>}
-
           <th>Estado</th>
           <th>Criação</th>
           <th className="text-center">Ações</th>
@@ -629,7 +769,6 @@ export default function AdminDashboard({ irParaLanding }) {
                     Modalidades
                   </button>
                 )}
-
                 <button
                   className="btn-sm btn-sm--primary"
                   onClick={() => abrirModalEditar(u)}
@@ -651,10 +790,111 @@ export default function AdminDashboard({ irParaLanding }) {
     </table>
   );
 
+  // Função Renderizadora Linha de Coaching Enriquecida
+  const renderLinhaCoaching = (c, permiteCancelar = false) => (
+    <tr key={c.id_coaching}>
+      <td>
+        <strong>{formatDataApi(c.data_aula)}</strong>
+        <div style={{ fontSize: "0.8rem", color: "#666" }}>
+          {formatHoraCurta(c.hora_inicio)} ({c.duracao_minutos} min)
+        </div>
+      </td>
+      <td>
+        <div style={{ fontWeight: "600" }}>{c.alunos || "—"}</div>
+        <small style={{ display: "block", color: "#555" }}>
+          EE: {c.encarregado}
+        </small>
+      </td>
+      <td>
+        <strong>{c.nome_professor}</strong>
+        <div style={{ fontSize: "0.8rem", color: "var(--primary-color)" }}>
+          📍 {c.sala || "Sem sala"}
+        </div>
+      </td>
+      <td>
+        {c.modalidade}
+        <div style={{ fontSize: "0.75rem", color: "#777" }}>
+          {c.formato_aula}
+        </div>
+      </td>
+      <td style={{ fontWeight: "bold" }}>
+        {c.valor_final != null ? `${Number(c.valor_final).toFixed(2)}€` : "—"}
+      </td>
+      <td>
+        <span
+          className={`badge badge--${c.estado === "Realizado" ? "green" : c.estado === "Cancelado" ? "danger" : "blue"}`}
+        >
+          {c.estado}
+        </span>
+      </td>
+      {permiteCancelar ? (
+        <td className="text-center">
+          <button
+            className="btn-sm btn-sm--danger"
+            onClick={() => handleCancelarCoaching(c.id_coaching)}
+          >
+            Cancelar
+          </button>
+        </td>
+      ) : (
+        <td className="text-center">
+          <span style={{ color: "#888", fontSize: "0.85rem" }}>🔒 Fechado</span>
+        </td>
+      )}
+    </tr>
+  );
+
+  if (!isAuthorized) {
+    return (
+      <div className="admin-login-wrapper">
+        <div className="admin-login-box">
+          <img src={logoImg} alt="Logo" className="admin-login-logo" />
+          <h2 className="admin-login-title">Painel Restrito</h2>
+          <p className="admin-login-subtitle">
+            Acesso exclusivo à Administração
+          </p>
+
+          <form className="admin-form" onSubmit={handleAdminLogin}>
+            {loginError && (
+              <div className="info-note info-note--error">{loginError}</div>
+            )}
+            <div className="field">
+              <label>Email / Username</label>
+              <input
+                type="text"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                autoComplete="username"
+              />
+            </div>
+            <div className="field">
+              <label>Palavra-passe</label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              />
+            </div>
+            <button type="submit" className="btn-primary w-full p-14">
+              Entrar
+            </button>
+          </form>
+
+          <button className="btn-text-link" onClick={irParaLanding}>
+            Voltar ao site
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   const tabs = [
     { id: "overview", label: "🏠 Visão Geral" },
     { id: "utilizadores", label: "👥 Utilizadores" },
     { id: "coaching", label: "🗓️ Pedidos Coaching" },
+    { id: "historico_coaching", label: "📚 Histórico de Coachings" },
   ];
 
   return (
@@ -739,14 +979,12 @@ export default function AdminDashboard({ irParaLanding }) {
         {activeTab === "utilizadores" && (
           <div className="tab-content">
             <h1 className="page-title">👥 Gestão de Utilizadores</h1>
-
             <Section
               title={`Pendentes (${pendentes.length})`}
               defaultOpen={true}
             >
               {renderTabelaUtilizadores(pendentes, "PENDENTES")}
             </Section>
-
             <Section
               title={`Encarregados de Educação (${encarregados.length})`}
               defaultOpen={true}
@@ -764,7 +1002,6 @@ export default function AdminDashboard({ irParaLanding }) {
             >
               {renderTabelaUtilizadores(encarregados, "EE")}
             </Section>
-
             <Section
               title={`Professores (${profs.length})`}
               defaultOpen={true}
@@ -782,7 +1019,6 @@ export default function AdminDashboard({ irParaLanding }) {
             >
               {renderTabelaUtilizadores(profs, "PROF")}
             </Section>
-
             <Section
               title={`Administração (${adminsEOutros.length})`}
               defaultOpen={true}
@@ -802,9 +1038,316 @@ export default function AdminDashboard({ irParaLanding }) {
             </Section>
           </div>
         )}
+
+        {activeTab === "coaching" && (
+          <div className="tab-content">
+            <h1 className="page-title">🗓️ Pedidos de Coaching</h1>
+            <p className="page-subtitle">
+              Gestão de pedidos a aguardar aprovação da coordenação
+            </p>
+
+            <div
+              className="admin-section"
+              style={{ padding: "20px", marginBottom: "20px" }}
+            >
+              <h4
+                style={{
+                  margin: "0 0 15px 0",
+                  fontSize: "1rem",
+                  color: "var(--primary-dark)",
+                }}
+              >
+                Filtros de Pesquisa
+              </h4>
+              <div
+                className="form-group-row"
+                style={{ flexWrap: "wrap", gap: "15px" }}
+              >
+                <div className="field form-col-1">
+                  <label>Encarregado</label>
+                  <input
+                    type="text"
+                    placeholder="Ex: Rui..."
+                    value={filtroCoaching.encarregado}
+                    onChange={(e) =>
+                      setFiltroCoaching({
+                        ...filtroCoaching,
+                        encarregado: e.target.value,
+                      })
+                    }
+                  />
+                </div>
+                <div className="field form-col-1">
+                  <label>Aluno</label>
+                  <input
+                    type="text"
+                    placeholder="Ex: Maria..."
+                    value={filtroCoaching.aluno}
+                    onChange={(e) =>
+                      setFiltroCoaching({
+                        ...filtroCoaching,
+                        aluno: e.target.value,
+                      })
+                    }
+                  />
+                </div>
+                <div className="field form-col-1">
+                  <label>Professor Requisitado</label>
+                  <input
+                    type="text"
+                    placeholder="Ex: Ana..."
+                    value={filtroCoaching.professor}
+                    onChange={(e) =>
+                      setFiltroCoaching({
+                        ...filtroCoaching,
+                        professor: e.target.value,
+                      })
+                    }
+                  />
+                </div>
+              </div>
+              <div
+                className="form-group-row"
+                style={{ flexWrap: "wrap", gap: "15px", marginTop: "15px" }}
+              >
+                <div className="field form-col-1">
+                  <label>Modalidade</label>
+                  <input
+                    type="text"
+                    placeholder="Ex: Ballet..."
+                    value={filtroCoaching.modalidade}
+                    onChange={(e) =>
+                      setFiltroCoaching({
+                        ...filtroCoaching,
+                        modalidade: e.target.value,
+                      })
+                    }
+                  />
+                </div>
+                <div className="field form-col-1">
+                  <label>Hora Início (De)</label>
+                  <input
+                    type="time"
+                    value={filtroCoaching.horaInicio}
+                    onChange={(e) =>
+                      setFiltroCoaching({
+                        ...filtroCoaching,
+                        horaInicio: e.target.value,
+                      })
+                    }
+                  />
+                </div>
+                <div className="field form-col-1">
+                  <label>Hora Fim (Até)</label>
+                  <input
+                    type="time"
+                    value={filtroCoaching.horaFim}
+                    onChange={(e) =>
+                      setFiltroCoaching({
+                        ...filtroCoaching,
+                        horaFim: e.target.value,
+                      })
+                    }
+                  />
+                </div>
+              </div>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "flex-end",
+                  marginTop: "15px",
+                }}
+              >
+                <button
+                  className="btn-sm btn-cancel"
+                  onClick={() =>
+                    setFiltroCoaching({
+                      encarregado: "",
+                      aluno: "",
+                      modalidade: "",
+                      professor: "",
+                      horaInicio: "",
+                      horaFim: "",
+                    })
+                  }
+                >
+                  Limpar Filtros
+                </button>
+              </div>
+            </div>
+
+            <Section
+              title={`Pedidos Pendentes (${pedidosCoachingFiltrados.length})`}
+              defaultOpen={true}
+            >
+              <table className="admin-table">
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>Encarregado</th>
+                    <th>Aluno(s)</th>
+                    <th>Prof. Req.</th>
+                    <th>Modalidade</th>
+                    <th>Formato / Duração</th>
+                    <th>Data Pretendida</th>
+                    <th>Estado</th>
+                    <th className="text-center">Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pedidosCoachingFiltrados.map((p) => (
+                    <tr key={p.id_pedido_coaching}>
+                      <td>#{p.id_pedido_coaching}</td>
+                      <td>
+                        <strong>{p.encarregado || "—"}</strong>
+                      </td>
+                      <td>{p.nome_aluno || p.alunos || "—"}</td>
+                      <td>{p.professor || "Qualquer"}</td>
+                      <td>{p.modalidade}</td>
+                      <td>
+                        {p.formato_aula} ({p.duracao_minutos} min)
+                      </td>
+                      <td>
+                        {formatDataApi(p.data_aula_pretendida)} às{" "}
+                        {formatHoraCurta(p.hora_inicio_pretendida)}
+                      </td>
+                      <td>
+                        <span className="badge badge--orange">Pendente</span>
+                      </td>
+                      <td className="text-center whitespace-nowrap">
+                        <button
+                          className="btn-sm btn-sm--green mr-8"
+                          onClick={() => abrirModalAprovarPedido(p)}
+                        >
+                          Aprovar
+                        </button>
+                        <button
+                          className="btn-sm btn-sm--danger"
+                          onClick={() =>
+                            handleRejeitarPedido(p.id_pedido_coaching)
+                          }
+                        >
+                          Rejeitar
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                  {pedidosCoachingFiltrados.length === 0 && (
+                    <tr>
+                      <td colSpan="9" className="empty-row">
+                        Nenhum pedido encontrado.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </Section>
+          </div>
+        )}
+
+        {/* NOVA ABA DE HISTÓRICO COM AS 3 SECÇÕES */}
+        {activeTab === "historico_coaching" && (
+          <div className="tab-content">
+            <h1 className="page-title">📚 Histórico de Coachings</h1>
+            <p className="page-subtitle">
+              Acompanhamento detalhado de aulas agendadas, realizadas ou
+              canceladas.
+            </p>
+
+            <Section
+              title={`⏳ À Espera de Conclusão (${coachingsEspera.length})`}
+              defaultOpen={true}
+            >
+              <table className="admin-table">
+                <thead>
+                  <tr>
+                    <th>Data/Hora</th>
+                    <th>Aluno(s) / EE</th>
+                    <th>Professor / Sala</th>
+                    <th>Modalidade</th>
+                    <th>Valor</th>
+                    <th>Estado</th>
+                    <th className="text-center">Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {coachingsEspera.map((c) => renderLinhaCoaching(c, true))}
+                  {coachingsEspera.length === 0 && (
+                    <tr>
+                      <td colSpan="7" className="text-center empty-row">
+                        Nenhuma aula pendente.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </Section>
+
+            <Section
+              title={`✅ Concluídas (${coachingsConcluidos.length})`}
+              defaultOpen={true}
+            >
+              <table className="admin-table">
+                <thead>
+                  <tr>
+                    <th>Data/Hora</th>
+                    <th>Aluno(s) / EE</th>
+                    <th>Professor / Sala</th>
+                    <th>Modalidade</th>
+                    <th>Valor</th>
+                    <th>Estado</th>
+                    <th className="text-center">Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {coachingsConcluidos.map((c) =>
+                    renderLinhaCoaching(c, false),
+                  )}
+                  {coachingsConcluidos.length === 0 && (
+                    <tr>
+                      <td colSpan="7" className="text-center empty-row">
+                        Nenhuma aula concluída.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </Section>
+
+            <Section
+              title={`❌ Canceladas (${coachingsCancelados.length})`}
+              defaultOpen={false}
+            >
+              <table className="admin-table">
+                <thead>
+                  <tr>
+                    <th>Data/Hora</th>
+                    <th>Aluno(s) / EE</th>
+                    <th>Professor / Sala</th>
+                    <th>Modalidade</th>
+                    <th>Valor</th>
+                    <th>Estado</th>
+                    <th className="text-center">Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {coachingsCancelados.map((c) =>
+                    renderLinhaCoaching(c, false),
+                  )}
+                  {coachingsCancelados.length === 0 && (
+                    <tr>
+                      <td colSpan="7" className="text-center empty-row">
+                        Nenhuma aula cancelada.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </Section>
+          </div>
+        )}
       </main>
 
-      {/* Modal de Criar/Editar Utilizador */}
       {modalUser.isOpen && (
         <div className="admin-modal-overlay">
           <div className="admin-modal-content">
@@ -813,7 +1356,6 @@ export default function AdminDashboard({ irParaLanding }) {
                 ? "Criar Novo Utilizador"
                 : "Editar Utilizador"}
             </h2>
-
             <form className="admin-form" onSubmit={submeterModal}>
               {modalUser.data.tipo === "EE" && (
                 <div className="form-group-row">
@@ -852,7 +1394,6 @@ export default function AdminDashboard({ irParaLanding }) {
                   </div>
                 </div>
               )}
-
               <div className="field">
                 <label>Nome Completo (Encarregado/Prof)</label>
                 <input
@@ -867,7 +1408,6 @@ export default function AdminDashboard({ irParaLanding }) {
                   required
                 />
               </div>
-
               <div className="field">
                 <label>Email *</label>
                 <input
@@ -883,7 +1423,6 @@ export default function AdminDashboard({ irParaLanding }) {
                   required
                 />
               </div>
-
               <div className="form-group-row">
                 <div className="field form-col-1">
                   <label>Telefone</label>
@@ -916,10 +1455,9 @@ export default function AdminDashboard({ irParaLanding }) {
                   </select>
                 </div>
               </div>
-
               <div className="field">
                 <label>
-                  Palavra-passe
+                  Palavra-passe{" "}
                   {modalUser.mode === "edit" && (
                     <span className="password-hint">
                       (Deixe em branco para manter)
@@ -942,7 +1480,6 @@ export default function AdminDashboard({ irParaLanding }) {
                   }
                 />
               </div>
-
               <div className="modal-actions">
                 <button
                   type="button"
@@ -960,7 +1497,6 @@ export default function AdminDashboard({ irParaLanding }) {
         </div>
       )}
 
-      {/* Modal de Associação de Modalidades */}
       {modalMods.isOpen && (
         <div className="admin-modal-overlay">
           <div className="admin-modal-content admin-modal-content--sm">
@@ -970,7 +1506,6 @@ export default function AdminDashboard({ irParaLanding }) {
             <p className="admin-modal-subtitle">
               Selecione as modalidades que este professor leciona:
             </p>
-
             <div className="modalities-grid">
               {allModalidades.map((m) => (
                 <label key={m.id_modalidade} className="check-label-styled">
@@ -995,7 +1530,6 @@ export default function AdminDashboard({ irParaLanding }) {
                 </span>
               )}
             </div>
-
             <div className="modal-actions">
               <button
                 type="button"
@@ -1012,6 +1546,118 @@ export default function AdminDashboard({ irParaLanding }) {
                 Guardar
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {modalAprovar.isOpen && modalAprovar.pedido && (
+        <div className="admin-modal-overlay">
+          <div className="admin-modal-content">
+            <h2 className="admin-modal-title">
+              Aprovar Pedido #{modalAprovar.pedido.id_pedido_coaching}
+            </h2>
+            <div
+              style={{
+                backgroundColor: "#f4f4f4",
+                padding: "10px",
+                borderRadius: "8px",
+                marginBottom: "20px",
+                fontSize: "0.9rem",
+              }}
+            >
+              <p>
+                <strong>EE:</strong> {modalAprovar.pedido.encarregado}
+              </p>
+              <p>
+                <strong>Aluno(s):</strong> {modalAprovar.pedido.alunos}
+              </p>
+              <p>
+                <strong>Modalidade:</strong> {modalAprovar.pedido.modalidade} (
+                {modalAprovar.pedido.duracao_minutos} min)
+              </p>
+              <p>
+                <strong>Data/Hora:</strong>{" "}
+                {formatDataApi(modalAprovar.pedido.data_aula_pretendida)} às{" "}
+                {formatHoraCurta(modalAprovar.pedido.hora_inicio_pretendida)}
+              </p>
+              <p>
+                <strong>Preço do Sistema:</strong>{" "}
+                {modalAprovar.pedido.custo_estimado} €
+              </p>
+            </div>
+            <form className="admin-form" onSubmit={submeterAprovacao}>
+              <div className="field">
+                <label>Professor a Atribuir *</label>
+                <select
+                  required
+                  value={modalAprovar.idProfessor}
+                  onChange={(e) =>
+                    setModalAprovar({
+                      ...modalAprovar,
+                      idProfessor: e.target.value,
+                    })
+                  }
+                >
+                  <option value="">-- Selecione o Professor --</option>
+                  {profs.map((prof) => (
+                    <option key={prof.id_utilizador} value={prof.id_utilizador}>
+                      {prof.nome}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="form-group-row">
+                <div className="field form-col-1">
+                  <label>Atribuir Sala *</label>
+                  <select
+                    required
+                    value={modalAprovar.idSala}
+                    onChange={(e) =>
+                      setModalAprovar({
+                        ...modalAprovar,
+                        idSala: e.target.value,
+                      })
+                    }
+                  >
+                    <option value="">-- Escolha uma Sala --</option>
+                    {salas.map((s) => (
+                      <option key={s.id_sala} value={s.id_sala}>
+                        {s.nome} (Max: {s.capacidade_maxima} pes.)
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="field form-col-1">
+                  <label>Valor a Cobrar (€) *</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    required
+                    value={modalAprovar.valorFinal}
+                    onChange={(e) =>
+                      setModalAprovar({
+                        ...modalAprovar,
+                        valorFinal: e.target.value,
+                      })
+                    }
+                  />
+                </div>
+              </div>
+              <div className="modal-actions">
+                <button
+                  type="button"
+                  className="btn-cancel"
+                  onClick={() =>
+                    setModalAprovar({ isOpen: false, pedido: null })
+                  }
+                >
+                  Cancelar
+                </button>
+                <button type="submit" className="btn-submit">
+                  Confirmar e Agendar Sala
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

@@ -508,14 +508,10 @@ async function editarUtilizadorCompleto(req, res, next) {
     if (tipo === "PROF") nomePerfil = "Professor";
     if (tipo === "ADMIN") nomePerfil = "Admin";
 
-    if (
-      tipo === "PROF" &&
-      (!Array.isArray(idsModalidades) || idsModalidades.length === 0)
-    ) {
-      return res.status(400).json({
-        mensagem: "Seleciona pelo menos uma modalidade para este professor.",
-      });
-    }
+    /* A VALIDAÇÃO RÍGIDA DAS MODALIDADES FOI REMOVIDA DAQUI! 
+      Como o Frontend tem um modal à parte só para as Modalidades (botão dourado), 
+      esta função já não vai bloquear a edição se quiseres apenas alterar um nome ou telefone.
+    */
 
     await utilizadorModel.atualizarUtilizadorCompleto(id, {
       nome,

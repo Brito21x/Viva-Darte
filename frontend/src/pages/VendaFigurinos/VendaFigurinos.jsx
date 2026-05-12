@@ -576,7 +576,7 @@ export default function VendaFigurinos({
           {utilizador && (
             <div className="user-profile">
               <span className="welcome-text">
-                Olá, <strong>{utilizador.nome}</strong>
+                Olá, <strong>{utilizador?.nome || ""}</strong>
               </span>
               <button className="btn-logout" onClick={handleLogout}>
                 Sair

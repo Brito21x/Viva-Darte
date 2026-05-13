@@ -18,9 +18,9 @@ const ESTADOS_FINAIS_VALIDOS = ["Realizado", "Nao_Realizado"];
 
 function normalizarHoraSqlTime(valor) {
   if (valor instanceof Date && !Number.isNaN(valor.getTime())) {
-    const hh = String(valor.getHours()).padStart(2, "0");
-    const mm = String(valor.getMinutes()).padStart(2, "0");
-    const ss = String(valor.getSeconds()).padStart(2, "0");
+    const hh = String(valor.getUTCHours()).padStart(2, "0");
+    const mm = String(valor.getUTCMinutes()).padStart(2, "0");
+    const ss = String(valor.getUTCSeconds()).padStart(2, "0");
     return `${hh}:${mm}:${ss}`;
   }
   const s = String(valor ?? "").trim();
@@ -558,12 +558,25 @@ async function aprovarPedido(req, res, next) {
         .status(409)
         .json({ mensagem: "Pedido não pendente ou não encontrado." });
 
-    const mHora = String(pedido.hora_inicio_pretendida || "").match(
-      /(\d{2}):(\d{2})(?::(\d{2}))?/,
-    );
-    const horaInicio = mHora
-      ? `${mHora[1]}:${mHora[2]}:${mHora[3] || "00"}`
-      : null;
+    let horaInicio = null;
+    if (pedido.hora_inicio_pretendida) {
+      if (pedido.hora_inicio_pretendida instanceof Date) {
+        // Lê a hora explicitamente em UTC para evitar que o fuso horário (WEST) some +1 hora
+        const hh = String(pedido.hora_inicio_pretendida.getUTCHours()).padStart(
+          2,
+          "0",
+        );
+        const mm = String(
+          pedido.hora_inicio_pretendida.getUTCMinutes(),
+        ).padStart(2, "0");
+        horaInicio = `${hh}:${mm}:00`;
+      } else {
+        const mHora = String(pedido.hora_inicio_pretendida).match(
+          /(\d{2}):(\d{2})/,
+        );
+        horaInicio = mHora ? `${mHora[1]}:${mHora[2]}:00` : null;
+      }
+    }
     const diaSemanaCoaching = diaSemanaCoachingFromDateValue(
       pedido.data_aula_pretendida,
     );
@@ -651,13 +664,6 @@ async function cancelarCoaching(req, res, next) {
 async function registarValidacao(req, res, next) {
   try {
     const idCoaching = parseInt(req.params.id, 10);
-    const cab =
-      await coachingModel.getCoachingCabecalhoCancelamento(idCoaching);
-    const fimAula = instanteFimCoaching(cab);
-    if (!fimAula || fimAula.getTime() > Date.now())
-      return res
-        .status(400)
-        .json({ mensagem: "Só pode validar aulas já terminadas." });
 
     const tipoValidador = utilizadorTemPerfil(
       req.utilizador.perfis || [],

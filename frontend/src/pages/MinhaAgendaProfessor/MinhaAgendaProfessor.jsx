@@ -6,6 +6,22 @@ import { apiAuthFetch } from "../../services/api";
 const FORMATOS_AULA = ["Solo", "Dueto", "Trio", "Ensemble"];
 const DURACOES_AULA = [30, 60, 90, 120];
 
+const MESES = [
+  "Janeiro",
+  "Fevereiro",
+  "Março",
+  "Abril",
+  "Maio",
+  "Junho",
+  "Julho",
+  "Agosto",
+  "Setembro",
+  "Outubro",
+  "Novembro",
+  "Dezembro",
+];
+const ANOS = [2025, 2026, 2027, 2028];
+
 function traduzErroCoaching(err, fallback) {
   const msg = String(err?.message || "").trim();
   if (!msg) return fallback;
@@ -86,19 +102,6 @@ function diaSemanaAbrevData(dataAula) {
     0: "Dom",
   };
   return map[js] || null;
-}
-
-function nomeDiaSemana(diaSemana) {
-  const map = {
-    1: "Segunda-feira",
-    2: "Terça-feira",
-    3: "Quarta-feira",
-    4: "Quinta-feira",
-    5: "Sexta-feira",
-    6: "Sábado",
-    7: "Domingo",
-  };
-  return map[Number(diaSemana)] || `Dia ${diaSemana}`;
 }
 
 function abrevDiaSemana(diaSemana) {
@@ -207,6 +210,9 @@ export default function MinhaAgendaProfessor({
   const [erroAgenda, setErroAgenda] = useState("");
   const [weekStart, setWeekStart] = useState(() => getMonday(new Date()));
 
+  // ESTADO DO PAINEL DO PROFESSOR
+  const [isProfMenuOpen, setIsProfMenuOpen] = useState(false);
+
   const [disponibilidades, setDisponibilidades] = useState([]);
   const [isLoadingDispo, setIsLoadingDispo] = useState(false);
   const [erroDispo, setErroDispo] = useState("");
@@ -215,6 +221,9 @@ export default function MinhaAgendaProfessor({
   const [novoHoraInicio, setNovoHoraInicio] = useState("14:00");
   const [novoHoraFim, setNovoHoraFim] = useState("19:00");
   const [isSavingDispo, setIsSavingDispo] = useState(false);
+  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
+  const [selectedAnoLetivoId, setSelectedAnoLetivoId] = useState("");
+  const [isDetalhesModalOpen, setIsDetalhesModalOpen] = useState(false);
 
   const [globalToast, setGlobalToast] = useState(null);
 
@@ -246,25 +255,9 @@ export default function MinhaAgendaProfessor({
     alunosIds: [],
     idProfessor: "",
   });
+  const [minhasModalidades, setMinhasModalidades] = useState([]);
 
-  const isPerfilEE = useMemo(() => {
-    const perfil = String(utilizador?.perfil || "").toLowerCase();
-    if (perfil.includes("ee") || perfil.includes("encarregado")) return true;
-    const perfis = utilizador?.perfis;
-    if (!Array.isArray(perfis)) return false;
-    return perfis.some((p) => {
-      if (typeof p === "string")
-        return (
-          p.toLowerCase().includes("ee") ||
-          p.toLowerCase().includes("encarregado")
-        );
-      const nome = String(p?.nome || p?.perfil || "").toLowerCase();
-      return nome.includes("ee") || nome.includes("encarregado");
-    });
-  }, [utilizador]);
-
-  const isAgendaEE = modo === "ee" || isPerfilEE;
-  const podePedirAula = isAgendaEE;
+  // --- Constantes derivadas do estado ---
   const horas = [
     "08:00",
     "09:00",
@@ -283,11 +276,33 @@ export default function MinhaAgendaProfessor({
   ];
   const dias = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
 
+  // --- Memos derivados ---
+  const isPerfilEE = useMemo(() => {
+    const perfil = String(utilizador?.perfil || "").toLowerCase();
+    if (perfil.includes("ee") || perfil.includes("encarregado")) return true;
+    const perfis = utilizador?.perfis;
+    if (!Array.isArray(perfis)) return false;
+    return perfis.some((p) => {
+      if (typeof p === "string")
+        return (
+          p.toLowerCase().includes("ee") ||
+          p.toLowerCase().includes("encarregado")
+        );
+      const nome = String(p?.nome || p?.perfil || "").toLowerCase();
+      return nome.includes("ee") || nome.includes("encarregado");
+    });
+  }, [utilizador]);
+
+  const isAgendaEE = modo === "ee" || isPerfilEE;
+  const podePedirAula = isAgendaEE;
+
+  // --- Helpers ---
   function mostrarToast(texto, tipo = "sucesso") {
     setGlobalToast({ texto, tipo });
     setTimeout(() => setGlobalToast(null), 5000);
   }
 
+  // --- Efeitos ---
   useEffect(() => {
     document.title = "Minha agenda | Viva D'arte";
   }, []);
@@ -307,6 +322,26 @@ export default function MinhaAgendaProfessor({
   }, []);
 
   useEffect(() => {
+    if (!utilizador || isAgendaEE) return;
+    let active = true;
+    async function fetchMinhasModalidades() {
+      try {
+        const profId = utilizador.id || utilizador.id_utilizador;
+        const res = await apiAuthFetch(
+          `/api/escola/professores/${profId}/modalidades`,
+        );
+        if (active) setMinhasModalidades(Array.isArray(res) ? res : []);
+      } catch (e) {
+        console.error("Erro ao carregar as minhas modalidades:", e);
+      }
+    }
+    fetchMinhasModalidades();
+    return () => {
+      active = false;
+    };
+  }, [utilizador, isAgendaEE]);
+
+  useEffect(() => {
     if (!utilizador) return;
     let active = true;
     async function carregarDadosPedido() {
@@ -321,7 +356,10 @@ export default function MinhaAgendaProfessor({
 
         const anosArray = Array.isArray(anos) ? anos : [];
         setAnosLetivosPedido(anosArray);
+
+        // --- PREENCHE OS FILTROS LOGO AQUI ---
         if (anosArray.length > 0) {
+          setSelectedAnoLetivoId(anosArray[0].id_ano_letivo);
           setPedidoForm((prev) => ({
             ...prev,
             idAnoLetivo: anosArray[0].id_ano_letivo,
@@ -410,7 +448,9 @@ export default function MinhaAgendaProfessor({
 
     try {
       if (isAgendaEE) {
-        const meusPedidos = await apiAuthFetch("/api/coaching/pedidos/meus");
+        const meusPedidos = await apiAuthFetch(
+          `/api/coaching/pedidos/meus?dataInicio=${dataInicio}&dataFim=${dataFim}`,
+        );
         setPedidosPendentesProf(Array.isArray(meusPedidos) ? meusPedidos : []);
         setAgenda([]);
       } else {
@@ -442,12 +482,32 @@ export default function MinhaAgendaProfessor({
   }, [weekStart, isAgendaEE, utilizador]);
 
   const resumoMensal = useMemo(() => {
-    const total = agenda.reduce(
+    const aulasDadasNoPeriodo = agenda.filter((a) => {
+      // 1. A aula tem de estar realizada
+      if (a.estado !== "Realizado") return false;
+
+      // 2. Tem de pertencer ao Ano Letivo selecionado
+      // (Nota: Garantir que a API envia o campo id_ano_letivo ou ANO_LETIVOid_ano_letivo na agenda)
+      const idAnoAula = a.id_ano_letivo || a.ANO_LETIVOid_ano_letivo;
+      if (String(idAnoAula) !== String(selectedAnoLetivoId)) return false;
+
+      // 3. Tem de pertencer ao mês selecionado
+      const dataAula = parseDataCalendario(a.data_aula);
+      if (!dataAula) return false;
+      return dataAula.getMonth() === selectedMonth;
+    });
+
+    const total = aulasDadasNoPeriodo.reduce(
       (acc, row) => acc + Number(row.valor_final || 0),
       0,
     );
-    return { aulasDadas: agenda.length, aReceber: total };
-  }, [agenda]);
+
+    return {
+      aulasDadas: aulasDadasNoPeriodo.length,
+      aReceber: total,
+      detalhes: aulasDadasNoPeriodo,
+    };
+  }, [agenda, selectedMonth, selectedAnoLetivoId]);
 
   const agendaPorDiaHora = useMemo(() => {
     const map = new Map();
@@ -455,6 +515,24 @@ export default function MinhaAgendaProfessor({
       if (!map.has(key)) map.set(key, []);
       map.get(key).push(event);
     };
+
+    // Intervalo da semana visível
+    const semanaInicio = weekStart;
+    const semanaFim = addDays(weekStart, 6);
+
+    function dentroSemana(dataStr) {
+      const d = parseDataCalendario(dataStr);
+      if (!d) return false;
+      return d >= semanaInicio && d <= semanaFim;
+    }
+
+    // 1. Lógica inteligente para o nome da disciplina no slot livre
+    const labelModalidade =
+      minhasModalidades.length === 1
+        ? minhasModalidades[0].modalidade
+        : minhasModalidades.length > 1
+          ? "Várias Disciplinas"
+          : "Disponível";
 
     for (const d of disponibilidades) {
       const diaName = abrevDiaSemana(d.dia_semana);
@@ -470,11 +548,11 @@ export default function MinhaAgendaProfessor({
         addEvent(k, {
           origem: "disponibilidade",
           id_disponibilidade: d.id_disponibilidade,
-          modalidade: d.modalidade || "Ballet",
+          modalidade: labelModalidade, // <--- Aqui removemos o "Ballet" fixo!
           nome_professor: utilizador?.nome || "Professor",
           hora_inicio: horaSlot,
           duracao_minutos: 60,
-          formato_aula: "Disponível",
+          formato_aula: "Livre para marcação",
           estado: "Livre",
         });
       }
@@ -502,6 +580,8 @@ export default function MinhaAgendaProfessor({
           ? p.hora_inicio_coaching
           : p.hora_inicio_pretendida;
 
+        if (!dentroSemana(diaReal)) continue;
+
         const diaKey = diaSemanaAbrevData(diaReal);
         const horaSlot = horaParaSlot(horaReal);
         if (!diaKey || !horaSlot) continue;
@@ -516,6 +596,7 @@ export default function MinhaAgendaProfessor({
           formato_aula: p.formato_aula,
           modalidade: p.modalidade,
           encarregado: utilizador?.nome || "Eu",
+          alunos: p.alunos || p.nome_aluno, // <-- ADICIONA ESTA LINHA AQUI
           estado: isAgendado ? p.estado_coaching : p.estado,
           sala: p.nome_sala,
           nome_professor: isAgendado ? p.nome_professor_agendado : p.professor,
@@ -523,6 +604,8 @@ export default function MinhaAgendaProfessor({
       } else {
         const est = String(p.estado || "").toLowerCase();
         if (est !== "pendente") continue;
+
+        if (!dentroSemana(p.data_aula_pretendida)) continue;
 
         const diaKey = diaSemanaAbrevData(p.data_aula_pretendida);
         const horaSlot = horaParaSlot(p.hora_inicio_pretendida);
@@ -543,6 +626,7 @@ export default function MinhaAgendaProfessor({
             formato_aula: p.formato_aula,
             modalidade: p.modalidade,
             encarregado: p.encarregado,
+            alunos: p.alunos || p.nome_aluno, // <-- ADICIONA ESTA LINHA AQUI TAMBÉM
             estado: p.estado,
             sala: null,
             id_coaching: null,
@@ -551,7 +635,71 @@ export default function MinhaAgendaProfessor({
       }
     }
     return map;
-  }, [agenda, pedidosPendentesProf, disponibilidades, utilizador]);
+  }, [
+    agenda,
+    pedidosPendentesProf,
+    disponibilidades,
+    utilizador,
+    minhasModalidades,
+    weekStart,
+  ]);
+
+  // AULAS POR CONFIRMAR A EXECUÇÃO (AGENDADAS OU CONFIRMADAS)
+  const aulasParaValidar = useMemo(() => {
+    return agenda.filter(
+      (a) => a.estado === "Agendado" || a.estado === "Confirmado",
+    );
+  }, [agenda]);
+
+  // PRÓXIMAS AULAS MARCADAS (EXCLUI AS QUE O PROFESSOR JÁ CONFIRMOU)
+  const proximasAulas = useMemo(() => {
+    const agora = new Date();
+    return agenda.filter((a) => {
+      // Exclui estados que já saíram do fluxo de marcação ativa para o professor
+      if (
+        a.estado === "Cancelado" ||
+        a.estado === "Rejeitado" ||
+        a.estado === "Realizado" ||
+        a.estado === "Nao_Realizado" ||
+        a.estado === "Concluido"
+      )
+        return false;
+
+      const dataAula = parseDataCalendario(a.data_aula);
+      if (!dataAula) return false;
+      const mins = parseTimeToMinutes(a.hora_inicio);
+      if (mins == null) return false;
+      const h = Math.floor(mins / 60);
+      const mm = mins % 60;
+      const fimAula = new Date(
+        dataAula.getFullYear(),
+        dataAula.getMonth(),
+        dataAula.getDate(),
+        h,
+        mm,
+        0,
+        0,
+      );
+      fimAula.setMinutes(
+        fimAula.getMinutes() + Number(a.duracao_minutos || 60),
+      );
+      return fimAula >= agora;
+    });
+  }, [agenda]);
+
+  // NOVA LISTA: AULAS QUE O PROFESSOR JÁ CONFIRMOU, À ESPERA DA COORDENAÇÃO
+  const aulasAguardandoCoordenacao = useMemo(() => {
+    return pedidosPendentesProf
+      .filter((p) => p.estado === "Pendente")
+      .map((p) => ({
+        ...p,
+        isPedido: true,
+        tipoItem: "APROVACAO",
+        data_aula: p.data_aula_pretendida,
+        hora_inicio: p.hora_inicio_pretendida,
+        nome_sala: "A definir pela coordenação",
+      }));
+  }, [pedidosPendentesProf]);
 
   const irParaHoje = () => setWeekStart(getMonday(new Date()));
   const irParaSemanaAnterior = () => setWeekStart((d) => addDays(d, -7));
@@ -575,11 +723,17 @@ export default function MinhaAgendaProfessor({
           horaFim: normalizeTime(novoHoraFim),
         },
       });
+
       const data = await apiAuthFetch("/api/coaching/disponibilidades");
       setDisponibilidades(Array.isArray(data) ? data : []);
 
-      // Mostrar mensagem de sucesso sem fechar a janela!
-      mostrarToast("Horário adicionado com sucesso!", "sucesso");
+      setAlertModal({
+        isOpen: true,
+        mensagem: "Horário adicionado! Podes inserir o próximo.",
+      });
+
+      setNovoHoraInicio("");
+      setNovoHoraFim("");
     } catch (e) {
       setErroDispo(e?.message || "Erro ao guardar disponibilidade");
     } finally {
@@ -610,10 +764,20 @@ export default function MinhaAgendaProfessor({
         method: "POST",
         body: { estadoValidacao: "Confirmado", observacoes: null },
       });
-      mostrarToast("Realização da aula validada!", "sucesso");
+
+      // Mensagem atualizada para dar feedback de que saiu da lista de tarefas
+      setAlertModal({
+        isOpen: true,
+        mensagem:
+          "Realização da aula validada! A aula foi enviada para a coordenação.",
+      });
+
       carregarAgendaSemana();
     } catch (e) {
-      alert(e?.message || "Não foi possível validar esta aula.");
+      setAlertModal({
+        isOpen: true,
+        mensagem: e?.message || "Não foi possível validar esta aula.",
+      });
     }
   };
 
@@ -819,6 +983,15 @@ export default function MinhaAgendaProfessor({
 
   return (
     <div className="dashboard-container">
+      {globalToast && (
+        <div className={`global-toast global-toast--${globalToast.tipo}`}>
+          <span className="toast-icon">
+            {globalToast.tipo === "sucesso" ? "✅" : "❌"}
+          </span>
+          {globalToast.texto}
+        </div>
+      )}
+
       <nav className="navbar interna">
         <div className="nav-brand" onClick={irParaLanding}>
           <img src={logoImg} alt="Logo" className="nav-logo-img" />
@@ -893,13 +1066,46 @@ export default function MinhaAgendaProfessor({
 
       <div className="dashboard-wrapper" id="agenda">
         <main className="calendar-container">
+          {/* BARRA DE NAVEGAÇÃO DA SEMANA */}
+          <div className="calendar-nav-bar">
+            <button
+              className="btn-today"
+              type="button"
+              onClick={irParaSemanaAnterior}
+            >
+              ←
+            </button>
+            <button
+              className="btn-today btn-today--hoje"
+              type="button"
+              onClick={irParaHoje}
+            >
+              Hoje
+            </button>
+            <span className="calendar-nav-label">{semanaLabel}</span>
+            <button
+              className="btn-today"
+              type="button"
+              onClick={irParaSemanaSeguinte}
+            >
+              →
+            </button>
+          </div>
+
+          {/* CABEÇALHO COM OS DIAS DA SEMANA E DATAS */}
           <div className="calendar-days-sticky">
             <div className="time-corner"></div>
-            {dias.map((dia) => (
-              <div key={dia} className="day-sticky-cell">
-                {dia}
-              </div>
-            ))}
+            {dias.map((dia, idx) => {
+              // Calcula a data exata para cada coluna somando os dias à segunda-feira atual
+              const dataDoDia = addDays(weekStart, idx);
+
+              return (
+                <div key={dia} className="day-sticky-cell">
+                  <span className="day-label-name">{dia}</span>
+                  <span className="day-label-date">{formatDM(dataDoDia)}</span>
+                </div>
+              );
+            })}
           </div>
 
           <div className="calendar-scrollable-area">
@@ -933,11 +1139,20 @@ export default function MinhaAgendaProfessor({
                           );
 
                           if (row.origem === "disponibilidade") {
+                            const listaDisciplinas =
+                              minhasModalidades.length > 0
+                                ? minhasModalidades
+                                    .map((m) => m.modalidade)
+                                    .join(", ")
+                                : "Nenhuma disciplina associada";
+
                             return (
                               <div
                                 key={`disp-${rIdx}`}
                                 className={`event-block ${classeModalidade} disponibilidade-block`}
                                 onClick={(e) => e.stopPropagation()}
+                                title={`Disciplinas disponíveis: ${listaDisciplinas}`}
+                                style={{ cursor: "help" }}
                               >
                                 <div className="event-info">
                                   <span className="event-time">
@@ -992,7 +1207,7 @@ export default function MinhaAgendaProfessor({
                                   )}
                                   {!isAgendaEE && (
                                     <p className="event-student">
-                                      EE: {row.encarregado}
+                                      Aluno(s): {row.alunos || row.encarregado}
                                     </p>
                                   )}
                                 </div>
@@ -1030,21 +1245,9 @@ export default function MinhaAgendaProfessor({
                                   Sala: {row.sala || "A definir"} •{" "}
                                   {isAgendaEE
                                     ? `Prof: ${row.nome_professor}`
-                                    : `EE: ${row.encarregado}`}
+                                    : `Aluno(s): ${row.alunos || row.encarregado}`}
                                 </p>
                               </div>
-                              {pendente && (
-                                <button
-                                  type="button"
-                                  className="btn-validar-mini"
-                                  onClick={(ev) => {
-                                    ev.stopPropagation();
-                                    validarRealizacao(row);
-                                  }}
-                                >
-                                  Validar Realização
-                                </button>
-                              )}
                             </div>
                           );
                         })}
@@ -1277,7 +1480,7 @@ export default function MinhaAgendaProfessor({
           </div>
         )}
 
-        {/* ALERTA MODAL (SUCESSO) */}
+        {/* ALERTA MODAL (SUCESSO OU ERRO) */}
         {alertModal.isOpen && (
           <div
             className="modal-overlay modal-overlay-high-z"
@@ -1299,52 +1502,36 @@ export default function MinhaAgendaProfessor({
         )}
 
         <aside className="sidebar">
-          {/* CARTÃO NAVEGAÇÃO */}
-          <div className="sidebar-card">
-            <h3 className="m-0">Navegação</h3>
-            <p className="sidebar-subtitle">{semanaLabel}</p>
-            <div className="sidebar-nav-header">
-              <button
-                className="btn-today flex-1"
-                type="button"
-                onClick={irParaSemanaAnterior}
-              >
-                ←
-              </button>
-              <button
-                className="btn-today flex-2"
-                type="button"
-                onClick={irParaHoje}
-              >
-                Hoje
-              </button>
-              <button
-                className="btn-today flex-1"
-                type="button"
-                onClick={irParaSemanaSeguinte}
-              >
-                →
-              </button>
-            </div>
-          </div>
-
-          {/* CARTÃO DE INFORMAÇÃO PARA EE */}
-          {isAgendaEE && (
-            <div className="sidebar-card info-card">
-              <h3>Informação</h3>
-              <p>
-                Para requisitar o seu coaching, por favor clique no quadrado do
-                horário pretendido na agenda.
-              </p>
-            </div>
-          )}
-
-          {/* HORÁRIOS E RESUMO (SÓ PROFESSORES) */}
+          {/* ORDENAÇÃO PARA O PROFESSOR */}
           {!isAgendaEE && (
             <>
+              {/* 1. PAINEL DE ATIVIDADE */}
+              <div className="sidebar-card activity-panel-card">
+                <h3>Painel de Atividade</h3>
+                <p>
+                  Acede às tuas estatísticas, confirma a execução de aulas e
+                  consulta as próximas marcações.
+                </p>
+
+                {aulasParaValidar.length > 0 && (
+                  <div className="alert-badge">
+                    Tens {aulasParaValidar.length} aula(s) para confirmar a
+                    execução!
+                  </div>
+                )}
+
+                <button
+                  className="btn-gold btn-gold-full"
+                  onClick={() => setIsProfMenuOpen(true)}
+                >
+                  Abrir Painel do Professor
+                </button>
+              </div>
+
+              {/* 2. MINHA DISPONIBILIDADE */}
               <div className="sidebar-card">
                 <div className="sidebar-header-flex">
-                  <h3>Meus Horários</h3>
+                  <h3>Minha Disponibilidade</h3>
                 </div>
 
                 <div className="dispo-list-hud">
@@ -1374,100 +1561,87 @@ export default function MinhaAgendaProfessor({
                   Gerir Disponibilidades
                 </button>
               </div>
+            </>
+          )}
 
-              <div className="sidebar-card resumo-card">
-                <h3 className="resumo-title">
-                  Resumo de{" "}
-                  {new Date(weekStart).toLocaleString("pt-PT", {
-                    month: "long",
-                  })}
-                </h3>
-                <div className="stat-row">
-                  <span>Aulas Confirmadas:</span>
-                  <strong>{resumoMensal.aulasDadas}</strong>
+          {/* ORDENAÇÃO PARA O EE */}
+          {isAgendaEE && (
+            <>
+              {/* 1. INFORMAÇÃO */}
+              <div className="sidebar-card info-card">
+                <h3>Informação</h3>
+                <p>
+                  Para requisitar o seu coaching, por favor clique no quadrado
+                  do horário pretendido na agenda.
+                </p>
+              </div>
+
+              {/* 3. OS MEUS PEDIDOS */}
+              <div className="sidebar-card">
+                <div className="sidebar-header-flex">
+                  <h3 className="m-0">Os Meus Pedidos</h3>
                 </div>
-                <div className="stat-row highlight">
-                  <span>A Receber Estimado:</span>
-                  <strong>{resumoMensal.aReceber.toFixed(2)}€</strong>
+                <div
+                  className="dispo-list-hud"
+                  className="dispo-list-hud dispo-list-hud--tall"
+                >
+                  {pedidosPendentesProf.length === 0 ? (
+                    <div className="empty-dispo">
+                      Ainda não tem pedidos de coaching.
+                    </div>
+                  ) : (
+                    pedidosPendentesProf.map((p) => {
+                      let badgeClass = "pendente";
+                      let badgeText = "Pendente";
+
+                      if (p.estado === "Aprovado") {
+                        badgeClass = "aprovado";
+                        badgeText = p.estado_coaching || "Agendado";
+                        if (badgeText === "Cancelado") badgeClass = "rejeitado";
+                      } else if (
+                        p.estado === "Rejeitado" ||
+                        p.estado === "Cancelado"
+                      ) {
+                        badgeClass = "rejeitado";
+                        badgeText = p.estado;
+                      }
+
+                      const diaReal =
+                        p.estado === "Aprovado" && p.data_aula_coaching
+                          ? p.data_aula_coaching
+                          : p.data_aula_pretendida;
+                      const horaReal =
+                        p.estado === "Aprovado" && p.hora_inicio_coaching
+                          ? p.hora_inicio_coaching
+                          : p.hora_inicio_pretendida;
+
+                      return (
+                        <div
+                          key={p.id_pedido_coaching}
+                          className="pedido-item-simples"
+                        >
+                          <div className="pedido-simples-info">
+                            <strong>{p.modalidade}</strong> ({p.formato_aula})
+                            <br />
+                            <span className="pedido-date-text">
+                              {formatDM(diaReal)} às {formatHoraCurta(horaReal)}
+                            </span>
+                          </div>
+                          <span className={`badge-simples badge-${badgeClass}`}>
+                            {badgeText}
+                          </span>
+                        </div>
+                      );
+                    })
+                  )}
                 </div>
               </div>
             </>
           )}
-
-          {/* LISTA SIMPLIFICADA DE PEDIDOS (SÓ EE) */}
-          {isAgendaEE && (
-            <div className="sidebar-card">
-              <div className="sidebar-header-flex">
-                <h3 className="m-0" style={{ color: "var(--primary-dark)" }}>
-                  Os Meus Pedidos
-                </h3>
-              </div>
-              <div
-                className="dispo-list-hud"
-                style={{ maxHeight: "400px", marginTop: "10px" }}
-              >
-                {pedidosPendentesProf.length === 0 ? (
-                  <div className="empty-dispo">
-                    Ainda não tem pedidos de coaching.
-                  </div>
-                ) : (
-                  pedidosPendentesProf.map((p) => {
-                    let badgeClass = "pendente";
-                    let badgeText = "Pendente";
-
-                    if (p.estado === "Aprovado") {
-                      badgeClass = "aprovado";
-                      badgeText = p.estado_coaching || "Agendado";
-                      if (badgeText === "Cancelado") badgeClass = "rejeitado";
-                    } else if (
-                      p.estado === "Rejeitado" ||
-                      p.estado === "Cancelado"
-                    ) {
-                      badgeClass = "rejeitado";
-                      badgeText = p.estado;
-                    }
-
-                    const diaReal =
-                      p.estado === "Aprovado" && p.data_aula_coaching
-                        ? p.data_aula_coaching
-                        : p.data_aula_pretendida;
-                    const horaReal =
-                      p.estado === "Aprovado" && p.hora_inicio_coaching
-                        ? p.hora_inicio_coaching
-                        : p.hora_inicio_pretendida;
-
-                    return (
-                      <div
-                        key={p.id_pedido_coaching}
-                        className="pedido-item-simples"
-                      >
-                        <div className="pedido-simples-info">
-                          <strong>{p.modalidade}</strong> ({p.formato_aula})
-                          <br />
-                          <span
-                            style={{
-                              fontSize: "0.8rem",
-                              color: "#888",
-                              display: "inline-block",
-                              marginTop: "4px",
-                            }}
-                          >
-                            {formatDM(diaReal)} às {formatHoraCurta(horaReal)}
-                          </span>
-                        </div>
-                        <span className={`badge-simples badge-${badgeClass}`}>
-                          {badgeText}
-                        </span>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            </div>
-          )}
         </aside>
       </div>
 
+      {/* MODAL: GERIR DISPONIBILIDADE */}
       {!isAgendaEE && isDispoModalOpen && (
         <div
           className="modal-overlay"
@@ -1480,6 +1654,24 @@ export default function MinhaAgendaProfessor({
                 Define os blocos de horário em que estás disponível para dar
                 Coaching.
               </p>
+
+              {/* Aviso Automático de Modalidades */}
+              {minhasModalidades.length > 0 && (
+                <div className="dispo-modal-info">
+                  <strong className="text-gold">As tuas disciplinas: </strong>
+                  {minhasModalidades.map((m) => m.modalidade).join(", ")}
+                  <div className="mt-4">
+                    Os alunos podem escolher qualquer uma destas modalidades
+                    para os teus horários livres.
+                    <strong>
+                      {" "}
+                      Assim que um aluno marcar uma aula, o sistema bloqueia-te
+                      e ficas logo indisponível para as outras modalidades nessa
+                      hora!
+                    </strong>
+                  </div>
+                </div>
+              )}
             </div>
 
             {!!erroDispo && <div className="modal-error-msg">{erroDispo}</div>}
@@ -1574,6 +1766,387 @@ export default function MinhaAgendaProfessor({
                 onClick={() => setIsDispoModalOpen(false)}
               >
                 Concluir
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: PAINEL DE ATIVIDADE DO PROFESSOR */}
+      {isProfMenuOpen && (
+        <div className="modal-overlay" onClick={() => setIsProfMenuOpen(false)}>
+          <div
+            className="modal-modern modal-lg"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="modal-header">
+              <h2>Painel de Atividade</h2>
+              <p>O teu centro de operações da Viva D'arte</p>
+            </div>
+
+            <div className="prof-dashboard-grid">
+              {/* COLUNA ESQUERDA: RESUMO E VALIDAÇÕES */}
+              <div className="prof-dashboard-col">
+                {/* SECÇÃO 1: RESUMO FINANCEIRO COM FILTROS */}
+                <div className="prof-panel-section">
+                  <div className="resumo-header">
+                    <div className="resumo-title-wrap">
+                      <svg
+                        viewBox="0 0 24 24"
+                        className="resumo-icon"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                      >
+                        <path d="M21 21H3V3m18 8l-6-6-4 4-4-4" />
+                      </svg>
+                      <h3 className="resumo-title">Resumo Financeiro</h3>
+                    </div>
+
+                    <div className="resumo-filters">
+                      {/* Seletor de Mês (Design Moderno) */}
+                      <select
+                        value={selectedMonth}
+                        onChange={(e) =>
+                          setSelectedMonth(Number(e.target.value))
+                        }
+                        className="filter-select"
+                      >
+                        {MESES.map((mes, idx) => (
+                          <option key={idx} value={idx}>
+                            {mes}
+                          </option>
+                        ))}
+                      </select>
+
+                      {/* Seletor de Ano Letivo (Design Moderno) */}
+                      <select
+                        value={selectedAnoLetivoId}
+                        onChange={(e) => setSelectedAnoLetivoId(e.target.value)}
+                        className="filter-select"
+                      >
+                        <option value="">Ano Letivo</option>
+                        {anosLetivosPedido.map((ano) => (
+                          <option
+                            key={ano.id_ano_letivo}
+                            value={ano.id_ano_letivo}
+                          >
+                            {ano.ano}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="prof-stat-cards">
+                    <div className="prof-stat-card">
+                      <span>Aulas Dadas</span>
+                      <strong>{resumoMensal.aulasDadas}</strong>
+                    </div>
+                    <div
+                      className="prof-stat-card highlight prof-stat-card--clickable"
+                      onClick={() => setIsDetalhesModalOpen(true)}
+                    >
+                      <span>A Receber</span>
+                      <strong>{resumoMensal.aReceber.toFixed(2)}€</strong>
+                      <span className="stat-card-hint">Ver detalhes ↗</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* SECÇÃO 2: CONFIRMAR EXECUÇÃO (O código que perguntaste entra aqui) */}
+                <div className="prof-panel-section prof-panel-section--mt">
+                  <h3>
+                    <svg
+                      viewBox="0 0 24 24"
+                      className="section-icon alert-icon"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                    >
+                      <circle cx="12" cy="12" r="10" />
+                      <path d="M12 8v4l3 3" />
+                    </svg>
+                    Confirmar a Execução da aula
+                  </h3>
+
+                  {aulasParaValidar.length === 0 ? (
+                    <div className="empty-state-text">
+                      Não tens aulas pendentes. Bom trabalho!
+                    </div>
+                  ) : (
+                    aulasParaValidar.map((aula) => (
+                      <div
+                        key={aula.id_coaching}
+                        className="aula-item-modern needs-validation"
+                      >
+                        <div className="aula-item-header">
+                          <span className="aula-item-title">
+                            {aula.modalidade}
+                          </span>
+                          <span className="aula-item-format">
+                            {aula.formato_aula}
+                          </span>
+                        </div>
+                        <div className="aula-item-details">
+                          <div className="aula-detail-row">
+                            <svg
+                              viewBox="0 0 24 24"
+                              className="detail-icon"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                            >
+                              <rect
+                                x="3"
+                                y="4"
+                                width="18"
+                                height="18"
+                                rx="2"
+                                ry="2"
+                              />
+                              <line x1="16" y1="2" x2="16" y2="6" />
+                              <line x1="8" y1="2" x2="8" y2="6" />
+                              <line x1="3" y1="10" x2="21" y2="10" />
+                            </svg>
+                            {formatDM(aula.data_aula)}
+                          </div>
+                          <div className="aula-detail-row">
+                            <svg
+                              viewBox="0 0 24 24"
+                              className="detail-icon"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                            >
+                              <circle cx="12" cy="12" r="10" />
+                              <polyline points="12 6 12 12 16 14" />
+                            </svg>
+                            {formatHoraCurta(aula.hora_inicio)}
+                          </div>
+                        </div>
+                        <button
+                          className="btn-validate-modern"
+                          onClick={() => validarRealizacao(aula)}
+                        >
+                          Confirmar a Execução da aula
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+              {/* FINAL DA COLUNA ESQUERDA */}
+
+              {/* COLUNA DIREITA: PRÓXIMAS AULAS E AGUARDANDO COORDENAÇÃO */}
+              <div className="prof-dashboard-col">
+                {/* PRÓXIMAS MARCAÇÕES */}
+                <div className="prof-panel-section">
+                  <h3>
+                    <svg
+                      viewBox="0 0 24 24"
+                      className="section-icon"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                    >
+                      <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                      <line x1="16" y1="2" x2="16" y2="6" />
+                      <line x1="8" y1="2" x2="8" y2="6" />
+                      <line x1="3" y1="10" x2="21" y2="10" />
+                      <path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01M16 18h.01" />
+                    </svg>
+                    Próximas Marcações
+                  </h3>
+
+                  {proximasAulas.length === 0 ? (
+                    <div className="empty-state-text">
+                      Sem aulas futuras agendadas.
+                    </div>
+                  ) : (
+                    proximasAulas.map((aula) => (
+                      <div
+                        key={`prox-${aula.id_coaching}`}
+                        className="aula-item-modern"
+                      >
+                        <div className="aula-item-header">
+                          <span className="aula-item-title">
+                            {aula.modalidade}
+                          </span>
+                          <span className="aula-item-format">
+                            {aula.formato_aula}
+                          </span>
+                        </div>
+                        <div className="aula-item-details">
+                          <div className="aula-detail-row">
+                            <svg
+                              viewBox="0 0 24 24"
+                              className="detail-icon"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                            >
+                              <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+                              <circle cx="12" cy="10" r="3" />
+                            </svg>
+                            Sala: {aula.sala || "A definir"}
+                          </div>
+                          <div className="aula-detail-row">
+                            <svg
+                              viewBox="0 0 24 24"
+                              className="detail-icon"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                            >
+                              <rect
+                                x="3"
+                                y="4"
+                                width="18"
+                                height="18"
+                                rx="2"
+                                ry="2"
+                              />
+                              <line x1="16" y1="2" x2="16" y2="6" />
+                              <line x1="8" y1="2" x2="8" y2="6" />
+                              <line x1="3" y1="10" x2="21" y2="10" />
+                            </svg>
+                            {formatDM(aula.data_aula)} às{" "}
+                            {formatHoraCurta(aula.hora_inicio)}
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                {/* À ESPERA DA COORDENAÇÃO */}
+                <div className="prof-panel-section prof-panel-section--mt">
+                  <h3>
+                    <svg
+                      viewBox="0 0 24 24"
+                      className="section-icon"
+                      className="section-icon section-icon--warning"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                    >
+                      <circle cx="12" cy="12" r="10" />
+                      <line x1="12" y1="8" x2="12" y2="12" />
+                      <line x1="12" y1="16" x2="12.01" y2="16" />
+                    </svg>
+                    À Espera da Coordenação
+                  </h3>
+
+                  {aulasAguardandoCoordenacao.length === 0 ? (
+                    <div className="empty-state-text">
+                      Nada pendente com a coordenação.
+                    </div>
+                  ) : (
+                    aulasAguardandoCoordenacao.map((item, idx) => (
+                      <div
+                        key={idx}
+                        className="aula-item-modern aula-item-modern--pending-ee"
+                      >
+                        <div className="aula-item-header">
+                          <span className="aula-item-title">
+                            {item.modalidade} ({item.formato_aula})
+                          </span>
+                        </div>
+                        <div className="aula-item-details">
+                          <div>
+                            {formatDM(item.data_aula)} às{" "}
+                            {formatHoraCurta(item.hora_inicio)}
+                          </div>
+                        </div>
+                        <div className="pending-warning-text">
+                          ⚠️ Novo Pedido: A aguardar aprovação da coordenação...
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+              {/* Modal de Detalhes de Faturação */}
+              {isDetalhesModalOpen && (
+                <div
+                  className="modal-overlay modal-overlay-high-z"
+                  onClick={() => setIsDetalhesModalOpen(false)}
+                >
+                  <div
+                    className="modal-modern modal-modern--sm"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div className="modal-header">
+                      <h2>Detalhes de Faturação</h2>
+                      <p>
+                        Mês de{" "}
+                        {new Date().toLocaleString("pt-PT", {
+                          month: "long",
+                          year: "numeric",
+                        })}
+                      </p>
+                    </div>
+
+                    <div className="horarios-list-container horarios-list-container--modal">
+                      {resumoMensal.detalhes.length === 0 ? (
+                        <div className="empty-state-text">
+                          Nenhuma aula confirmada este mês.
+                        </div>
+                      ) : (
+                        <table className="admin-table">
+                          <thead>
+                            <tr>
+                              <th>Data</th>
+                              <th>Modalidade</th>
+                              <th className="text-right">Valor</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {resumoMensal.detalhes.map((aula) => (
+                              <tr key={aula.id_coaching} className="table-row">
+                                <td className="table-cell">
+                                  {formatDM(aula.data_aula)} às{" "}
+                                  {formatHoraCurta(aula.hora_inicio)}
+                                </td>
+                                <td className="table-cell">
+                                  {aula.modalidade} <br />
+                                  <small className="text-muted">
+                                    {aula.formato_aula}
+                                  </small>
+                                </td>
+                                <td className="table-cell text-right">
+                                  <strong>
+                                    {Number(aula.valor_final || 0).toFixed(2)}€
+                                  </strong>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+                    </div>
+
+                    <div className="modal-actions-footer">
+                      <button
+                        className="btn-text"
+                        onClick={() => setIsDetalhesModalOpen(false)}
+                      >
+                        Fechar
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="modal-actions-footer">
+              <button
+                className="btn-text"
+                type="button"
+                onClick={() => setIsProfMenuOpen(false)}
+              >
+                Fechar Painel
               </button>
             </div>
           </div>

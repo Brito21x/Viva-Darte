@@ -808,7 +808,7 @@ export default function AdminDashboard({ irParaLanding }) {
       <td>
         <strong>{c.nome_professor}</strong>
         <div style={{ fontSize: "0.8rem", color: "var(--primary-color)" }}>
-          📍 {c.sala || "Sem sala"}
+          {c.sala || "Sem sala"}
         </div>
       </td>
       <td>
@@ -1255,7 +1255,7 @@ export default function AdminDashboard({ irParaLanding }) {
             </p>
 
             <Section
-              title={`⏳ À Espera de Conclusão (${coachingsEspera.length})`}
+              title={` À Espera de Conclusão (${coachingsEspera.length})`}
               defaultOpen={true}
             >
               <table className="admin-table">
@@ -1284,7 +1284,7 @@ export default function AdminDashboard({ irParaLanding }) {
             </Section>
 
             <Section
-              title={`✅ Concluídas (${coachingsConcluidos.length})`}
+              title={` Concluídas (${coachingsConcluidos.length})`}
               defaultOpen={true}
             >
               <table className="admin-table">
@@ -1315,7 +1315,7 @@ export default function AdminDashboard({ irParaLanding }) {
             </Section>
 
             <Section
-              title={`❌ Canceladas (${coachingsCancelados.length})`}
+              title={` Canceladas (${coachingsCancelados.length})`}
               defaultOpen={false}
             >
               <table className="admin-table">

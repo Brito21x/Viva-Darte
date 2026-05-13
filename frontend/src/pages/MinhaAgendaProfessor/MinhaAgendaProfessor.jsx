@@ -1367,12 +1367,11 @@ export default function MinhaAgendaProfessor({
                   </select>
                 </div>
                 <div className="form-group">
-                  <label>
-                    Professor <span className="text-optional">(Opcional)</span>
-                  </label>
+                  <label>Professor</label> {/* Removido o "(Opcional)" */}
                   <select
                     className="form-control"
                     value={pedidoForm.idProfessor}
+                    required // Adicionado atributo de validação
                     onChange={(e) => {
                       const id = e.target.value;
                       setPedidoForm((p) => ({ ...p, idProfessor: id }));
@@ -1387,7 +1386,9 @@ export default function MinhaAgendaProfessor({
                       }
                     }}
                   >
-                    <option value="">Qualquer Professor</option>
+                    <option value="" disabled>
+                      Selecione um Professor
+                    </option>
                     {professoresPedido.map((prof) => (
                       <option key={prof.id_professor} value={prof.id_professor}>
                         {prof.nome_professor}
@@ -1469,7 +1470,8 @@ export default function MinhaAgendaProfessor({
                     precoInfo.isLoading ||
                     !!precoInfo.erro ||
                     isSubmittingPedido ||
-                    alunosPedido.length === 0
+                    alunosPedido.length === 0 ||
+                    !pedidoForm.idProfessor
                   }
                   onClick={submeterPedidoCoachingDireto}
                 >

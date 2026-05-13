@@ -422,6 +422,12 @@ async function criarPedidoCoaching(req, res, next) {
 
     if (!isEE)
       return res.status(403).json({ mensagem: "Apenas EE pode pedir aulas." });
+    if (!idProfessor) {
+      return res
+        .status(400)
+        .json({ mensagem: "A seleção de um professor é obrigatória." });
+    }
+
     if (!Array.isArray(alunosIds) || alunosIds.length === 0)
       return res.status(400).json({ mensagem: "Indicar pelo menos um aluno." });
 

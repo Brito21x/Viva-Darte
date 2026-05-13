@@ -201,7 +201,21 @@ async function getAgendaProfessor(
   }
 
   const result = await request.query(
-    `SELECT c.id_coaching, c.data_aula, c.hora_inicio, c.duracao_minutos, c.formato_aula, c.numero_participantes, c.estado, c.valor_final, m.nome AS modalidade, s.nome AS sala, ee.nome AS encarregado FROM COACHING c JOIN MODALIDADE m ON c.MODALIDADEid_modalidade = m.id_modalidade JOIN SALA s ON c.SALAid_sala = s.id_sala JOIN PEDIDO_COACHING pc ON c.PEDIDO_COACHINGid_pedido_coaching = pc.id_pedido_coaching JOIN UTILIZADOR ee ON pc.UTILIZADORid_utilizador = ee.id_utilizador WHERE c.UTILIZADORid_utilizador = @IdProfessor AND c.estado NOT IN ('Cancelado') ${filtroData} ORDER BY c.data_aula ASC, c.hora_inicio ASC;`,
+    `SELECT 
+        c.id_coaching, c.data_aula, c.hora_inicio, c.duracao_minutos, 
+        c.formato_aula, c.numero_participantes, c.estado, c.valor_final, 
+        c.ANO_LETIVOid_ano_letivo, m.nome AS modalidade, s.nome AS sala, 
+        ee.nome AS encarregado,
+        -- ADICIONADO: Vai buscar o nome do(s) aluno(s)
+        (SELECT STRING_AGG(a.nome, ', ') FROM PEDIDO_COACHING_PARTICIPANTE pcp JOIN ALUNO a ON pcp.ALUNOid_aluno = a.id_aluno WHERE pcp.PEDIDO_COACHINGid_pedido_coaching = c.PEDIDO_COACHINGid_pedido_coaching) AS alunos
+     FROM COACHING c 
+     JOIN MODALIDADE m ON c.MODALIDADEid_modalidade = m.id_modalidade 
+     JOIN SALA s ON c.SALAid_sala = s.id_sala 
+     JOIN PEDIDO_COACHING pc ON c.PEDIDO_COACHINGid_pedido_coaching = pc.id_pedido_coaching 
+     JOIN UTILIZADOR ee ON pc.UTILIZADORid_utilizador = ee.id_utilizador 
+     WHERE c.UTILIZADORid_utilizador = @IdProfessor AND c.estado NOT IN ('Cancelado') 
+     ${filtroData} 
+     ORDER BY c.data_aula ASC, c.hora_inicio ASC;`,
   );
   return result.recordset;
 }

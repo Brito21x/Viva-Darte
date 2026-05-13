@@ -18,9 +18,9 @@ const ESTADOS_FINAIS_VALIDOS = ["Realizado", "Nao_Realizado"];
 
 function normalizarHoraSqlTime(valor) {
   if (valor instanceof Date && !Number.isNaN(valor.getTime())) {
-    const hh = String(valor.getHours()).padStart(2, "0");
-    const mm = String(valor.getMinutes()).padStart(2, "0");
-    const ss = String(valor.getSeconds()).padStart(2, "0");
+    const hh = String(valor.getUTCHours()).padStart(2, "0");
+    const mm = String(valor.getUTCMinutes()).padStart(2, "0");
+    const ss = String(valor.getUTCSeconds()).padStart(2, "0");
     return `${hh}:${mm}:${ss}`;
   }
   const s = String(valor ?? "").trim();
@@ -422,6 +422,12 @@ async function criarPedidoCoaching(req, res, next) {
 
     if (!isEE)
       return res.status(403).json({ mensagem: "Apenas EE pode pedir aulas." });
+    if (!idProfessor) {
+      return res
+        .status(400)
+        .json({ mensagem: "A seleção de um professor é obrigatória." });
+    }
+
     if (!Array.isArray(alunosIds) || alunosIds.length === 0)
       return res.status(400).json({ mensagem: "Indicar pelo menos um aluno." });
 
@@ -558,12 +564,25 @@ async function aprovarPedido(req, res, next) {
         .status(409)
         .json({ mensagem: "Pedido não pendente ou não encontrado." });
 
-    const mHora = String(pedido.hora_inicio_pretendida || "").match(
-      /(\d{2}):(\d{2})(?::(\d{2}))?/,
-    );
-    const horaInicio = mHora
-      ? `${mHora[1]}:${mHora[2]}:${mHora[3] || "00"}`
-      : null;
+    let horaInicio = null;
+    if (pedido.hora_inicio_pretendida) {
+      if (pedido.hora_inicio_pretendida instanceof Date) {
+        // Lê a hora explicitamente em UTC para evitar que o fuso horário (WEST) some +1 hora
+        const hh = String(pedido.hora_inicio_pretendida.getUTCHours()).padStart(
+          2,
+          "0",
+        );
+        const mm = String(
+          pedido.hora_inicio_pretendida.getUTCMinutes(),
+        ).padStart(2, "0");
+        horaInicio = `${hh}:${mm}:00`;
+      } else {
+        const mHora = String(pedido.hora_inicio_pretendida).match(
+          /(\d{2}):(\d{2})/,
+        );
+        horaInicio = mHora ? `${mHora[1]}:${mHora[2]}:00` : null;
+      }
+    }
     const diaSemanaCoaching = diaSemanaCoachingFromDateValue(
       pedido.data_aula_pretendida,
     );
@@ -651,13 +670,6 @@ async function cancelarCoaching(req, res, next) {
 async function registarValidacao(req, res, next) {
   try {
     const idCoaching = parseInt(req.params.id, 10);
-    const cab =
-      await coachingModel.getCoachingCabecalhoCancelamento(idCoaching);
-    const fimAula = instanteFimCoaching(cab);
-    if (!fimAula || fimAula.getTime() > Date.now())
-      return res
-        .status(400)
-        .json({ mensagem: "Só pode validar aulas já terminadas." });
 
     const tipoValidador = utilizadorTemPerfil(
       req.utilizador.perfis || [],
@@ -717,6 +729,93 @@ async function concluirCoaching(req, res, next) {
   }
 }
 
+async function agendarDiretoAdmin(req, res, next) {
+  try {
+    const idValidador = req.utilizador.id;
+    const {
+      idEncarregado,
+      idModalidade,
+      idProfessor,
+      idSala,
+      dataAula,
+      horaInicio,
+      duracaoMinutos,
+      formatoAula,
+      valorFinal,
+    } = req.body;
+
+    const pool = await require("../config/db").poolPromise;
+
+    // 1. Encontrar o Aluno correto através da tabela ENCARREGADO_ALUNO (Corrigido)
+    let idAluno = null;
+    try {
+      const alunoRes = await pool
+        .request()
+        .input("IdEE", require("mssql").Int, Number(idEncarregado)).query(`
+          SELECT TOP 1 ALUNOid_aluno AS id_aluno 
+          FROM ENCARREGADO_ALUNO 
+          WHERE UTILIZADORid_utilizador = @IdEE;
+        `);
+
+      if (alunoRes && alunoRes.recordset && alunoRes.recordset.length > 0) {
+        idAluno = alunoRes.recordset[0].id_aluno;
+      }
+    } catch (errAluno) {
+      console.log("Aviso: Erro ao buscar aluno associado:", errAluno.message);
+    }
+
+    // 2. Criar pedido já forçado
+    const coachingModel = require("../models/coachingModel");
+    const idPedido = await coachingModel.criarPedidoCoaching(
+      {
+        formatoAula,
+        duracaoMinutos: Number(duracaoMinutos),
+        dataAula,
+        horaInicio,
+        custoEstimado: Number(valorFinal),
+        idEncarregado: Number(idEncarregado),
+        idAnoLetivo: 1, // Assume o ativo
+        idModalidade: Number(idModalidade),
+        idProfessor: Number(idProfessor),
+      },
+      idAluno ? [idAluno] : [],
+      { skipAlunoValidation: true },
+    );
+
+    // 3. Aprovar ignorando a disponibilidade do professor (força o agendamento na agenda)
+    function diaSemanaCoachingFromDateValue(dataValor) {
+      const dt = new Date(dataValor);
+      const day = dt.getDay();
+      return day === 0 ? 7 : day;
+    }
+
+    const idCoaching = await coachingModel.aprovarEAgendarCoaching({
+      idPedido,
+      formatoAula,
+      duracaoMinutos: Number(duracaoMinutos),
+      numeroParticipantes: idAluno ? 1 : 0,
+      dataAula,
+      horaInicio: `${horaInicio}:00`,
+      diaSemanaCoaching: diaSemanaCoachingFromDateValue(dataAula),
+      idProfessor: Number(idProfessor),
+      idAnoLetivo: 1, // Assume o ativo
+      idModalidade: Number(idModalidade),
+      idSala: Number(idSala),
+      valorFinal: Number(valorFinal),
+      idValidador,
+    });
+
+    return res
+      .status(201)
+      .json({ mensagem: "Agendamento forçado com sucesso.", idCoaching });
+  } catch (error) {
+    if (error.message && error.message.includes("Conflito")) {
+      return res.status(409).json({ mensagem: error.message });
+    }
+    next(error);
+  }
+}
+
 module.exports = {
   adicionarDisponibilidade,
   getPrecoEstimado,
@@ -739,4 +838,5 @@ module.exports = {
   getPendentesConclusaoCoordenacao,
   concluirCoaching,
   listarHistorico,
+  agendarDiretoAdmin,
 };

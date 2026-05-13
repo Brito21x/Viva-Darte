@@ -332,22 +332,6 @@
   text-overflow: ellipsis;
 }
 
-.btn-validar-mini {
-  margin-top: 4px;
-  background: rgba(255, 255, 255, 0.18);
-  border: 1px solid rgba(255, 255, 255, 0.35);
-  color: #fff;
-  border-radius: 5px;
-  padding: 4px 6px;
-  font-size: 0.65rem;
-  font-weight: 700;
-  cursor: pointer;
-  transition: background 0.2s;
-}
-.btn-validar-mini:hover {
-  background: rgba(255, 255, 255, 0.3);
-}
-
 /* SIDEBAR & HUD */
 .sidebar {
   position: sticky;
@@ -368,6 +352,49 @@
   font-size: 1.1rem;
   color: var(--primary-dark);
   font-weight: 800;
+}
+
+/* NOVO VISUAL PARA PAINEL DE ATIVIDADE NA SIDEBAR */
+.activity-panel-card {
+  background: linear-gradient(135deg, var(--primary-dark) 0%, #1a1816 100%);
+  color: #fff;
+  border: none;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+}
+.activity-panel-card h3 {
+  color: var(--accent-gold);
+  margin-bottom: 8px;
+}
+.activity-panel-card p {
+  font-size: 0.85rem;
+  color: #d8d3c7;
+  margin-top: 0;
+  margin-bottom: 16px;
+  line-height: 1.4;
+}
+.activity-panel-card .alert-badge {
+  background-color: #d9534f;
+  color: white;
+  padding: 10px;
+  border-radius: 8px;
+  text-align: center;
+  font-size: 0.85rem;
+  margin-bottom: 16px;
+  font-weight: 800;
+  box-shadow: 0 4px 10px rgba(217, 83, 79, 0.25);
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.02);
+  }
+  100% {
+    transform: scale(1);
+  }
 }
 
 .sidebar-subtitle {
@@ -399,57 +426,6 @@
 .btn-full-margin {
   width: 100%;
   margin-top: 14px;
-}
-
-.resumo-card {
-  background-color: var(--primary-dark);
-  color: white;
-}
-.resumo-card h3 {
-  color: white;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  padding-bottom: 12px;
-  margin-bottom: 0;
-}
-.resumo-card .stat-row {
-  display: flex;
-  justify-content: space-between;
-  margin-top: 15px;
-  opacity: 0.9;
-  font-size: 0.95rem;
-}
-.resumo-card .stat-row.highlight {
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-  padding-top: 15px;
-  color: var(--accent-gold);
-  font-size: 1.15rem;
-  font-weight: 700;
-}
-.resumo-title {
-  margin: 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  padding-bottom: 10px;
-}
-
-.modalidade-legend h4 {
-  margin: 0 0 12px;
-  font-size: 1rem;
-  color: var(--primary-dark);
-  font-weight: 800;
-}
-.legend-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 10px;
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: #555;
-}
-.color-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
 }
 
 .info-card h3 {
@@ -527,7 +503,7 @@
   font-weight: 600;
 }
 
-/* OS MEUS PEDIDOS (EE HUD) - REDESENHADO */
+/* OS MEUS PEDIDOS (EE HUD) */
 .pedido-item-simples {
   display: flex;
   justify-content: space-between;
@@ -648,6 +624,11 @@
   filter: brightness(1.05);
   transform: translateY(-1px);
 }
+.btn-gold-full {
+  width: 100%;
+  padding: 14px;
+  display: block;
+}
 
 /* TOAST E ALERTAS */
 .global-toast {
@@ -700,12 +681,6 @@
   font-weight: 600;
   margin: 0 0 24px;
 }
-.alert-modal-box .btn-dark {
-  min-width: 120px;
-  padding: 10px 24px;
-  font-size: 0.95rem;
-  border-radius: 8px;
-}
 
 /* MODAIS */
 .modal-overlay {
@@ -734,6 +709,9 @@
   box-sizing: border-box;
   position: relative;
   animation: modalFadeIn 0.25s ease-out;
+}
+.modal-modern.modal-lg {
+  max-width: 800px;
 }
 .modal-modern::-webkit-scrollbar {
   width: 6px;
@@ -772,6 +750,162 @@
   font-size: 0.95rem;
 }
 
+/* NOVO DESIGN: PAINEL DO PROFESSOR (MODAL) */
+.prof-dashboard-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+@media (max-width: 768px) {
+  .prof-dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.prof-panel-section {
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.02);
+  display: flex;
+  flex-direction: column;
+}
+.prof-panel-section h3 {
+  margin-top: 0;
+  font-size: 1.1rem;
+  color: var(--primary-dark);
+  border-bottom: 2px solid #f9f9f9;
+  padding-bottom: 12px;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.section-icon {
+  width: 20px;
+  height: 20px;
+  color: var(--accent-gold);
+}
+.section-icon.alert-icon {
+  color: #d9534f;
+}
+
+.prof-stat-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.prof-stat-card {
+  background: #fdfaf5;
+  border: 1px solid rgba(179, 139, 89, 0.2);
+  padding: 16px;
+  border-radius: 10px;
+  text-align: center;
+}
+.prof-stat-card span {
+  display: block;
+  font-size: 0.75rem;
+  color: #888;
+  text-transform: uppercase;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
+.prof-stat-card strong {
+  display: block;
+  font-size: 1.8rem;
+  color: var(--primary-dark);
+  line-height: 1;
+}
+.prof-stat-card.highlight strong {
+  color: var(--accent-gold);
+}
+
+.aula-item-modern {
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-left: 4px solid var(--accent-gold);
+  padding: 14px 16px;
+  border-radius: 8px;
+  margin-bottom: 12px;
+  background: #fafafa;
+  transition:
+    transform 0.2s,
+    box-shadow 0.2s;
+}
+.aula-item-modern:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+.aula-item-modern.needs-validation {
+  border-left-color: #d9534f;
+  background: #fffafa;
+  border-color: rgba(217, 83, 79, 0.15);
+}
+.aula-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.aula-item-title {
+  font-weight: 800;
+  color: var(--primary-dark);
+  font-size: 1rem;
+}
+.aula-item-format {
+  font-size: 0.7rem;
+  background: rgba(0, 0, 0, 0.06);
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-weight: 700;
+  color: #555;
+  text-transform: uppercase;
+}
+.aula-item-details {
+  font-size: 0.85rem;
+  color: #666;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.aula-detail-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.detail-icon {
+  width: 14px;
+  height: 14px;
+  opacity: 0.6;
+}
+
+.btn-validate-modern {
+  width: 100%;
+  background: #d9534f;
+  color: white;
+  border: none;
+  padding: 12px;
+  border-radius: 8px;
+  font-weight: 700;
+  font-size: 0.9rem;
+  margin-top: 14px;
+  cursor: pointer;
+  transition: background 0.3s;
+}
+.btn-validate-modern:hover {
+  background: #c9302c;
+}
+.empty-state-text {
+  color: #999;
+  font-style: italic;
+  font-size: 0.9rem;
+  text-align: center;
+  padding: 30px 0;
+}
+
+/* OUTROS MODAIS DA AGENDA E CÁLCULO DE PREÇO */
 .price-summary-card {
   background: #fdfaf5;
   border: 1px solid rgba(179, 139, 89, 0.2);
@@ -809,16 +943,6 @@
   font-weight: 900;
   color: var(--accent-gold);
   line-height: 1;
-}
-
-.loading-text-gold {
-  font-size: 1.2rem;
-  color: var(--accent-gold);
-}
-.error-text-red {
-  color: #d9534f;
-  font-size: 1rem;
-  font-weight: 700;
 }
 
 .modern-form-grid {
@@ -885,11 +1009,6 @@
   color: #d9534f;
   background-color: #fff0f0;
   border: 1px dashed #d9534f;
-}
-.hint-text {
-  color: #888;
-  margin-top: 4px;
-  display: block;
 }
 
 .modal-actions-footer {
@@ -1149,4 +1268,228 @@
     flex: 1;
     min-width: 250px;
   }
+}
+
+/* ============================================================
+   CLASSES ADICIONADAS: substituição de inline styles
+   ============================================================ */
+
+/* Toast centrado (modal-style) */
+.global-toast {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 10000;
+  padding: 24px 48px;
+  font-size: 1.2rem;
+  font-weight: 600;
+  border-radius: 12px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+  background-color: #2c2c2c;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.toast-icon {
+  font-size: 1.5rem;
+}
+
+/* Cabeçalho do calendário – células dos dias */
+.day-sticky-cell {
+  flex-direction: column;
+  line-height: 1.2;
+}
+.day-label-name {
+  font-weight: bold;
+}
+.day-label-date {
+  font-size: 0.8rem;
+  font-weight: normal;
+  opacity: 0.8;
+}
+
+/* Disponibilidade modal – aviso de disciplinas */
+.dispo-modal-info {
+  margin-top: 12px;
+  padding: 12px;
+  background-color: #fffcf5;
+  border-left: 4px solid #e6a23c;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  color: #555;
+}
+.text-gold {
+  color: #e6a23c;
+}
+.mt-4 {
+  margin-top: 4px;
+}
+
+/* EE – lista de pedidos com altura maior */
+.dispo-list-hud--tall {
+  max-height: 400px;
+  margin-top: 10px;
+}
+
+/* Data do pedido na lista EE */
+.pedido-date-text {
+  font-size: 0.8rem;
+  color: #888;
+  display: inline-block;
+  margin-top: 4px;
+}
+
+/* Painel do professor – cabeçalho do resumo financeiro */
+.resumo-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+.resumo-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.resumo-icon {
+  width: 22px;
+  height: 22px;
+  color: #333;
+}
+.resumo-title {
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: #333;
+}
+.resumo-filters {
+  display: flex;
+  gap: 10px;
+}
+.filter-select {
+  padding: 6px 12px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  border-radius: 20px;
+  border: 1px solid #dcdcdc;
+  background-color: #fff;
+  color: #333;
+  cursor: pointer;
+  outline: none;
+}
+
+/* Card "A Receber" clicável */
+.prof-stat-card--clickable {
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+.stat-card-hint {
+  font-size: 0.75rem;
+  opacity: 0.8;
+  margin-top: 4px;
+  display: block;
+}
+
+/* Secções com margem superior no painel */
+.prof-panel-section--mt {
+  margin-top: 24px;
+}
+
+/* Ícone de aviso laranja */
+.section-icon--warning {
+  color: #e6a23c;
+}
+
+/* Aula pendente EE na lista */
+.aula-item-modern--pending-ee {
+  border-left-color: #e6a23c;
+  background-color: #fffcf5;
+}
+
+/* Texto de aviso de pedido pendente */
+.pending-warning-text {
+  color: #e6a23c;
+  font-weight: 600;
+  margin-top: 5px;
+  font-size: 0.85rem;
+}
+
+/* Modal pequeno (detalhes de faturação) */
+.modal-modern--sm {
+  max-width: 500px;
+}
+
+/* Lista de horários dentro de modal */
+.horarios-list-container--modal {
+  max-height: 300px;
+  overflow-y: auto;
+  margin-top: 15px;
+}
+
+/* Tabela de detalhes de faturação */
+.admin-table {
+  width: 100%;
+  text-align: left;
+  font-size: 0.9rem;
+  border-collapse: collapse;
+}
+.table-row {
+  border-bottom: 1px solid #eee;
+}
+.table-cell {
+  padding: 10px 0;
+}
+.text-right {
+  text-align: right;
+}
+.text-muted {
+  color: #888;
+}
+
+/* Dia tag na modal de disponibilidades */
+.dia-tag {
+  background: var(--accent-gold);
+  color: white;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+/* ============================================================
+   BARRA DE NAVEGAÇÃO DA SEMANA (acima do calendário)
+   ============================================================ */
+.calendar-nav-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  background: #fdfaf5;
+  border-bottom: 1px solid #eee;
+  flex-shrink: 0;
+}
+
+.calendar-nav-label {
+  flex: 1;
+  text-align: center;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--primary-dark);
+  letter-spacing: 0.3px;
+}
+
+.btn-today--hoje {
+  padding: 8px 20px;
+  background: var(--primary-dark);
+  color: #fff;
+  border-color: var(--primary-dark);
+  font-weight: 700;
+}
+.btn-today--hoje:hover {
+  background: #1a1816;
+  border-color: #1a1816;
 }

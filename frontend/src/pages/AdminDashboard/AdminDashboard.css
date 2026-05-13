@@ -731,3 +731,150 @@
     gap: 14px;
   }
 }
+
+/* ─── Searchable Select Customizado ─────────────────────────────────────────── */
+.searchable-wrapper {
+  position: relative;
+  width: 100%;
+}
+
+.searchable-arrow {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 0.75rem;
+  color: #999;
+  pointer-events: none;
+}
+
+.searchable-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: #ffffff;
+  border: 1px solid var(--accent-gold);
+  border-top: none;
+  border-radius: 0 0 8px 8px;
+  z-index: 10000;
+  max-height: 220px;
+  overflow-y: auto;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+}
+
+.searchable-dropdown::-webkit-scrollbar {
+  width: 6px;
+}
+.searchable-dropdown::-webkit-scrollbar-thumb {
+  background-color: rgba(179, 139, 89, 0.5); /* Accent gold transparent */
+  border-radius: 10px;
+}
+
+.searchable-option {
+  padding: 12px 14px;
+  cursor: pointer;
+  border-bottom: 1px solid #f9f9f9;
+  color: var(--primary-dark);
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition:
+    background 0.2s,
+    color 0.2s;
+}
+
+.searchable-option:last-child {
+  border-bottom: none;
+}
+
+.searchable-option:hover {
+  background: #fdfaf5;
+  color: var(--accent-gold);
+}
+
+.searchable-empty {
+  padding: 12px 14px;
+  color: #999;
+  font-size: 0.9rem;
+  text-align: center;
+  font-style: italic;
+}
+
+/* ─── Agendamento Direto Largo ──────────────────────────────────────────────── */
+.admin-modal-content--lg {
+  max-width: 850px;
+}
+
+/* ─── Searchable Select Customizado ─────────────────────────────────────────── */
+.searchable-wrapper {
+  position: relative;
+  width: 100%;
+}
+
+.searchable-arrow {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 0.75rem;
+  color: #999;
+  pointer-events: none;
+}
+
+.searchable-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: #ffffff;
+  border: 1px solid var(--accent-gold);
+  border-top: none;
+  border-radius: 0 0 8px 8px;
+  z-index: 10000;
+  max-height: 220px;
+  overflow-y: auto;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+}
+
+.searchable-dropdown::-webkit-scrollbar {
+  width: 6px;
+}
+.searchable-dropdown::-webkit-scrollbar-thumb {
+  background-color: rgba(179, 139, 89, 0.5); /* Accent gold transparent */
+  border-radius: 10px;
+}
+
+.searchable-option {
+  padding: 12px 14px;
+  cursor: pointer;
+  border-bottom: 1px solid #f9f9f9;
+  color: var(--primary-dark);
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition:
+    background 0.2s,
+    color 0.2s;
+}
+
+.searchable-option:last-child {
+  border-bottom: none;
+}
+
+.searchable-option:hover {
+  background: #fdfaf5;
+  color: var(--accent-gold);
+}
+
+.searchable-empty {
+  padding: 12px 14px;
+  color: #999;
+  font-size: 0.9rem;
+  text-align: center;
+  font-style: italic;
+}

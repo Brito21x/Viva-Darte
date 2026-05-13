@@ -729,6 +729,93 @@ async function concluirCoaching(req, res, next) {
   }
 }
 
+async function agendarDiretoAdmin(req, res, next) {
+  try {
+    const idValidador = req.utilizador.id;
+    const {
+      idEncarregado,
+      idModalidade,
+      idProfessor,
+      idSala,
+      dataAula,
+      horaInicio,
+      duracaoMinutos,
+      formatoAula,
+      valorFinal,
+    } = req.body;
+
+    const pool = await require("../config/db").poolPromise;
+
+    // 1. Encontrar o Aluno correto através da tabela ENCARREGADO_ALUNO (Corrigido)
+    let idAluno = null;
+    try {
+      const alunoRes = await pool
+        .request()
+        .input("IdEE", require("mssql").Int, Number(idEncarregado)).query(`
+          SELECT TOP 1 ALUNOid_aluno AS id_aluno 
+          FROM ENCARREGADO_ALUNO 
+          WHERE UTILIZADORid_utilizador = @IdEE;
+        `);
+
+      if (alunoRes && alunoRes.recordset && alunoRes.recordset.length > 0) {
+        idAluno = alunoRes.recordset[0].id_aluno;
+      }
+    } catch (errAluno) {
+      console.log("Aviso: Erro ao buscar aluno associado:", errAluno.message);
+    }
+
+    // 2. Criar pedido já forçado
+    const coachingModel = require("../models/coachingModel");
+    const idPedido = await coachingModel.criarPedidoCoaching(
+      {
+        formatoAula,
+        duracaoMinutos: Number(duracaoMinutos),
+        dataAula,
+        horaInicio,
+        custoEstimado: Number(valorFinal),
+        idEncarregado: Number(idEncarregado),
+        idAnoLetivo: 1, // Assume o ativo
+        idModalidade: Number(idModalidade),
+        idProfessor: Number(idProfessor),
+      },
+      idAluno ? [idAluno] : [],
+      { skipAlunoValidation: true },
+    );
+
+    // 3. Aprovar ignorando a disponibilidade do professor (força o agendamento na agenda)
+    function diaSemanaCoachingFromDateValue(dataValor) {
+      const dt = new Date(dataValor);
+      const day = dt.getDay();
+      return day === 0 ? 7 : day;
+    }
+
+    const idCoaching = await coachingModel.aprovarEAgendarCoaching({
+      idPedido,
+      formatoAula,
+      duracaoMinutos: Number(duracaoMinutos),
+      numeroParticipantes: idAluno ? 1 : 0,
+      dataAula,
+      horaInicio: `${horaInicio}:00`,
+      diaSemanaCoaching: diaSemanaCoachingFromDateValue(dataAula),
+      idProfessor: Number(idProfessor),
+      idAnoLetivo: 1, // Assume o ativo
+      idModalidade: Number(idModalidade),
+      idSala: Number(idSala),
+      valorFinal: Number(valorFinal),
+      idValidador,
+    });
+
+    return res
+      .status(201)
+      .json({ mensagem: "Agendamento forçado com sucesso.", idCoaching });
+  } catch (error) {
+    if (error.message && error.message.includes("Conflito")) {
+      return res.status(409).json({ mensagem: error.message });
+    }
+    next(error);
+  }
+}
+
 module.exports = {
   adicionarDisponibilidade,
   getPrecoEstimado,
@@ -751,4 +838,5 @@ module.exports = {
   getPendentesConclusaoCoordenacao,
   concluirCoaching,
   listarHistorico,
+  agendarDiretoAdmin,
 };

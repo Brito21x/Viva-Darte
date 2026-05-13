@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import "./AdminDashboard.css";
 import logoImg from "../../assets/logo.png";
 
@@ -49,9 +49,83 @@ async function apiFetchChecked(path, token, opts = {}) {
   return data;
 }
 
-function StatCard({ icon, label, value, accent }) {
+// --- COMPONENTE: Dropdown com Pesquisa (Autocomplete) ---
+function SearchableSelect({ options, value, onChange, placeholder }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const wrapperRef = useRef(null);
+
+  const selectedOption = options.find((o) => String(o.id) === String(value));
+  const displayValue = isOpen
+    ? search
+    : selectedOption
+      ? selectedOption.label
+      : "";
+
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (wrapperRef.current && !wrapperRef.current.contains(event.target)) {
+        setIsOpen(false);
+        setSearch(""); // Limpa a pesquisa ao fechar para mostrar a lista toda na próxima vez
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const filteredOptions = options.filter((o) =>
+    o.label.toLowerCase().includes(search.toLowerCase()),
+  );
+
   return (
-    <div className={`stat-card stat-card--${accent}`}>
+    <div className="searchable-wrapper" ref={wrapperRef}>
+      <input
+        type="text"
+        className="form-control"
+        placeholder={placeholder}
+        value={displayValue}
+        onChange={(e) => {
+          setSearch(e.target.value);
+          setIsOpen(true);
+          if (value) onChange(""); // Limpa a seleção se começar a apagar/escrever
+        }}
+        onFocus={() => {
+          setIsOpen(true);
+          setSearch("");
+        }}
+      />
+      <span className="searchable-arrow">▼</span>
+      {isOpen && (
+        <ul className="searchable-dropdown">
+          {filteredOptions.length === 0 && (
+            <li className="searchable-empty">Sem resultados</li>
+          )}
+          {filteredOptions.map((o) => (
+            <li
+              key={o.id}
+              className="searchable-option"
+              onMouseDown={() => {
+                onChange(o.id);
+                setSearch(o.label);
+                setIsOpen(false);
+              }}
+            >
+              {o.label}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function StatCard({ icon, label, value, accent, onClick }) {
+  return (
+    <div
+      className={`stat-card stat-card--${accent}`}
+      onClick={onClick}
+      style={{ cursor: onClick ? "pointer" : "default" }}
+    >
       <span className="stat-icon">{icon}</span>
       <div>
         <p className="stat-label">{label}</p>
@@ -133,6 +207,20 @@ export default function AdminDashboard({ irParaLanding }) {
     idProfessor: "",
     valorFinal: "",
   });
+
+  const [modalAgendarDireto, setModalAgendarDireto] = useState({
+    isOpen: false,
+    idEncarregado: "",
+    idModalidade: "",
+    idProfessor: "",
+    idSala: "",
+    dataAula: "",
+    horaInicio: "",
+    duracaoMinutos: 60,
+    formatoAula: "Solo",
+    valorFinal: "",
+  });
+
   const [msg, setMsg] = useState("");
 
   const [modalUser, setModalUser] = useState({
@@ -144,15 +232,6 @@ export default function AdminDashboard({ irParaLanding }) {
     isOpen: false,
     userId: null,
     selectedIds: [],
-  });
-
-  const [filtroCoaching, setFiltroCoaching] = useState({
-    encarregado: "",
-    aluno: "",
-    modalidade: "",
-    professor: "",
-    horaInicio: "",
-    horaFim: "",
   });
 
   useEffect(() => {
@@ -544,15 +623,56 @@ export default function AdminDashboard({ irParaLanding }) {
     }
   }
 
+  async function handleAgendarDireto(e) {
+    e.preventDefault();
+    if (!modalAgendarDireto.idEncarregado)
+      return mostrarMsg("Selecione um Encarregado/Aluno", "erro");
+    if (!modalAgendarDireto.idModalidade)
+      return mostrarMsg("Selecione uma Modalidade", "erro");
+    if (!modalAgendarDireto.idProfessor)
+      return mostrarMsg("Selecione um Professor", "erro");
+    if (!modalAgendarDireto.idSala)
+      return mostrarMsg("Selecione uma Sala", "erro");
+
+    try {
+      const res = await fetch(`${API_URL}/api/coaching/agendar-admin`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(modalAgendarDireto),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        mostrarMsg("Agendamento criado e aprovado com sucesso!", "ok");
+        setModalAgendarDireto({
+          isOpen: false,
+          idEncarregado: "",
+          idModalidade: "",
+          idProfessor: "",
+          idSala: "",
+          dataAula: "",
+          horaInicio: "",
+          duracaoMinutos: 60,
+          formatoAula: "Solo",
+          valorFinal: "",
+        });
+        carregarDados();
+      } else {
+        mostrarMsg(data.mensagem || "Erro ao agendar a aula.", "erro");
+      }
+    } catch (err) {
+      mostrarMsg("Erro de ligação.", "erro");
+    }
+  }
+
   async function handleRejeitarPedido(idPedido) {
     const justificacao = window.prompt(
       "Por favor, introduza a justificação para rejeitar este pedido:",
     );
     if (!justificacao)
-      return mostrarMsg(
-        "A justificação é obrigatória para cancelar a rejeição.",
-        "erro",
-      );
+      return mostrarMsg("A justificação é obrigatória para rejeitar.", "erro");
 
     try {
       const res = await fetch(
@@ -605,43 +725,7 @@ export default function AdminDashboard({ irParaLanding }) {
     }
   }
 
-  // Cálculos de Filtros e Separação de Listas
-  const pedidosCoachingFiltrados = pedidosPendentes.filter((p) => {
-    const encarregado = p.encarregado || "";
-    const modalidade = p.modalidade || "";
-    const professor = p.professor || "Qualquer";
-    const aluno = p.nome_aluno || p.alunos || "";
-
-    const matchEncarregado = encarregado
-      .toLowerCase()
-      .includes(filtroCoaching.encarregado.toLowerCase());
-    const matchModalidade = modalidade
-      .toLowerCase()
-      .includes(filtroCoaching.modalidade.toLowerCase());
-    const matchProfessor = professor
-      .toLowerCase()
-      .includes(filtroCoaching.professor.toLowerCase());
-    const matchAluno = aluno
-      .toLowerCase()
-      .includes(filtroCoaching.aluno.toLowerCase());
-
-    let matchHora = true;
-    const horaPedido = formatHoraCurta(p.hora_inicio_pretendida);
-
-    if (filtroCoaching.horaInicio && horaPedido < filtroCoaching.horaInicio)
-      matchHora = false;
-    if (filtroCoaching.horaFim && horaPedido > filtroCoaching.horaFim)
-      matchHora = false;
-
-    return (
-      matchEncarregado &&
-      matchModalidade &&
-      matchProfessor &&
-      matchAluno &&
-      matchHora
-    );
-  });
-
+  // Preparação de listas e lógicas de filtragem cruzada (Agendamento Direto)
   const pendentes = utilizadores.filter(
     (u) => u.ativo === false || u.ativo === 0,
   );
@@ -665,7 +749,6 @@ export default function AdminDashboard({ irParaLanding }) {
       u.perfis !== "EE",
   );
 
-  // Divisão do Histórico em 3 Tabelas
   const coachingsEspera = historicoCoachings.filter(
     (c) => c.estado === "Agendado" || c.estado === "Confirmado",
   );
@@ -676,7 +759,72 @@ export default function AdminDashboard({ irParaLanding }) {
     (c) => c.estado === "Cancelado",
   );
 
-  // Função Renderizadora Tabela Utilizadores (Agora 100% segura com a variável 'u')
+  // OPÇÕES FORMATADAS PARA OS DROPDOWNS INTELIGENTES
+  const eeOptions = encarregados.map((ee) => ({
+    id: ee.id_utilizador,
+    label: `${ee.nome} (Aluno: ${ee.nomeAluno || "Sem aluno registado"})`,
+  }));
+
+  // FILTROS CRUZADOS: PROFESSOR <-> MODALIDADE
+  const profSelecionado = profs.find(
+    (p) => String(p.id_utilizador) === String(modalAgendarDireto.idProfessor),
+  );
+  const modSelecionada = allModalidades.find(
+    (m) => String(m.id_modalidade) === String(modalAgendarDireto.idModalidade),
+  );
+
+  const modalidadesDisponiveis =
+    modalAgendarDireto.idProfessor && profSelecionado
+      ? allModalidades.filter((m) =>
+          (profSelecionado.modalidades || "").includes(m.nome),
+        )
+      : allModalidades;
+
+  const profsDisponiveis =
+    modalAgendarDireto.idModalidade && modSelecionada
+      ? profs.filter((p) => (p.modalidades || "").includes(modSelecionada.nome))
+      : profs;
+
+  const handleModChange = (idMod) => {
+    let nextProf = modalAgendarDireto.idProfessor;
+    if (idMod && nextProf) {
+      const mod = allModalidades.find(
+        (m) => String(m.id_modalidade) === String(idMod),
+      );
+      const prof = profs.find(
+        (p) => String(p.id_utilizador) === String(nextProf),
+      );
+      if (mod && prof && !(prof.modalidades || "").includes(mod.nome)) {
+        nextProf = ""; // Limpa o professor se ele não leciona esta nova modalidade
+      }
+    }
+    setModalAgendarDireto({
+      ...modalAgendarDireto,
+      idModalidade: idMod,
+      idProfessor: nextProf,
+    });
+  };
+
+  const handleProfChange = (idProf) => {
+    let nextMod = modalAgendarDireto.idModalidade;
+    if (idProf && nextMod) {
+      const prof = profs.find(
+        (p) => String(p.id_utilizador) === String(idProf),
+      );
+      const mod = allModalidades.find(
+        (m) => String(m.id_modalidade) === String(nextMod),
+      );
+      if (prof && mod && !(prof.modalidades || "").includes(mod.nome)) {
+        nextMod = ""; // Limpa a modalidade se o novo professor não a leciona
+      }
+    }
+    setModalAgendarDireto({
+      ...modalAgendarDireto,
+      idProfessor: idProf,
+      idModalidade: nextMod,
+    });
+  };
+
   const renderTabelaUtilizadores = (listaUtilizadores, tipoTabela) => (
     <table className="admin-table">
       <thead>
@@ -760,7 +908,6 @@ export default function AdminDashboard({ irParaLanding }) {
                     Suspender
                   </button>
                 )}
-
                 {isProf && isAtivo && (
                   <button
                     className="btn-sm btn-sm--gold mr-8"
@@ -790,7 +937,6 @@ export default function AdminDashboard({ irParaLanding }) {
     </table>
   );
 
-  // Função Renderizadora Linha de Coaching Enriquecida
   const renderLinhaCoaching = (c, permiteCancelar = false) => (
     <tr key={c.id_coaching}>
       <td>
@@ -881,7 +1027,6 @@ export default function AdminDashboard({ irParaLanding }) {
               Entrar
             </button>
           </form>
-
           <button className="btn-text-link" onClick={irParaLanding}>
             Voltar ao site
           </button>
@@ -953,24 +1098,30 @@ export default function AdminDashboard({ irParaLanding }) {
               Olá, {utilizador?.nome?.split(" ")[0]}{" "}
             </h1>
             <p className="page-subtitle">Resumo do sistema</p>
+
             <div className="stats-grid">
               <StatCard
                 icon="👥"
                 label="Total Utilizadores"
                 value={utilizadores.length}
                 accent="blue"
+                onClick={() => setActiveTab("utilizadores")}
               />
               <StatCard
                 icon="⏳"
                 label="Por Aprovar"
                 value={pendentes.length}
                 accent="orange"
+                onClick={() => setActiveTab("utilizadores")}
               />
+            </div>
+            <div className="stats-grid" style={{ marginTop: "20px" }}>
               <StatCard
                 icon="🗓️"
                 label="Pedidos Coaching"
                 value={pedidosPendentes.length}
                 accent="teal"
+                onClick={() => setActiveTab("coaching")}
               />
             </div>
           </div>
@@ -1046,139 +1197,23 @@ export default function AdminDashboard({ irParaLanding }) {
               Gestão de pedidos a aguardar aprovação da coordenação
             </p>
 
-            <div
-              className="admin-section"
-              style={{ padding: "20px", marginBottom: "20px" }}
-            >
-              <h4
-                style={{
-                  margin: "0 0 15px 0",
-                  fontSize: "1rem",
-                  color: "var(--primary-dark)",
-                }}
-              >
-                Filtros de Pesquisa
-              </h4>
-              <div
-                className="form-group-row"
-                style={{ flexWrap: "wrap", gap: "15px" }}
-              >
-                <div className="field form-col-1">
-                  <label>Encarregado</label>
-                  <input
-                    type="text"
-                    placeholder="Ex: Rui..."
-                    value={filtroCoaching.encarregado}
-                    onChange={(e) =>
-                      setFiltroCoaching({
-                        ...filtroCoaching,
-                        encarregado: e.target.value,
-                      })
-                    }
-                  />
-                </div>
-                <div className="field form-col-1">
-                  <label>Aluno</label>
-                  <input
-                    type="text"
-                    placeholder="Ex: Maria..."
-                    value={filtroCoaching.aluno}
-                    onChange={(e) =>
-                      setFiltroCoaching({
-                        ...filtroCoaching,
-                        aluno: e.target.value,
-                      })
-                    }
-                  />
-                </div>
-                <div className="field form-col-1">
-                  <label>Professor Requisitado</label>
-                  <input
-                    type="text"
-                    placeholder="Ex: Ana..."
-                    value={filtroCoaching.professor}
-                    onChange={(e) =>
-                      setFiltroCoaching({
-                        ...filtroCoaching,
-                        professor: e.target.value,
-                      })
-                    }
-                  />
-                </div>
-              </div>
-              <div
-                className="form-group-row"
-                style={{ flexWrap: "wrap", gap: "15px", marginTop: "15px" }}
-              >
-                <div className="field form-col-1">
-                  <label>Modalidade</label>
-                  <input
-                    type="text"
-                    placeholder="Ex: Ballet..."
-                    value={filtroCoaching.modalidade}
-                    onChange={(e) =>
-                      setFiltroCoaching({
-                        ...filtroCoaching,
-                        modalidade: e.target.value,
-                      })
-                    }
-                  />
-                </div>
-                <div className="field form-col-1">
-                  <label>Hora Início (De)</label>
-                  <input
-                    type="time"
-                    value={filtroCoaching.horaInicio}
-                    onChange={(e) =>
-                      setFiltroCoaching({
-                        ...filtroCoaching,
-                        horaInicio: e.target.value,
-                      })
-                    }
-                  />
-                </div>
-                <div className="field form-col-1">
-                  <label>Hora Fim (Até)</label>
-                  <input
-                    type="time"
-                    value={filtroCoaching.horaFim}
-                    onChange={(e) =>
-                      setFiltroCoaching({
-                        ...filtroCoaching,
-                        horaFim: e.target.value,
-                      })
-                    }
-                  />
-                </div>
-              </div>
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "flex-end",
-                  marginTop: "15px",
-                }}
-              >
-                <button
-                  className="btn-sm btn-cancel"
-                  onClick={() =>
-                    setFiltroCoaching({
-                      encarregado: "",
-                      aluno: "",
-                      modalidade: "",
-                      professor: "",
-                      horaInicio: "",
-                      horaFim: "",
-                    })
-                  }
-                >
-                  Limpar Filtros
-                </button>
-              </div>
-            </div>
-
             <Section
-              title={`Pedidos Pendentes (${pedidosCoachingFiltrados.length})`}
+              title={`Pedidos Pendentes (${pedidosPendentes.length})`}
               defaultOpen={true}
+              actionButton={
+                <button
+                  className="btn-sm btn-sm--primary"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setModalAgendarDireto({
+                      ...modalAgendarDireto,
+                      isOpen: true,
+                    });
+                  }}
+                >
+                  + Criar Agendamento Direto
+                </button>
+              }
             >
               <table className="admin-table">
                 <thead>
@@ -1195,7 +1230,7 @@ export default function AdminDashboard({ irParaLanding }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {pedidosCoachingFiltrados.map((p) => (
+                  {pedidosPendentes.map((p) => (
                     <tr key={p.id_pedido_coaching}>
                       <td>#{p.id_pedido_coaching}</td>
                       <td>
@@ -1232,7 +1267,7 @@ export default function AdminDashboard({ irParaLanding }) {
                       </td>
                     </tr>
                   ))}
-                  {pedidosCoachingFiltrados.length === 0 && (
+                  {pedidosPendentes.length === 0 && (
                     <tr>
                       <td colSpan="9" className="empty-row">
                         Nenhum pedido encontrado.
@@ -1245,7 +1280,6 @@ export default function AdminDashboard({ irParaLanding }) {
           </div>
         )}
 
-        {/* NOVA ABA DE HISTÓRICO COM AS 3 SECÇÕES */}
         {activeTab === "historico_coaching" && (
           <div className="tab-content">
             <h1 className="page-title">📚 Histórico de Coachings</h1>
@@ -1253,7 +1287,6 @@ export default function AdminDashboard({ irParaLanding }) {
               Acompanhamento detalhado de aulas agendadas, realizadas ou
               canceladas.
             </p>
-
             <Section
               title={` À Espera de Conclusão (${coachingsEspera.length})`}
               defaultOpen={true}
@@ -1282,7 +1315,6 @@ export default function AdminDashboard({ irParaLanding }) {
                 </tbody>
               </table>
             </Section>
-
             <Section
               title={` Concluídas (${coachingsConcluidos.length})`}
               defaultOpen={true}
@@ -1313,7 +1345,6 @@ export default function AdminDashboard({ irParaLanding }) {
                 </tbody>
               </table>
             </Section>
-
             <Section
               title={` Canceladas (${coachingsCancelados.length})`}
               defaultOpen={false}
@@ -1348,6 +1379,7 @@ export default function AdminDashboard({ irParaLanding }) {
         )}
       </main>
 
+      {/* --- MODAIS DE ADMINISTRAÇÃO BÁSICA --- */}
       {modalUser.isOpen && (
         <div className="admin-modal-overlay">
           <div className="admin-modal-content">
@@ -1655,6 +1687,185 @@ export default function AdminDashboard({ irParaLanding }) {
                 </button>
                 <button type="submit" className="btn-submit">
                   Confirmar e Agendar Sala
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* --- MODAL MELHORADO: AGENDAMENTO DIRETO --- */}
+      {modalAgendarDireto.isOpen && (
+        <div className="admin-modal-overlay">
+          {/* Adicionada a classe modal-agendamento-direto para aumentar a largura */}
+          <div className="admin-modal-content admin-modal-content--lg">
+            <h2 className="admin-modal-title">Agendamento Direto</h2>
+            <p className="admin-modal-subtitle">
+              Criar pedido escrevendo os nomes para pesquisa instantânea.
+            </p>
+            <form className="admin-form" onSubmit={handleAgendarDireto}>
+              <div className="form-group-row">
+                <div className="field form-col-1">
+                  {/* O texto Aluno agora aparece automaticamente no rótulo da lista */}
+                  <label>Pesquisar Encarregado / Aluno *</label>
+                  <SearchableSelect
+                    placeholder="Escreve o nome do EE ou Aluno..."
+                    options={eeOptions}
+                    value={modalAgendarDireto.idEncarregado}
+                    onChange={(id) =>
+                      setModalAgendarDireto({
+                        ...modalAgendarDireto,
+                        idEncarregado: id,
+                      })
+                    }
+                  />
+                </div>
+              </div>
+
+              <div className="form-group-row">
+                <div className="field form-col-1">
+                  <label>Modalidade *</label>
+                  <SearchableSelect
+                    placeholder="Selecionar Modalidade..."
+                    options={modalidadesDisponiveis.map((m) => ({
+                      id: m.id_modalidade,
+                      label: m.nome,
+                    }))}
+                    value={modalAgendarDireto.idModalidade}
+                    onChange={handleModChange}
+                  />
+                </div>
+                <div className="field form-col-1">
+                  <label>Professor *</label>
+                  <SearchableSelect
+                    placeholder="Selecionar Professor..."
+                    options={profsDisponiveis.map((p) => ({
+                      id: p.id_utilizador,
+                      label: p.nome,
+                    }))}
+                    value={modalAgendarDireto.idProfessor}
+                    onChange={handleProfChange}
+                  />
+                </div>
+              </div>
+
+              <div className="form-group-row">
+                <div className="field form-col-1">
+                  <label>Sala *</label>
+                  <SearchableSelect
+                    placeholder="Selecionar Sala..."
+                    options={salas.map((s) => ({
+                      id: s.id_sala,
+                      label: `${s.nome} (Max: ${s.capacidade_maxima})`,
+                    }))}
+                    value={modalAgendarDireto.idSala}
+                    onChange={(id) =>
+                      setModalAgendarDireto({
+                        ...modalAgendarDireto,
+                        idSala: id,
+                      })
+                    }
+                  />
+                </div>
+                <div className="field form-col-1">
+                  <label>Data da Aula *</label>
+                  <input
+                    type="date"
+                    required
+                    value={modalAgendarDireto.dataAula}
+                    onChange={(e) =>
+                      setModalAgendarDireto({
+                        ...modalAgendarDireto,
+                        dataAula: e.target.value,
+                      })
+                    }
+                  />
+                </div>
+                <div className="field form-col-1">
+                  <label>Hora Início *</label>
+                  <input
+                    type="time"
+                    required
+                    value={modalAgendarDireto.horaInicio}
+                    onChange={(e) =>
+                      setModalAgendarDireto({
+                        ...modalAgendarDireto,
+                        horaInicio: e.target.value,
+                      })
+                    }
+                  />
+                </div>
+              </div>
+
+              <div className="form-group-row">
+                <div className="field form-col-1">
+                  <label>Formato *</label>
+                  <select
+                    required
+                    value={modalAgendarDireto.formatoAula}
+                    onChange={(e) =>
+                      setModalAgendarDireto({
+                        ...modalAgendarDireto,
+                        formatoAula: e.target.value,
+                      })
+                    }
+                  >
+                    <option value="Solo">Solo</option>
+                    <option value="Dueto">Dueto</option>
+                    <option value="Trio">Trio</option>
+                    <option value="Ensemble">Ensemble</option>
+                  </select>
+                </div>
+                <div className="field form-col-1">
+                  <label>Duração (min) *</label>
+                  <select
+                    required
+                    value={modalAgendarDireto.duracaoMinutos}
+                    onChange={(e) =>
+                      setModalAgendarDireto({
+                        ...modalAgendarDireto,
+                        duracaoMinutos: Number(e.target.value),
+                      })
+                    }
+                  >
+                    <option value={30}>30 min</option>
+                    <option value={60}>60 min</option>
+                    <option value={90}>90 min</option>
+                    <option value={120}>120 min</option>
+                  </select>
+                </div>
+                <div className="field form-col-1">
+                  <label>Valor a Cobrar (€) *</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    required
+                    value={modalAgendarDireto.valorFinal}
+                    onChange={(e) =>
+                      setModalAgendarDireto({
+                        ...modalAgendarDireto,
+                        valorFinal: e.target.value,
+                      })
+                    }
+                  />
+                </div>
+              </div>
+
+              <div className="modal-actions">
+                <button
+                  type="button"
+                  className="btn-cancel"
+                  onClick={() =>
+                    setModalAgendarDireto({
+                      ...modalAgendarDireto,
+                      isOpen: false,
+                    })
+                  }
+                >
+                  Cancelar
+                </button>
+                <button type="submit" className="btn-submit">
+                  Forçar Agendamento
                 </button>
               </div>
             </form>

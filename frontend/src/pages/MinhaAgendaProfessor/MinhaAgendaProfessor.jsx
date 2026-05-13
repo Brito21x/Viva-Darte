@@ -2062,7 +2062,7 @@ export default function MinhaAgendaProfessor({
                           </div>
                         </div>
                         <div className="pending-warning-text">
-                          ⚠️ Novo Pedido: A aguardar aprovação da coordenação...
+                          Novo Pedido: A aguardar aprovação da coordenação...
                         </div>
                       </div>
                     ))

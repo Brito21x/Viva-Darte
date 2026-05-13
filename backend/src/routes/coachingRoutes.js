@@ -243,4 +243,10 @@ router.get(
   coachingController.listarHistorico,
 ); //
 
+router.post(
+  "/agendar-admin",
+  autorizar("Admin"),
+  coachingController.agendarDiretoAdmin,
+);
+
 module.exports = router;

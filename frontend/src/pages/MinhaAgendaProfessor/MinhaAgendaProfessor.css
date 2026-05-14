@@ -694,9 +694,6 @@
   backdrop-filter: blur(4px);
   padding: 20px;
 }
-.modal-overlay-high-z {
-  z-index: 9999;
-}
 .modal-modern {
   background: #fff;
   border-radius: 20px;
@@ -1492,4 +1489,11 @@
 .btn-today--hoje:hover {
   background: #1a1816;
   border-color: #1a1816;
+}
+/* --- Modal de pagamento: garante z-index acima dos outros modais e da navbar --- */
+.modal-overlay-high-z {
+  z-index: 999999;
+}
+.modal-overlay-high-z .modal-modern {
+  z-index: 1000000;
 }

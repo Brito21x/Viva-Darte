@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import "./MinhaAgendaProfessor.css";
 import logoImg from "../../assets/logo.png";
 import { apiAuthFetch } from "../../services/api";
@@ -224,6 +225,11 @@ export default function MinhaAgendaProfessor({
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
   const [selectedAnoLetivoId, setSelectedAnoLetivoId] = useState("");
   const [isDetalhesModalOpen, setIsDetalhesModalOpen] = useState(false);
+  const [modalConfirmarAula, setModalConfirmarAula] = useState({
+    isOpen: false,
+    aula: null,
+    metodoPagamento: "Numerário",
+  });
 
   const [globalToast, setGlobalToast] = useState(null);
 
@@ -757,19 +763,26 @@ export default function MinhaAgendaProfessor({
     }
   };
 
-  const validarRealizacao = async (row) => {
+  const validarRealizacao = async (row, metodoPagamento) => {
     if (!row?.id_coaching) return;
     try {
       await apiAuthFetch(`/api/coaching/${row.id_coaching}/validar`, {
         method: "POST",
-        body: { estadoValidacao: "Confirmado", observacoes: null },
+        body: {
+          estadoValidacao: "Confirmado",
+          observacoes: null,
+          metodoPagamento,
+        },
       });
 
-      // Mensagem atualizada para dar feedback de que saiu da lista de tarefas
+      setModalConfirmarAula({
+        isOpen: false,
+        aula: null,
+        metodoPagamento: "Numerário",
+      });
       setAlertModal({
         isOpen: true,
-        mensagem:
-          "Realização da aula validada! A aula foi enviada para a coordenação.",
+        mensagem: `Realização validada! Pagamento por ${metodoPagamento} registado com sucesso.`,
       });
 
       carregarAgendaSemana();
@@ -1929,9 +1942,15 @@ export default function MinhaAgendaProfessor({
                         </div>
                         <button
                           className="btn-validate-modern"
-                          onClick={() => validarRealizacao(aula)}
+                          onClick={() =>
+                            setModalConfirmarAula({
+                              isOpen: true,
+                              aula,
+                              metodoPagamento: "Numerário",
+                            })
+                          }
                         >
-                          Confirmar a Execução da aula
+                          Confirmar Execução e Pagamento
                         </button>
                       </div>
                     ))
@@ -2234,6 +2253,80 @@ export default function MinhaAgendaProfessor({
           <p>&copy; 2026 Viva D'arte. Todos os direitos reservados.</p>
         </div>
       </footer>
+      {modalConfirmarAula.isOpen && (
+        <div
+          className="modal-overlay modal-overlay-high-z"
+          onClick={() =>
+            setModalConfirmarAula({
+              isOpen: false,
+              aula: null,
+              metodoPagamento: "Numerário",
+            })
+          }
+        >
+          <div
+            className="modal-modern modal-modern--sm"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="modal-header">
+              <h2>Confirmar Execução</h2>
+              <p>
+                Confirma que a aula foi dada e indica o método de pagamento.
+              </p>
+            </div>
+
+            <div
+              className="modern-form-grid"
+              style={{ gridTemplateColumns: "1fr" }}
+            >
+              <div className="form-group">
+                <label>Método de Pagamento *</label>
+                <select
+                  className="form-control"
+                  value={modalConfirmarAula.metodoPagamento}
+                  onChange={(e) =>
+                    setModalConfirmarAula({
+                      ...modalConfirmarAula,
+                      metodoPagamento: e.target.value,
+                    })
+                  }
+                >
+                  <option value="Numerário">Numerário (Dinheiro vivo)</option>
+                  <option value="MBWay">MBWay</option>
+                  <option value="Transferência">Transferência Bancária</option>
+                  <option value="Multibanco">Multibanco</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="modal-actions-footer" style={{ marginTop: "20px" }}>
+              <button
+                className="btn-text"
+                onClick={() =>
+                  setModalConfirmarAula({
+                    isOpen: false,
+                    aula: null,
+                    metodoPagamento: "Numerário",
+                  })
+                }
+              >
+                Cancelar
+              </button>
+              <button
+                className="btn-gold"
+                onClick={() =>
+                  validarRealizacao(
+                    modalConfirmarAula.aula,
+                    modalConfirmarAula.metodoPagamento,
+                  )
+                }
+              >
+                Confirmar e Liquidar Fatura
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -613,6 +613,26 @@ async function aprovarPedido(req, res, next) {
       valorFinal: Number(String(valorFinal).replace(",", ".")),
       idValidador,
     });
+    try {
+      const faturacaoModel = require("../models/faturacaoModel");
+      const idEE =
+        pedido.id_encarregado ||
+        pedido.UTILIZADORid_utilizador ||
+        pedido.id_utilizador;
+      const idAno = pedido.ANO_LETIVOid_ano_letivo || 1; // 👈 Pega no ano letivo do pedido
+
+      if (idEE) {
+        await faturacaoModel.adicionarLinhaFaturaMensal(
+          idEE,
+          Number(String(valorFinal).replace(",", ".")),
+          `Coaching ${pedido.modalidade}`,
+          pedido.data_aula_pretendida,
+          idAno, // 👈 Passa para a função
+        );
+      }
+    } catch (errFatura) {
+      console.error("Erro ao gerar fatura pendente:", errFatura);
+    }
     return res.status(201).json({ mensagem: "Coaching agendado.", idCoaching });
   } catch (error) {
     if (
@@ -670,6 +690,7 @@ async function cancelarCoaching(req, res, next) {
 async function registarValidacao(req, res, next) {
   try {
     const idCoaching = parseInt(req.params.id, 10);
+    const { estadoValidacao, observacoes, metodoPagamento } = req.body;
 
     const tipoValidador = utilizadorTemPerfil(
       req.utilizador.perfis || [],
@@ -677,13 +698,92 @@ async function registarValidacao(req, res, next) {
     )
       ? "Professor"
       : "EncarregadoEducacao";
+
     await coachingModel.registarValidacaoAula(
       idCoaching,
       req.utilizador.id,
       tipoValidador,
-      req.body.estadoValidacao,
-      req.body.observacoes || null,
+      estadoValidacao,
+      observacoes || null,
     );
+
+    // RF20 — Quando o professor confirma a execução e indica o método de pagamento,
+    // liquida automaticamente a fatura mensal do EE referente a esta aula.
+    if (
+      estadoValidacao === "Confirmado" &&
+      tipoValidador === "Professor" &&
+      metodoPagamento &&
+      String(metodoPagamento).trim() !== ""
+    ) {
+      try {
+        const pool = await require("../config/db").poolPromise;
+        const sql = require("mssql");
+
+        // 1) Obter o EE dono do pedido, a data da aula e o ano letivo
+        //    Nome correto da FK em COACHING: PEDIDO_COACHINGid_pedido_coaching
+        const cabResult = await pool
+          .request()
+          .input("IdCoaching", sql.Int, idCoaching).query(`
+            SELECT
+              c.data_aula,
+              c.ANO_LETIVOid_ano_letivo AS id_ano_letivo,
+              pc.UTILIZADORid_utilizador AS id_ee
+            FROM COACHING c
+            INNER JOIN PEDIDO_COACHING pc
+              ON c.PEDIDO_COACHINGid_pedido_coaching = pc.id_pedido_coaching
+            WHERE c.id_coaching = @IdCoaching;
+          `);
+
+        if (cabResult.recordset.length > 0) {
+          const row = cabResult.recordset[0];
+          const dataAula = new Date(row.data_aula);
+          const idEE = row.id_ee;
+          const idAnoLetivo = row.id_ano_letivo || 1;
+
+          if (idEE && !Number.isNaN(dataAula.getTime())) {
+            // 2) Localizar a fatura mensal Pendente correspondente (EE + ano + mês + ano letivo)
+            const faturaResult = await pool
+              .request()
+              .input("UserId", sql.Int, idEE)
+              .input("Ano", sql.Int, dataAula.getFullYear())
+              .input("Mes", sql.Int, dataAula.getMonth() + 1)
+              .input("IdAnoLetivo", sql.Int, idAnoLetivo).query(`
+                SELECT TOP 1 id_faturacao
+                FROM FATURACAO_MENSAL
+                WHERE UTILIZADORid_utilizador = @UserId
+                  AND ano = @Ano
+                  AND mes = @Mes
+                  AND ANO_LETIVOid_ano_letivo = @IdAnoLetivo
+                  AND estado_pagamento = 'Pendente'
+                ORDER BY id_faturacao DESC;
+              `);
+
+            if (faturaResult.recordset.length > 0) {
+              const idFatura = faturaResult.recordset[0].id_faturacao;
+              const faturacaoModel = require("../models/faturacaoModel");
+              await faturacaoModel.registarPagamento(
+                idFatura,
+                String(metodoPagamento).trim(),
+              );
+              console.log(
+                `[RF20] Fatura #${idFatura} marcada como Paga (${metodoPagamento}) — coaching #${idCoaching}.`,
+              );
+            } else {
+              console.warn(
+                `[RF20] Sem fatura pendente para EE=${idEE} em ${dataAula.getMonth() + 1}/${dataAula.getFullYear()} (coaching #${idCoaching}).`,
+              );
+            }
+          }
+        }
+      } catch (errFatura) {
+        // Falha na liquidação automática NÃO deve impedir a validação da aula.
+        console.error(
+          "Erro ao registar pagamento automático da aula (RF20):",
+          errFatura,
+        );
+      }
+    }
+
     return res.status(201).json({ mensagem: "Validação registada." });
   } catch (error) {
     next(error);
@@ -742,6 +842,7 @@ async function agendarDiretoAdmin(req, res, next) {
       duracaoMinutos,
       formatoAula,
       valorFinal,
+      idAnoLetivo,
     } = req.body;
 
     const pool = await require("../config/db").poolPromise;
@@ -774,7 +875,7 @@ async function agendarDiretoAdmin(req, res, next) {
         horaInicio,
         custoEstimado: Number(valorFinal),
         idEncarregado: Number(idEncarregado),
-        idAnoLetivo: 1, // Assume o ativo
+        idAnoLetivo: Number(idAnoLetivo), // Assume o ativo
         idModalidade: Number(idModalidade),
         idProfessor: Number(idProfessor),
       },
@@ -798,12 +899,27 @@ async function agendarDiretoAdmin(req, res, next) {
       horaInicio: `${horaInicio}:00`,
       diaSemanaCoaching: diaSemanaCoachingFromDateValue(dataAula),
       idProfessor: Number(idProfessor),
-      idAnoLetivo: 1, // Assume o ativo
+      idAnoLetivo: Number(idAnoLetivo),
       idModalidade: Number(idModalidade),
       idSala: Number(idSala),
       valorFinal: Number(valorFinal),
       idValidador,
     });
+
+    try {
+      const faturacaoModel = require("../models/faturacaoModel");
+      if (idEncarregado) {
+        await faturacaoModel.adicionarLinhaFaturaMensal(
+          Number(idEncarregado),
+          Number(valorFinal),
+          "Coaching Agendado (Direto)",
+          dataAula,
+          Number(idAnoLetivo),
+        );
+      }
+    } catch (errFatura) {
+      console.error("Erro ao gerar fatura pendente:", errFatura);
+    }
 
     return res
       .status(201)

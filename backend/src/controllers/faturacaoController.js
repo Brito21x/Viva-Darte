@@ -11,6 +11,7 @@
  */
 
 const faturacaoModel = require("../models/faturacaoModel");
+const { registarAuditoria } = require("../helpers/auditoriaHelper");
 
 // ============================================================================
 // LISTAGEM E DETALHE
@@ -114,6 +115,19 @@ async function registarPagamento(req, res, next) {
         .json({ mensagem: "Não foi possível atualizar a fatura." });
     }
 
+    registarAuditoria(req, {
+      tipo: "FATURA_PAGAR",
+      descricao: `Fatura #${idFaturacao} marcada como Paga (${metodoPagamento.trim()}) — ${fatura.nome_utilizador || "Utilizador #" + fatura.UTILIZADORid_utilizador}`,
+      entidadeTipo: "FATURA",
+      entidadeId: idFaturacao,
+      dadosExtra: {
+        metodoPagamento: metodoPagamento.trim(),
+        total: Number(fatura.total) || 0,
+        ano: fatura.ano,
+        mes: fatura.mes,
+      },
+    });
+
     return res
       .status(200)
       .json({ mensagem: "Pagamento registado com sucesso." });
@@ -149,6 +163,18 @@ async function cancelarFatura(req, res, next) {
         .status(500)
         .json({ mensagem: "Não foi possível cancelar a fatura." });
     }
+
+    registarAuditoria(req, {
+      tipo: "FATURA_CANCELAR",
+      descricao: `Fatura #${idFaturacao} cancelada — ${fatura.nome_utilizador || "Utilizador #" + fatura.UTILIZADORid_utilizador}`,
+      entidadeTipo: "FATURA",
+      entidadeId: idFaturacao,
+      dadosExtra: {
+        total: Number(fatura.total) || 0,
+        ano: fatura.ano,
+        mes: fatura.mes,
+      },
+    });
 
     return res.status(200).json({ mensagem: "Fatura cancelada com sucesso." });
   } catch (error) {
@@ -190,6 +216,28 @@ async function atualizarRegraPreco(req, res, next) {
   }
 }
 
+/**
+ * GET /api/faturacao/:id/linhas
+ * Devolve o detalhe de uma fatura: cabeçalho + lista de aulas (coachings)
+ * que a compõem (modalidade, data, hora, professor, sala, valor).
+ */
+async function getLinhasFatura(req, res, next) {
+  try {
+    const idFaturacao = parseInt(req.params.id);
+    if (isNaN(idFaturacao)) {
+      return res.status(400).json({ mensagem: "ID de fatura inválido." });
+    }
+
+    const detalhe = await faturacaoModel.getLinhasDaFatura(idFaturacao);
+    if (!detalhe) {
+      return res.status(404).json({ mensagem: "Fatura não encontrada." });
+    }
+    return res.status(200).json(detalhe);
+  } catch (error) {
+    next(error);
+  }
+}
+
 module.exports = {
   getFaturas,
   getResumo,
@@ -198,4 +246,5 @@ module.exports = {
   cancelarFatura,
   listarPrecos,
   atualizarRegraPreco,
+  getLinhasFatura,
 };

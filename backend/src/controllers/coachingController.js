@@ -7,6 +7,7 @@
 const coachingModel = require("../models/coachingModel");
 const precoCoachingModel = require("../models/precoCoachingModel");
 const { utilizadorTemPerfil } = require("../middlewares/auth");
+const { registarAuditoria } = require("../helpers/auditoriaHelper");
 
 const DATA_REF_COMPARACAO_HORAS = "2026-01-01";
 const MSG_SEM_DISPONIBILIDADE =
@@ -477,6 +478,21 @@ async function criarPedidoCoaching(req, res, next) {
       alunosIds.map(Number),
       { skipAlunoValidation: false },
     );
+
+    registarAuditoria(req, {
+      tipo: "COACHING_PEDIR",
+      descricao: `Pedido de coaching #${idPedido} — ${formatoAula} (${duracaoMinutos}min) em ${dataAula} ${horaInicio}`,
+      entidadeTipo: "PEDIDO_COACHING",
+      entidadeId: idPedido,
+      dadosExtra: {
+        formatoAula,
+        duracaoMinutos,
+        dataAula,
+        horaInicio,
+        custoEstimado,
+      },
+    });
+
     return res.status(201).json({
       mensagem: "Pedido submetido com sucesso.",
       idPedido,
@@ -633,6 +649,20 @@ async function aprovarPedido(req, res, next) {
     } catch (errFatura) {
       console.error("Erro ao gerar fatura pendente:", errFatura);
     }
+
+    registarAuditoria(req, {
+      tipo: "COACHING_APROVAR",
+      descricao: `Pedido #${idPedido} aprovado e agendado (coaching #${idCoaching})`,
+      entidadeTipo: "COACHING",
+      entidadeId: idCoaching,
+      dadosExtra: {
+        idPedido,
+        idProfessor: parseInt(idProfessor, 10),
+        idSala: parseInt(idSala, 10),
+        valorFinal: Number(String(valorFinal).replace(",", ".")),
+      },
+    });
+
     return res.status(201).json({ mensagem: "Coaching agendado.", idCoaching });
   } catch (error) {
     if (
@@ -651,7 +681,17 @@ async function rejeitarPedido(req, res, next) {
       return res
         .status(400)
         .json({ mensagem: "A justificação é obrigatória." });
-    await coachingModel.rejeitarPedidoCoaching(parseInt(req.params.id, 10));
+    const idPedido = parseInt(req.params.id, 10);
+    await coachingModel.rejeitarPedidoCoaching(idPedido);
+
+    registarAuditoria(req, {
+      tipo: "COACHING_REJEITAR",
+      descricao: `Pedido #${idPedido} rejeitado: ${req.body.justificacao}`,
+      entidadeTipo: "PEDIDO_COACHING",
+      entidadeId: idPedido,
+      dadosExtra: { justificacao: req.body.justificacao },
+    });
+
     return res.status(200).json({ mensagem: "Pedido rejeitado." });
   } catch (error) {
     next(error);
@@ -680,6 +720,14 @@ async function cancelarCoaching(req, res, next) {
           .json({ mensagem: "Não pode cancelar aula após a hora." });
     }
     await coachingModel.cancelarCoaching(idCoaching);
+
+    registarAuditoria(req, {
+      tipo: "COACHING_CANCELAR",
+      descricao: `Coaching #${idCoaching} cancelado`,
+      entidadeTipo: "COACHING",
+      entidadeId: idCoaching,
+    });
+
     return res.status(200).json({ mensagem: "Coaching cancelado." });
   } catch (error) {
     next(error);
@@ -783,6 +831,20 @@ async function registarValidacao(req, res, next) {
         );
       }
     }
+
+    // Auditoria: registar a validação da aula
+    registarAuditoria(req, {
+      tipo: "COACHING_VALIDAR",
+      descricao: `Coaching #${idCoaching} validado por ${tipoValidador} — estado: ${estadoValidacao}${metodoPagamento ? `, método: ${metodoPagamento}` : ""}`,
+      entidadeTipo: "COACHING",
+      entidadeId: idCoaching,
+      dadosExtra: {
+        estadoValidacao,
+        tipoValidador,
+        metodoPagamento: metodoPagamento || null,
+        observacoes: observacoes || null,
+      },
+    });
 
     return res.status(201).json({ mensagem: "Validação registada." });
   } catch (error) {

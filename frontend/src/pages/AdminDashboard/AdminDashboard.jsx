@@ -119,6 +119,43 @@ function SearchableSelect({ options, value, onChange, placeholder }) {
   );
 }
 
+// Normaliza um valor 'time' vindo do SQL Server ("19:00:00", ISO "1970-01-01T19:00:00.000Z"
+// ou Date) para a string "HH:MM". Devolve "—" se não conseguir interpretar.
+function formatarHoraSqlTime(valor) {
+  if (valor == null) return "—";
+  // Se for um Date object (alguns drivers fazem isto)
+  if (valor instanceof Date && !Number.isNaN(valor.getTime())) {
+    const hh = String(valor.getUTCHours()).padStart(2, "0");
+    const mm = String(valor.getUTCMinutes()).padStart(2, "0");
+    return `${hh}:${mm}`;
+  }
+  const s = String(valor).trim();
+  if (!s) return "—";
+  // Caso ISO completo "1970-01-01T19:00:00.000Z"
+  const isoMatch = s.match(/T(\d{2}):(\d{2})/);
+  if (isoMatch) return `${isoMatch[1]}:${isoMatch[2]}`;
+  // Caso "HH:MM" ou "HH:MM:SS"
+  const hmMatch = s.match(/^(\d{1,2}):(\d{2})/);
+  if (hmMatch) {
+    return `${String(hmMatch[1]).padStart(2, "0")}:${hmMatch[2]}`;
+  }
+  return "—";
+}
+
+// Calcula a hora de fim somando 'duracaoMinutos' a uma hora de início (formato igual ao SQL).
+// Devolve string "HH:MM" ou "" se inválido.
+function calcularHoraFim(horaInicio, duracaoMinutos) {
+  const hi = formatarHoraSqlTime(horaInicio);
+  if (hi === "—") return "";
+  const dur = parseInt(duracaoMinutos, 10);
+  if (!Number.isFinite(dur)) return "";
+  const [h, m] = hi.split(":").map(Number);
+  const totalMin = h * 60 + m + dur;
+  const hFim = Math.floor((totalMin / 60) % 24);
+  const mFim = totalMin % 60;
+  return `${String(hFim).padStart(2, "0")}:${String(mFim).padStart(2, "0")}`;
+}
+
 function StatCard({ icon, label, value, accent, onClick }) {
   return (
     <div
@@ -377,6 +414,16 @@ export default function AdminDashboard({ irParaLanding }) {
     estado: "",
   });
   const [faturacaoLoading, setFaturacaoLoading] = useState(false);
+
+  // Detalhe (drill-down) de uma fatura específica: cabeçalho + linhas/aulas
+  const [modalDetalheFatura, setModalDetalheFatura] = useState({
+    isOpen: false,
+    loading: false,
+    erro: "",
+    fatura: null,
+    linhas: [],
+    modoIndividual: false,
+  });
 
   // --- INVENTÁRIO ---
   const [inventarioPecas, setInventarioPecas] = useState([]);
@@ -1347,6 +1394,71 @@ export default function AdminDashboard({ irParaLanding }) {
     }
   }
 
+  // Abre o modal de drill-down com as aulas que compõem a fatura.
+  async function abrirDetalheFatura(idFatura) {
+    setModalDetalheFatura({
+      isOpen: true,
+      loading: true,
+      erro: "",
+      fatura: null,
+      linhas: [],
+      modoIndividual: false,
+    });
+    try {
+      const res = await fetch(`${API_URL}/api/faturacao/${idFatura}/linhas`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setModalDetalheFatura({
+          isOpen: true,
+          loading: false,
+          erro: data.mensagem || "Não foi possível carregar o detalhe.",
+          fatura: null,
+          linhas: [],
+          modoIndividual: false,
+        });
+        return;
+      }
+      const data = await res.json();
+      const linhas = Array.isArray(data.linhas) ? data.linhas : [];
+      setModalDetalheFatura({
+        isOpen: true,
+        loading: false,
+        erro: "",
+        fatura: data.fatura || null,
+        linhas,
+        modoIndividual:
+          typeof data.modoIndividual === "boolean"
+            ? data.modoIndividual
+            : linhas.length === 1,
+      });
+    } catch (err) {
+      setModalDetalheFatura({
+        isOpen: true,
+        loading: false,
+        erro: "Erro de ligação ao servidor.",
+        fatura: null,
+        linhas: [],
+        modoIndividual: false,
+      });
+    }
+  }
+
+  function fecharDetalheFatura() {
+    setModalDetalheFatura({
+      isOpen: false,
+      loading: false,
+      erro: "",
+      fatura: null,
+      linhas: [],
+      modoIndividual: false,
+    });
+  }
+
   // --- FUNÇÕES DE INVENTÁRIO ---
   // Vai buscar o catálogo + lista de vendas e funde a info, para que cada peça
   // à venda traga o preço correto da tabela VENDA_PECA.
@@ -2029,7 +2141,7 @@ export default function AdminDashboard({ irParaLanding }) {
             >
               <div>
                 <h1 className="page-title" style={{ margin: 0 }}>
-                  💶 Faturação
+                  Faturação
                 </h1>
                 <p className="page-subtitle">
                   Gestão de faturas e tabela de preços
@@ -2290,9 +2402,6 @@ export default function AdminDashboard({ irParaLanding }) {
                         opacity: 0.5,
                       }}
                     >
-                      <p style={{ fontSize: "2rem", margin: "0 0 10px 0" }}>
-                        📄
-                      </p>
                       <p>
                         Utilize os filtros acima para carregar a lista de
                         faturação.
@@ -2412,6 +2521,21 @@ export default function AdminDashboard({ irParaLanding }) {
 
                                 {/* RF20: Registo do Pagamento */}
                                 <td className="text-center whitespace-nowrap">
+                                  <button
+                                    className="btn-sm"
+                                    style={{
+                                      background: "#fff",
+                                      border: "1px solid #c9a961",
+                                      color: "#7a6a3a",
+                                      marginRight: "8px",
+                                    }}
+                                    onClick={() =>
+                                      abrirDetalheFatura(f.id_faturacao)
+                                    }
+                                    title="Ver aulas que compõem esta fatura"
+                                  >
+                                    Detalhes
+                                  </button>
                                   {f.estado_pagamento === "Pendente" ? (
                                     <>
                                       <button
@@ -2428,7 +2552,7 @@ export default function AdminDashboard({ irParaLanding }) {
                                             );
                                         }}
                                       >
-                                        💳 Marcar Pago
+                                        Marcar Pago
                                       </button>
                                       <button
                                         className="btn-sm btn-sm--danger"
@@ -2436,7 +2560,7 @@ export default function AdminDashboard({ irParaLanding }) {
                                           handleCancelarFatura(f.id_faturacao)
                                         }
                                       >
-                                        ✕ Cancelar
+                                        Cancelar
                                       </button>
                                     </>
                                   ) : (
@@ -2446,7 +2570,7 @@ export default function AdminDashboard({ irParaLanding }) {
                                         fontSize: "0.85rem",
                                       }}
                                     >
-                                      🔒 Fechado
+                                      Fechado
                                     </span>
                                   )}
                                 </td>
@@ -4185,6 +4309,477 @@ export default function AdminDashboard({ irParaLanding }) {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: Detalhe da Fatura (drill-down — aulas que a compõem) */}
+      {modalDetalheFatura.isOpen && (
+        <div className="admin-modal-overlay" onClick={fecharDetalheFatura}>
+          <div
+            className="admin-modal-content"
+            style={{ maxWidth: "780px", width: "92%" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="admin-modal-title">Detalhe da Fatura</h2>
+
+            {modalDetalheFatura.loading ? (
+              <p
+                style={{
+                  textAlign: "center",
+                  padding: "30px",
+                  color: "#888",
+                }}
+              >
+                A carregar detalhes…
+              </p>
+            ) : modalDetalheFatura.erro ? (
+              <div
+                style={{
+                  background: "#fdecea",
+                  borderLeft: "4px solid #d9534f",
+                  padding: "14px 18px",
+                  borderRadius: "8px",
+                  color: "#a02a25",
+                }}
+              >
+                {modalDetalheFatura.erro}
+              </div>
+            ) : (
+              <>
+                {/* Cabeçalho da fatura */}
+                {modalDetalheFatura.fatura && (
+                  <div
+                    style={{
+                      background: "#fdfaf5",
+                      border: "1px solid #ecdfc4",
+                      borderRadius: "10px",
+                      padding: "14px 18px",
+                      marginBottom: "18px",
+                      display: "grid",
+                      gridTemplateColumns: "repeat(2, 1fr)",
+                      gap: "10px 24px",
+                      fontSize: "0.9rem",
+                    }}
+                  >
+                    <div>
+                      <div style={{ color: "#888", fontSize: "0.75rem" }}>
+                        Fatura
+                      </div>
+                      <strong>#{modalDetalheFatura.fatura.id_faturacao}</strong>
+                    </div>
+                    <div>
+                      <div style={{ color: "#888", fontSize: "0.75rem" }}>
+                        Utilizador
+                      </div>
+                      <strong>
+                        {modalDetalheFatura.fatura.nome_utilizador || "—"}
+                      </strong>
+                      <div style={{ fontSize: "0.78rem", color: "#888" }}>
+                        {modalDetalheFatura.fatura.email_utilizador || ""}
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{ color: "#888", fontSize: "0.75rem" }}>
+                        Período
+                      </div>
+                      <strong>
+                        {String(modalDetalheFatura.fatura.mes).padStart(2, "0")}
+                        /{modalDetalheFatura.fatura.ano}
+                      </strong>
+                    </div>
+                    <div>
+                      <div style={{ color: "#888", fontSize: "0.75rem" }}>
+                        Estado
+                      </div>
+                      <span
+                        className={`badge badge--${
+                          modalDetalheFatura.fatura.estado_pagamento === "Pago"
+                            ? "green"
+                            : modalDetalheFatura.fatura.estado_pagamento ===
+                                "Cancelado"
+                              ? "danger"
+                              : "orange"
+                        }`}
+                      >
+                        {modalDetalheFatura.fatura.estado_pagamento || "—"}
+                      </span>
+                    </div>
+                    <div>
+                      <div style={{ color: "#888", fontSize: "0.75rem" }}>
+                        Método de pagamento
+                      </div>
+                      <strong>
+                        {modalDetalheFatura.fatura.metodo_pagamento || "—"}
+                      </strong>
+                    </div>
+                    <div>
+                      <div style={{ color: "#888", fontSize: "0.75rem" }}>
+                        Data de pagamento
+                      </div>
+                      <strong>
+                        {modalDetalheFatura.fatura.data_pagamento
+                          ? new Date(
+                              modalDetalheFatura.fatura.data_pagamento,
+                            ).toLocaleDateString("pt-PT")
+                          : "—"}
+                      </strong>
+                    </div>
+                    <div style={{ gridColumn: "1 / -1", marginTop: "4px" }}>
+                      <div style={{ color: "#888", fontSize: "0.75rem" }}>
+                        Total
+                      </div>
+                      <strong
+                        style={{
+                          fontSize: "1.3rem",
+                          color: "var(--primary-dark)",
+                        }}
+                      >
+                        {Number(modalDetalheFatura.fatura.total || 0).toFixed(
+                          2,
+                        )}
+                        €
+                      </strong>
+                    </div>
+                  </div>
+                )}
+
+                {/* Conteúdo: ficha individual quando há 1 aula, lista quando há várias */}
+                {modalDetalheFatura.linhas.length === 0 ? (
+                  <div
+                    style={{
+                      padding: "20px",
+                      textAlign: "center",
+                      color: "#888",
+                      background: "#fafafa",
+                      borderRadius: "8px",
+                    }}
+                  >
+                    Nenhuma aula encontrada para esta fatura.
+                  </div>
+                ) : modalDetalheFatura.modoIndividual ||
+                  modalDetalheFatura.linhas.length === 1 ? (
+                  (() => {
+                    const aula = modalDetalheFatura.linhas[0];
+                    const hh = formatarHoraSqlTime(aula.hora_inicio);
+                    const horaFim = calcularHoraFim(
+                      aula.hora_inicio,
+                      aula.duracao_minutos,
+                    );
+                    const corEstado =
+                      aula.estado_coaching === "Realizado" ||
+                      aula.validacao_professor === "Confirmado"
+                        ? "green"
+                        : aula.estado_coaching === "Nao_Realizado"
+                          ? "danger"
+                          : aula.estado_coaching === "Confirmado"
+                            ? "teal"
+                            : "orange";
+                    return (
+                      <>
+                        <h3
+                          style={{
+                            margin: "0 0 12px",
+                            fontSize: "1rem",
+                            color: "var(--primary-dark)",
+                          }}
+                        >
+                          Detalhes da aula
+                        </h3>
+                        <div
+                          style={{
+                            background: "#fff",
+                            border: "1px solid #e8e3d6",
+                            borderRadius: "10px",
+                            padding: "18px 22px",
+                            display: "grid",
+                            gridTemplateColumns: "repeat(2, 1fr)",
+                            gap: "14px 28px",
+                            fontSize: "0.92rem",
+                          }}
+                        >
+                          <div>
+                            <div style={{ color: "#888", fontSize: "0.75rem" }}>
+                              ID Coaching
+                            </div>
+                            <strong>#{aula.id_coaching}</strong>
+                          </div>
+                          <div>
+                            <div style={{ color: "#888", fontSize: "0.75rem" }}>
+                              Estado
+                            </div>
+                            <span className={`badge badge--${corEstado}`}>
+                              {aula.estado_coaching || "—"}
+                            </span>
+                          </div>
+
+                          <div>
+                            <div style={{ color: "#888", fontSize: "0.75rem" }}>
+                              Modalidade
+                            </div>
+                            <strong>{aula.modalidade || "—"}</strong>
+                          </div>
+                          <div>
+                            <div style={{ color: "#888", fontSize: "0.75rem" }}>
+                              Formato / Participantes
+                            </div>
+                            <strong>
+                              {aula.formato_aula || "—"}
+                              {aula.numero_participantes
+                                ? ` · ${aula.numero_participantes} aluno(s)`
+                                : ""}
+                            </strong>
+                          </div>
+
+                          <div>
+                            <div style={{ color: "#888", fontSize: "0.75rem" }}>
+                              Data
+                            </div>
+                            <strong>
+                              {aula.data_aula
+                                ? new Date(aula.data_aula).toLocaleDateString(
+                                    "pt-PT",
+                                  )
+                                : "—"}
+                            </strong>
+                          </div>
+                          <div>
+                            <div style={{ color: "#888", fontSize: "0.75rem" }}>
+                              Hora · Duração
+                            </div>
+                            <strong>
+                              {hh}
+                              {horaFim ? ` – ${horaFim}` : ""}{" "}
+                              <span style={{ color: "#999", fontWeight: 400 }}>
+                                ({aula.duracao_minutos || "—"} min)
+                              </span>
+                            </strong>
+                          </div>
+
+                          <div>
+                            <div style={{ color: "#888", fontSize: "0.75rem" }}>
+                              Professor
+                            </div>
+                            <strong>{aula.nome_professor || "—"}</strong>
+                          </div>
+                          <div>
+                            <div style={{ color: "#888", fontSize: "0.75rem" }}>
+                              Sala
+                            </div>
+                            <strong>{aula.sala || "—"}</strong>
+                          </div>
+
+                          <div>
+                            <div style={{ color: "#888", fontSize: "0.75rem" }}>
+                              Validação do professor
+                            </div>
+                            <strong>
+                              {aula.validacao_professor || "Pendente"}
+                            </strong>
+                            {aula.data_validacao_professor && (
+                              <div
+                                style={{
+                                  fontSize: "0.78rem",
+                                  color: "#888",
+                                }}
+                              >
+                                {new Date(
+                                  aula.data_validacao_professor,
+                                ).toLocaleString("pt-PT")}
+                              </div>
+                            )}
+                          </div>
+                          <div>
+                            <div style={{ color: "#888", fontSize: "0.75rem" }}>
+                              Valor da aula
+                            </div>
+                            <strong
+                              style={{
+                                fontSize: "1.05rem",
+                                color: "var(--primary-dark)",
+                              }}
+                            >
+                              {Number(aula.valor_final || 0).toFixed(2)}€
+                            </strong>
+                            {aula.custo_estimado != null &&
+                              Math.round(Number(aula.custo_estimado) * 100) !==
+                                Math.round(Number(aula.valor_final) * 100) && (
+                                <div
+                                  style={{
+                                    fontSize: "0.78rem",
+                                    color: "#888",
+                                  }}
+                                >
+                                  estimado:{" "}
+                                  {Number(aula.custo_estimado).toFixed(2)}€
+                                </div>
+                              )}
+                          </div>
+
+                          {aula.observacoes_professor && (
+                            <div style={{ gridColumn: "1 / -1" }}>
+                              <div
+                                style={{
+                                  color: "#888",
+                                  fontSize: "0.75rem",
+                                }}
+                              >
+                                Observações do professor
+                              </div>
+                              <div
+                                style={{
+                                  background: "#fdfaf5",
+                                  border: "1px solid #ecdfc4",
+                                  borderRadius: "8px",
+                                  padding: "10px 12px",
+                                  marginTop: "4px",
+                                  fontSize: "0.88rem",
+                                  whiteSpace: "pre-wrap",
+                                }}
+                              >
+                                {aula.observacoes_professor}
+                              </div>
+                            </div>
+                          )}
+
+                          {aula.data_pedido && (
+                            <div style={{ gridColumn: "1 / -1" }}>
+                              <div
+                                style={{
+                                  color: "#aaa",
+                                  fontSize: "0.72rem",
+                                  marginTop: "4px",
+                                }}
+                              >
+                                Pedido submetido em{" "}
+                                {new Date(aula.data_pedido).toLocaleString(
+                                  "pt-PT",
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </>
+                    );
+                  })()
+                ) : (
+                  <>
+                    <h3
+                      style={{
+                        margin: "0 0 10px",
+                        fontSize: "1rem",
+                        color: "var(--primary-dark)",
+                      }}
+                    >
+                      Aulas faturadas neste período (
+                      {modalDetalheFatura.linhas.length})
+                    </h3>
+                    <div
+                      style={{
+                        maxHeight: "360px",
+                        overflowY: "auto",
+                        border: "1px solid #eee",
+                        borderRadius: "8px",
+                      }}
+                    >
+                      <table
+                        className="admin-table"
+                        style={{ margin: 0, fontSize: "0.88rem" }}
+                      >
+                        <thead>
+                          <tr>
+                            <th>Data</th>
+                            <th>Hora</th>
+                            <th>Modalidade</th>
+                            <th>Professor</th>
+                            <th>Sala</th>
+                            <th style={{ textAlign: "right" }}>Valor</th>
+                            <th>Estado</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {modalDetalheFatura.linhas.map((l) => {
+                            const horaCurta = formatarHoraSqlTime(
+                              l.hora_inicio,
+                            );
+                            const cor =
+                              l.estado_coaching === "Realizado" ||
+                              l.validacao_professor === "Confirmado"
+                                ? "green"
+                                : l.estado_coaching === "Nao_Realizado"
+                                  ? "danger"
+                                  : l.estado_coaching === "Confirmado"
+                                    ? "teal"
+                                    : "orange";
+                            return (
+                              <tr key={l.id_coaching}>
+                                <td style={{ whiteSpace: "nowrap" }}>
+                                  {l.data_aula
+                                    ? new Date(l.data_aula).toLocaleDateString(
+                                        "pt-PT",
+                                      )
+                                    : "—"}
+                                </td>
+                                <td style={{ whiteSpace: "nowrap" }}>
+                                  {horaCurta}{" "}
+                                  <span
+                                    style={{
+                                      color: "#999",
+                                      fontSize: "0.78rem",
+                                    }}
+                                  >
+                                    ({l.duracao_minutos}min)
+                                  </span>
+                                </td>
+                                <td>
+                                  <strong>{l.modalidade || "—"}</strong>
+                                  <div
+                                    style={{
+                                      fontSize: "0.75rem",
+                                      color: "#888",
+                                    }}
+                                  >
+                                    {l.formato_aula || ""}
+                                  </div>
+                                </td>
+                                <td>{l.nome_professor || "—"}</td>
+                                <td>{l.sala || "—"}</td>
+                                <td
+                                  style={{
+                                    textAlign: "right",
+                                    whiteSpace: "nowrap",
+                                    fontWeight: 700,
+                                  }}
+                                >
+                                  {Number(l.valor_final || 0).toFixed(2)}€
+                                </td>
+                                <td>
+                                  <span className={`badge badge--${cor}`}>
+                                    {l.estado_coaching || "—"}
+                                  </span>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </>
+                )}
+              </>
+            )}
+
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "flex-end",
+                marginTop: "20px",
+              }}
+            >
+              <button className="btn-cancel" onClick={fecharDetalheFatura}>
+                Fechar
+              </button>
+            </div>
           </div>
         </div>
       )}

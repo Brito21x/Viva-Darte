@@ -5,6 +5,7 @@
  */
 
 const inventarioModel = require("../models/inventarioModel");
+const { registarAuditoria } = require("../helpers/auditoriaHelper");
 
 // ============================================================================
 // CATÁLOGO E DETALHES DE PEÇAS
@@ -114,6 +115,15 @@ async function registarPeca(req, res, next) {
       }
     }
 
+    // Auditoria: nova peça no inventário
+    registarAuditoria(req, {
+      tipo: "PECA_CRIAR",
+      descricao: `Peça "${nome}" registada (${isVenda ? "venda" : ""}${isVenda && isEmprestimo ? " + " : ""}${isEmprestimo ? "empréstimo" : ""})`,
+      entidadeTipo: "PECA",
+      entidadeId: idPeca,
+      dadosExtra: { nome, tamanho, estado, isVenda, isEmprestimo },
+    });
+
     return res
       .status(201)
       .json({ mensagem: "Peça guardada com sucesso!", idPeca });
@@ -170,11 +180,9 @@ async function requisitarEmprestimo(req, res, next) {
 
     // Validação estrita: Um empréstimo precisa obrigatoriamente de ter peças associadas
     if (!itens || itens.length === 0) {
-      return res
-        .status(400)
-        .json({
-          mensagem: "É necessário indicar a peça que pretende requisitar.",
-        });
+      return res.status(400).json({
+        mensagem: "É necessário indicar a peça que pretende requisitar.",
+      });
     }
 
     // Para simplificação de contexto atual, assume a primeira peça do array
@@ -191,6 +199,15 @@ async function requisitarEmprestimo(req, res, next) {
       metodoPagamento,
       estadoEntrega,
       idUtilizador,
+    });
+
+    // Auditoria: empréstimo solicitado
+    registarAuditoria(req, {
+      tipo: "EMPRESTIMO_PEDIR",
+      descricao: `Empréstimo solicitado para peça #${idPeca} (${dataInicio} → ${dataFim})`,
+      entidadeTipo: "PECA",
+      entidadeId: idPeca,
+      dadosExtra: { dataInicio, dataFim, metodoPagamento, estadoEntrega },
     });
 
     return res
@@ -225,22 +242,18 @@ async function registarDevolucao(req, res, next) {
 
     // Garante que o estado de devolução de todos os itens envolvidos foi reportado corretamente
     if (!Array.isArray(itens) || itens.length === 0) {
-      return res
-        .status(400)
-        .json({
-          mensagem:
-            "É necessário indicar o estado de devolução de cada peça associada.",
-        });
+      return res.status(400).json({
+        mensagem:
+          "É necessário indicar o estado de devolução de cada peça associada.",
+      });
     }
 
     for (const item of itens) {
       if (!item.idPeca || !item.estadoDevolucao) {
-        return res
-          .status(400)
-          .json({
-            mensagem:
-              "Cada item deve ter o respetivo idPeca e estadoDevolucao preenchidos.",
-          });
+        return res.status(400).json({
+          mensagem:
+            "Cada item deve ter o respetivo idPeca e estadoDevolucao preenchidos.",
+        });
       }
     }
 
@@ -253,6 +266,15 @@ async function registarDevolucao(req, res, next) {
         estadoDevolucao: i.estadoDevolucao,
       })),
     );
+
+    // Auditoria: devolução registada
+    registarAuditoria(req, {
+      tipo: "EMPRESTIMO_DEVOLVER",
+      descricao: `Devolução do empréstimo #${idEmprestimo} (estado: ${estadoFinal})`,
+      entidadeTipo: "EMPRESTIMO",
+      entidadeId: idEmprestimo,
+      dadosExtra: { estadoFinal, totalItens: itens.length },
+    });
 
     return res
       .status(200)
@@ -276,32 +298,26 @@ async function registarPenalizacao(req, res, next) {
       return res.status(400).json({ mensagem: "ID de empréstimo inválido." });
     }
     if (!idPeca || !tipo || valor === undefined) {
-      return res
-        .status(400)
-        .json({
-          mensagem:
-            "idPeca, tipo de penalização e valor são parâmetros obrigatórios.",
-        });
+      return res.status(400).json({
+        mensagem:
+          "idPeca, tipo de penalização e valor são parâmetros obrigatórios.",
+      });
     }
 
     // Validação estrita dos tipos de penalização previstos na base de dados
     const tiposValidos = ["Atraso", "Dano", "Perda"];
     if (!tiposValidos.includes(tipo)) {
-      return res
-        .status(400)
-        .json({
-          mensagem: `Tipo inválido. Valores aceites: ${tiposValidos.join(", ")}.`,
-        });
+      return res.status(400).json({
+        mensagem: `Tipo inválido. Valores aceites: ${tiposValidos.join(", ")}.`,
+      });
     }
 
     // Validação da regra de negócio: Multas não podem ter valores negativos nem nulos
     if (Number(valor) <= 0) {
-      return res
-        .status(400)
-        .json({
-          mensagem:
-            "O valor financeiro da penalização deve ser um número positivo.",
-        });
+      return res.status(400).json({
+        mensagem:
+          "O valor financeiro da penalização deve ser um número positivo.",
+      });
     }
 
     const idPenalizacao = await inventarioModel.registarPenalizacao({
@@ -333,12 +349,10 @@ async function registarPagamentoEmprestimo(req, res, next) {
       return res.status(400).json({ mensagem: "ID de empréstimo inválido." });
     }
     if (valor === undefined || !metodoPagamento || !estadoPagamento) {
-      return res
-        .status(400)
-        .json({
-          mensagem:
-            "O valor, método de pagamento e o estado do pagamento são obrigatórios.",
-        });
+      return res.status(400).json({
+        mensagem:
+          "O valor, método de pagamento e o estado do pagamento são obrigatórios.",
+      });
     }
 
     const sucesso = await inventarioModel.atualizarPagamentoEmprestimo(
@@ -352,11 +366,9 @@ async function registarPagamentoEmprestimo(req, res, next) {
       return res.status(404).json({ mensagem: "Empréstimo não encontrado." });
     }
 
-    return res
-      .status(200)
-      .json({
-        mensagem: "Pagamento do empréstimo atualizado e registado com sucesso.",
-      });
+    return res.status(200).json({
+      mensagem: "Pagamento do empréstimo atualizado e registado com sucesso.",
+    });
   } catch (error) {
     next(error);
   }
@@ -416,6 +428,14 @@ async function colocarPecaAVenda(req, res, next) {
       metodosStr,
     );
 
+    registarAuditoria(req, {
+      tipo: "VENDA_COLOCAR",
+      descricao: `Peça "${nomePeca || `#${idPeca}`}" colocada à venda por ${Number(preco).toFixed(2)}€`,
+      entidadeTipo: "VENDA",
+      entidadeId: idVenda,
+      dadosExtra: { idPeca: parseInt(idPeca), preco: parseFloat(preco) },
+    });
+
     return res
       .status(201)
       .json({ mensagem: "Peça colocada à venda com sucesso.", idVenda });
@@ -474,6 +494,14 @@ async function editarPeca(req, res, next) {
       await inventarioModel.atualizarFotosPeca(idPeca, fotos);
     }
 
+    registarAuditoria(req, {
+      tipo: "PECA_EDITAR",
+      descricao: `Peça #${idPeca}${nome ? ` ("${nome}")` : ""} editada`,
+      entidadeTipo: "PECA",
+      entidadeId: idPeca,
+      dadosExtra: { nome, tamanho, estado, preco },
+    });
+
     return res
       .status(200)
       .json({ mensagem: "Os dados da peça foram atualizados com sucesso." });
@@ -501,6 +529,13 @@ async function apagarPeca(req, res, next) {
         .json({ mensagem: "A peça que tentou apagar não foi encontrada." });
     }
 
+    registarAuditoria(req, {
+      tipo: "PECA_APAGAR",
+      descricao: `Peça #${idPeca} eliminada do inventário`,
+      entidadeTipo: "PECA",
+      entidadeId: idPeca,
+    });
+
     return res
       .status(200)
       .json({ mensagem: "Peça removida do inventário com sucesso." });
@@ -519,11 +554,9 @@ async function registarConclusaoVenda(req, res, next) {
     const { idComprador, metodoPagamento } = req.body;
 
     if (isNaN(idVenda) || !idComprador) {
-      return res
-        .status(400)
-        .json({
-          mensagem: "Os dados submetidos são inválidos ou insuficientes.",
-        });
+      return res.status(400).json({
+        mensagem: "Os dados submetidos são inválidos ou insuficientes.",
+      });
     }
 
     await inventarioModel.registarConclusaoVenda(
@@ -531,6 +564,14 @@ async function registarConclusaoVenda(req, res, next) {
       parseInt(idComprador),
       metodoPagamento,
     );
+
+    registarAuditoria(req, {
+      tipo: "VENDA_CONCLUIR",
+      descricao: `Venda #${idVenda} concluída (comprador: ${idComprador}, método: ${metodoPagamento || "—"})`,
+      entidadeTipo: "VENDA",
+      entidadeId: idVenda,
+      dadosExtra: { idComprador, metodoPagamento },
+    });
 
     return res
       .status(200)

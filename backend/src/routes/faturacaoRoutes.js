@@ -13,6 +13,7 @@ router.put(
   faturacaoCtrl.atualizarRegraPreco,
 );
 router.get("/faturacao/:id", autenticar, faturacaoCtrl.getFaturaPorId);
+router.get("/faturacao/:id/linhas", autenticar, faturacaoCtrl.getLinhasFatura);
 router.put(
   "/faturacao/:id/pagamento",
   autenticar,

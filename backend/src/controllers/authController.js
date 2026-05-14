@@ -7,6 +7,7 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
 const utilizadorModel = require("../models/authModel");
+const { registarAuditoria } = require("../helpers/auditoriaHelper");
 
 async function login(req, res, next) {
   try {
@@ -108,6 +109,15 @@ async function login(req, res, next) {
       { expiresIn: "8h" },
     );
 
+    // Auditoria: login bem-sucedido (não aguarda — fire-and-forget seguro)
+    registarAuditoria(req, {
+      tipo: "LOGIN",
+      descricao: `Login efetuado como ${perfilFinal}`,
+      idUtilizador: utilizador.id_utilizador,
+      entidadeTipo: "UTILIZADOR",
+      entidadeId: utilizador.id_utilizador,
+    });
+
     return res.status(200).json({
       mensagem: "Login efetuado",
       token,
@@ -125,6 +135,11 @@ async function login(req, res, next) {
 }
 
 async function logout(req, res) {
+  // Auditoria do logout (não bloqueia se falhar)
+  registarAuditoria(req, {
+    tipo: "LOGOUT",
+    descricao: "Sessão terminada",
+  });
   return res.status(200).json({ mensagem: "Sessão terminada com sucesso." });
 }
 
@@ -246,6 +261,15 @@ async function register(req, res, next) {
       dataNascimentoAluno,
     });
 
+    // Auditoria: auto-registo (utilizador novo a aguardar aprovação)
+    registarAuditoria(req, {
+      tipo: "REGISTO",
+      descricao: `Auto-registo de ${nomePerfil}: ${nome} <${email}>`,
+      idUtilizador: null, // ainda não tem ID válido a usar (e o utilizador não está autenticado)
+      entidadeTipo: "UTILIZADOR",
+      dadosExtra: { nome, email, perfil: nomePerfil },
+    });
+
     return res
       .status(201)
       .json({ mensagem: "Registo concluído! Aguarde aprovação." });
@@ -313,6 +337,15 @@ async function adminCriarUtilizador(req, res, next) {
       dataNascimentoAluno,
     });
 
+    // Auditoria: admin criou novo utilizador
+    registarAuditoria(req, {
+      tipo: "UTILIZADOR_CRIAR",
+      descricao: `Utilizador criado por admin: ${nome} <${email}> (${nomePerfil})`,
+      entidadeTipo: "UTILIZADOR",
+      entidadeId: novo?.id || novo?.id_utilizador || null,
+      dadosExtra: { nome, email, perfil: nomePerfil },
+    });
+
     return res
       .status(201)
       .json({ mensagem: "Utilizador criado.", utilizador: novo });
@@ -378,6 +411,16 @@ async function editarUtilizador(req, res, next) {
     if (!ok) {
       return res.status(404).json({ mensagem: "Utilizador não encontrado." });
     }
+
+    // Auditoria: edição de utilizador
+    registarAuditoria(req, {
+      tipo: "UTILIZADOR_EDIT",
+      descricao: `Utilizador #${id} editado (${nome})`,
+      entidadeTipo: "UTILIZADOR",
+      entidadeId: id,
+      dadosExtra: { nome, email, perfil: perfilFinal },
+    });
+
     return res.status(200).json({ mensagem: "Utilizador atualizado." });
   } catch (error) {
     next(error);
@@ -425,8 +468,15 @@ async function ativarUtilizador(req, res, next) {
       await utilizadorModel.atualizarModalidadesProfessor(id, idsModalidades);
     }
 
-    if (sucesso)
+    if (sucesso) {
+      registarAuditoria(req, {
+        tipo: "UTILIZADOR_ATIVAR",
+        descricao: `Utilizador #${id} ativado/aprovado`,
+        entidadeTipo: "UTILIZADOR",
+        entidadeId: parseInt(id, 10),
+      });
       return res.status(200).json({ mensagem: "Utilizador aceite!" });
+    }
     return res.status(400).json({ mensagem: "Erro ao aceitar." });
   } catch (error) {
     next(error);
@@ -439,7 +489,15 @@ async function desativarUtilizador(req, res, next) {
       req.params.id,
       false,
     );
-    if (sucesso) return res.status(200).json({ mensagem: "Acesso revogado!" });
+    if (sucesso) {
+      registarAuditoria(req, {
+        tipo: "UTILIZADOR_DESATIVAR",
+        descricao: `Utilizador #${req.params.id} desativado`,
+        entidadeTipo: "UTILIZADOR",
+        entidadeId: parseInt(req.params.id, 10),
+      });
+      return res.status(200).json({ mensagem: "Acesso revogado!" });
+    }
     return res.status(400).json({ mensagem: "Erro ao revogar." });
   } catch (error) {
     next(error);
@@ -449,10 +507,17 @@ async function desativarUtilizador(req, res, next) {
 async function eliminarUtilizador(req, res, next) {
   try {
     const sucesso = await utilizadorModel.apagarUtilizador(req.params.id);
-    if (sucesso)
+    if (sucesso) {
+      registarAuditoria(req, {
+        tipo: "UTILIZADOR_APAGAR",
+        descricao: `Utilizador #${req.params.id} eliminado`,
+        entidadeTipo: "UTILIZADOR",
+        entidadeId: parseInt(req.params.id, 10),
+      });
       return res
         .status(200)
         .json({ mensagem: "Pedido eliminado com sucesso!" });
+    }
     return res.status(400).json({ mensagem: "Erro ao eliminar utilizador." });
   } catch (error) {
     next(error);

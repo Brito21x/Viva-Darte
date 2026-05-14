@@ -1,6 +1,6 @@
 /**
  * @fileoverview Controlador de Inventário (Peças, Empréstimos e Vendas).
- * Este ficheiro gere o catálogo de peças, requisições de empréstimo, devoluções,
+ * @description Este ficheiro gere o catálogo de peças, requisições de empréstimo, devoluções,
  * penalizações por danos/atrasos e o mercado de vendas da escola.
  */
 
@@ -12,8 +12,13 @@ const { registarAuditoria } = require("../helpers/auditoriaHelper");
 // ============================================================================
 
 /**
- * Obtém a lista completa de peças disponíveis no catálogo do inventário.
- * GET /api/inventario/catalogo
+ * @async
+ * @function getCatalogo
+ * @description Obtém a lista completa de peças disponíveis no catálogo do inventário. (GET /api/inventario/catalogo)
+ * @param {import('express').Request} req - O objeto do pedido (request) do Express.
+ * @param {import('express').Response} res - O objeto da resposta (response) do Express.
+ * @param {import('express').NextFunction} next - A função para invocar o próximo middleware.
+ * @returns {Promise<import('express').Response|void>} Devolve o array com o catálogo de peças.
  */
 async function getCatalogo(req, res, next) {
   try {
@@ -24,14 +29,19 @@ async function getCatalogo(req, res, next) {
 }
 
 /**
- * Obtém os detalhes completos de uma peça específica, incluindo as suas fotografias.
- * GET /api/inventario/pecas/:id
+ * @async
+ * @function getPecaDetalhes
+ * @description Obtém os detalhes completos de uma peça específica, incluindo as suas fotografias. (GET /api/inventario/pecas/:id)
+ * @param {import('express').Request} req - O objeto do pedido (request) do Express.
+ * @param {string} req.params.id - O ID da peça a consultar.
+ * @param {import('express').Response} res - O objeto da resposta (response) do Express.
+ * @param {import('express').NextFunction} next - A função para invocar o próximo middleware.
+ * @returns {Promise<import('express').Response|void>} Devolve o objeto com os detalhes da peça ou uma mensagem de erro.
  */
 async function getPecaDetalhes(req, res, next) {
   try {
     const idPeca = parseInt(req.params.id);
 
-    // Validação básica do parâmetro da rota
     if (isNaN(idPeca)) {
       return res.status(400).json({ mensagem: "ID de peça inválido." });
     }
@@ -55,9 +65,24 @@ async function getPecaDetalhes(req, res, next) {
 // ============================================================================
 
 /**
- * Regista uma nova peça no inventário do sistema.
- * Configura automaticamente a peça para empréstimo e/ou venda consoante os parâmetros submetidos.
- * POST /api/inventario/pecas
+ * @async
+ * @function registarPeca
+ * @description Regista uma nova peça no inventário do sistema.
+ * Configura automaticamente a peça para empréstimo e/ou venda consoante os parâmetros submetidos. (POST /api/inventario/pecas)
+ * @param {import('express').Request} req - O objeto do pedido (request) do Express.
+ * @param {Object} req.body - O corpo do pedido.
+ * @param {string} req.body.nome - O nome da peça.
+ * @param {string} req.body.descricao - A descrição da peça.
+ * @param {string} req.body.tamanho - O tamanho da peça.
+ * @param {string} req.body.estado - O estado de conservação da peça.
+ * @param {number|string} [req.body.idCategoria] - O ID da categoria da peça.
+ * @param {Array<string>} [req.body.fotos] - Array com os URLs ou base64 das fotografias da peça.
+ * @param {number|string} [req.body.valor_dia] - O valor cobrado por dia (para empréstimos).
+ * @param {Array<string>} [req.body.metodos_pagamento] - Os métodos de pagamento aceites.
+ * @param {boolean|string} [req.body.disponivelVenda] - Indica se a peça está disponível para venda.
+ * @param {import('express').Response} res - O objeto da resposta (response) do Express.
+ * @param {import('express').NextFunction} next - A função para invocar o próximo middleware.
+ * @returns {Promise<import('express').Response|void>} Devolve uma mensagem de sucesso e o ID da nova peça.
  */
 async function registarPeca(req, res, next) {
   try {
@@ -73,17 +98,12 @@ async function registarPeca(req, res, next) {
       disponivelVenda,
     } = req.body;
 
-    // Identifica o utilizador (criador/dono da peça) através do token JWT
     const idUtilizador = req.utilizador.id || req.utilizador.id_utilizador;
 
-    // Lógica de negócio: Deteção inteligente do tipo de transação (Empréstimo ou Venda)
-    // Se tem um "valor ao dia", é porque está disponível para empréstimo/aluguer.
     const isEmprestimo = valor_dia !== undefined && valor_dia !== "";
-    // Está para venda se explicitly dito, ou se não for para empréstimo.
     const isVenda =
       disponivelVenda === true || disponivelVenda === "true" || !isEmprestimo;
 
-    // Processamento e normalização dos métodos de pagamento para formato em string separada por vírgulas
     const metodosStr =
       metodos_pagamento &&
       Array.isArray(metodos_pagamento) &&
@@ -91,31 +111,27 @@ async function registarPeca(req, res, next) {
         ? metodos_pagamento.join(",")
         : "MBWay";
 
-    // Guarda a peça principal na base de dados e obtém o ID gerado
     const idPeca = await inventarioModel.registarNovaPeca({
       nome,
       descricao,
       tamanho,
       estado,
       idUtilizador,
-      idCategoria: parseInt(idCategoria) || 1, // Fallback para categoria geral caso não enviada
+      idCategoria: parseInt(idCategoria) || 1,
       isEmprestimo,
       isVenda,
       valor_dia: parseFloat(valor_dia || 0),
       metodosStr,
     });
 
-    // Se existirem fotografias submetidas, faz o registo em lote das mesmas
     if (fotos && Array.isArray(fotos) && fotos.length > 0) {
       try {
         await inventarioModel.registarFotosPeca(idPeca, fotos);
       } catch (e) {
-        // Apenas logamos o erro, não falhamos a resposta HTTP se a peça já foi criada
         console.error("Aviso: Falha ao guardar as fotografias da peça", e);
       }
     }
 
-    // Auditoria: nova peça no inventário
     registarAuditoria(req, {
       tipo: "PECA_CRIAR",
       descricao: `Peça "${nome}" registada (${isVenda ? "venda" : ""}${isVenda && isEmprestimo ? " + " : ""}${isEmprestimo ? "empréstimo" : ""})`,
@@ -133,8 +149,19 @@ async function registarPeca(req, res, next) {
 }
 
 /**
- * Atualiza o estado físico de conservação, a disponibilidade comercial e a localização da peça.
- * PUT /api/inventario/pecas/:id/estado
+ * @async
+ * @function atualizarEstadoPeca
+ * @description Atualiza o estado físico de conservação, a disponibilidade comercial e a localização da peça. (PUT /api/inventario/pecas/:id/estado)
+ * @param {import('express').Request} req - O objeto do pedido (request) do Express.
+ * @param {string} req.params.id - O ID da peça a atualizar.
+ * @param {Object} req.body - O corpo do pedido.
+ * @param {string} req.body.estado - O novo estado da peça.
+ * @param {boolean} [req.body.disponivelEmprestimo] - A nova disponibilidade para empréstimo.
+ * @param {boolean} [req.body.disponivelVenda] - A nova disponibilidade para venda.
+ * @param {string} [req.body.localizacao] - A nova localização física da peça.
+ * @param {import('express').Response} res - O objeto da resposta (response) do Express.
+ * @param {import('express').NextFunction} next - A função para invocar o próximo middleware.
+ * @returns {Promise<import('express').Response|void>} Devolve uma mensagem de sucesso ou erro caso não seja encontrada.
  */
 async function atualizarEstadoPeca(req, res, next) {
   try {
@@ -169,8 +196,19 @@ async function atualizarEstadoPeca(req, res, next) {
 // ============================================================================
 
 /**
- * Regista uma nova requisição de empréstimo ou aluguer de peças por parte de um utilizador.
- * POST /api/inventario/emprestimos
+ * @async
+ * @function requisitarEmprestimo
+ * @description Regista uma nova requisição de empréstimo ou aluguer de peças por parte de um utilizador. (POST /api/inventario/emprestimos)
+ * @param {import('express').Request} req - O objeto do pedido (request) do Express.
+ * @param {Object} req.body - O corpo do pedido.
+ * @param {string} req.body.dataInicio - A data de início do empréstimo.
+ * @param {string} req.body.dataFim - A data de fim do empréstimo.
+ * @param {string} [req.body.observacoes] - Notas ou observações do pedido.
+ * @param {string} req.body.metodoPagamento - O método escolhido para pagar.
+ * @param {Array<{idPeca: number|string, estadoEntrega: string}>} req.body.itens - As peças incluídas na requisição.
+ * @param {import('express').Response} res - O objeto da resposta (response) do Express.
+ * @param {import('express').NextFunction} next - A função para invocar o próximo middleware.
+ * @returns {Promise<import('express').Response|void>} Devolve uma mensagem de sucesso ou erro (ex: peça indisponível).
  */
 async function requisitarEmprestimo(req, res, next) {
   try {
@@ -178,19 +216,15 @@ async function requisitarEmprestimo(req, res, next) {
     const { dataInicio, dataFim, observacoes, metodoPagamento, itens } =
       req.body;
 
-    // Validação estrita: Um empréstimo precisa obrigatoriamente de ter peças associadas
     if (!itens || itens.length === 0) {
       return res.status(400).json({
         mensagem: "É necessário indicar a peça que pretende requisitar.",
       });
     }
 
-    // Para simplificação de contexto atual, assume a primeira peça do array
-    // (A arquitetura suporta expansão para múltiplos itens no futuro)
     const idPeca = parseInt(itens[0].idPeca);
     const estadoEntrega = itens[0].estadoEntrega;
 
-    // Agrupa todos os dados e delega a transação para o Model
     await inventarioModel.requisitarEmprestimo({
       idPeca,
       dataInicio,
@@ -201,7 +235,6 @@ async function requisitarEmprestimo(req, res, next) {
       idUtilizador,
     });
 
-    // Auditoria: empréstimo solicitado
     registarAuditoria(req, {
       tipo: "EMPRESTIMO_PEDIR",
       descricao: `Empréstimo solicitado para peça #${idPeca} (${dataInicio} → ${dataFim})`,
@@ -223,8 +256,18 @@ async function requisitarEmprestimo(req, res, next) {
 }
 
 /**
- * Regista a devolução de um empréstimo em curso, avaliando o estado final com que as peças foram entregues.
- * POST /api/inventario/emprestimos/:id/devolucao
+ * @async
+ * @function registarDevolucao
+ * @description Regista a devolução de um empréstimo em curso, avaliando o estado final com que as peças foram entregues. (POST /api/inventario/emprestimos/:id/devolucao)
+ * @param {import('express').Request} req - O objeto do pedido (request) do Express.
+ * @param {string} req.params.id - O ID do empréstimo a devolver.
+ * @param {Object} req.body - O corpo do pedido.
+ * @param {string} req.body.estadoFinal - O estado em que o empréstimo foi finalizado.
+ * @param {string} [req.body.observacoes] - Notas ou observações sobre a devolução.
+ * @param {Array<{idPeca: number|string, estadoDevolucao: string}>} req.body.itens - As peças a devolver e os respetivos estados.
+ * @param {import('express').Response} res - O objeto da resposta (response) do Express.
+ * @param {import('express').NextFunction} next - A função para invocar o próximo middleware.
+ * @returns {Promise<import('express').Response|void>} Devolve uma mensagem confirmando o registo da devolução.
  */
 async function registarDevolucao(req, res, next) {
   try {
@@ -240,7 +283,6 @@ async function registarDevolucao(req, res, next) {
         .json({ mensagem: "O estado final do empréstimo é obrigatório." });
     }
 
-    // Garante que o estado de devolução de todos os itens envolvidos foi reportado corretamente
     if (!Array.isArray(itens) || itens.length === 0) {
       return res.status(400).json({
         mensagem:
@@ -267,7 +309,6 @@ async function registarDevolucao(req, res, next) {
       })),
     );
 
-    // Auditoria: devolução registada
     registarAuditoria(req, {
       tipo: "EMPRESTIMO_DEVOLVER",
       descricao: `Devolução do empréstimo #${idEmprestimo} (estado: ${estadoFinal})`,
@@ -285,9 +326,20 @@ async function registarDevolucao(req, res, next) {
 }
 
 /**
- * Aplica uma penalização (multa monetária) associada a um empréstimo (Atraso, Dano ou Perda).
- * Exclusivo para perfis de Coordenação/Administração.
- * POST /api/inventario/emprestimos/:id/penalizacao
+ * @async
+ * @function registarPenalizacao
+ * @description Aplica uma penalização (multa monetária) associada a um empréstimo (Atraso, Dano ou Perda).
+ * Exclusivo para perfis de Coordenação/Administração. (POST /api/inventario/emprestimos/:id/penalizacao)
+ * @param {import('express').Request} req - O objeto do pedido (request) do Express.
+ * @param {string} req.params.id - O ID do empréstimo.
+ * @param {Object} req.body - O corpo do pedido.
+ * @param {number|string} req.body.idPeca - O ID da peça à qual se aplica a multa.
+ * @param {string} req.body.tipo - O tipo da penalização (Atraso, Dano ou Perda).
+ * @param {number|string} req.body.valor - O montante da penalização.
+ * @param {string} [req.body.descricao] - Notas ou descrição do motivo da penalização.
+ * @param {import('express').Response} res - O objeto da resposta (response) do Express.
+ * @param {import('express').NextFunction} next - A função para invocar o próximo middleware.
+ * @returns {Promise<import('express').Response|void>} Devolve uma mensagem confirmando a multa e o respetivo ID.
  */
 async function registarPenalizacao(req, res, next) {
   try {
@@ -337,8 +389,18 @@ async function registarPenalizacao(req, res, next) {
 }
 
 /**
- * Atualiza o estado do pagamento referente aos custos de um empréstimo.
- * PUT /api/inventario/emprestimos/:id/pagamento
+ * @async
+ * @function registarPagamentoEmprestimo
+ * @description Atualiza o estado do pagamento referente aos custos de um empréstimo. (PUT /api/inventario/emprestimos/:id/pagamento)
+ * @param {import('express').Request} req - O objeto do pedido (request) do Express.
+ * @param {string} req.params.id - O ID do empréstimo a atualizar o pagamento.
+ * @param {Object} req.body - O corpo do pedido.
+ * @param {number|string} req.body.valor - O valor total do pagamento.
+ * @param {string} req.body.metodoPagamento - O método utilizado para liquidar o empréstimo.
+ * @param {string} req.body.estadoPagamento - O novo estado do pagamento.
+ * @param {import('express').Response} res - O objeto da resposta (response) do Express.
+ * @param {import('express').NextFunction} next - A função para invocar o próximo middleware.
+ * @returns {Promise<import('express').Response|void>} Devolve uma mensagem confirmando a alteração.
  */
 async function registarPagamentoEmprestimo(req, res, next) {
   try {
@@ -379,8 +441,13 @@ async function registarPagamentoEmprestimo(req, res, next) {
 // ============================================================================
 
 /**
- * Lista todas as peças que se encontram atualmente marcadas como disponíveis para venda direta.
- * GET /api/inventario/vendas
+ * @async
+ * @function getPecasAVenda
+ * @description Lista todas as peças que se encontram atualmente marcadas como disponíveis para venda direta. (GET /api/inventario/vendas)
+ * @param {import('express').Request} req - O objeto do pedido (request) do Express.
+ * @param {import('express').Response} res - O objeto da resposta (response) do Express.
+ * @param {import('express').NextFunction} next - A função para invocar o próximo middleware.
+ * @returns {Promise<import('express').Response|void>} Devolve o array com as peças à venda.
  */
 async function getPecasAVenda(req, res, next) {
   try {
@@ -391,8 +458,19 @@ async function getPecasAVenda(req, res, next) {
 }
 
 /**
- * Coloca uma peça do catálogo à venda, definindo um preço comercial.
- * POST /api/inventario/vendas
+ * @async
+ * @function colocarPecaAVenda
+ * @description Coloca uma peça do catálogo à venda, definindo um preço comercial. (POST /api/inventario/vendas)
+ * @param {import('express').Request} req - O objeto do pedido (request) do Express.
+ * @param {Object} req.body - O corpo do pedido.
+ * @param {number|string} req.body.idPeca - O ID da peça a disponibilizar.
+ * @param {number|string} req.body.preco - O preço estabelecido para a venda.
+ * @param {string} [req.body.nomePeca] - O nome da peça (opcional).
+ * @param {string} [req.body.condicaoPeca] - A condição da peça para a venda.
+ * @param {Array<string>} [req.body.metodosPagamento] - Os métodos de pagamento aceites.
+ * @param {import('express').Response} res - O objeto da resposta (response) do Express.
+ * @param {import('express').NextFunction} next - A função para invocar o próximo middleware.
+ * @returns {Promise<import('express').Response|void>} Devolve o ID da nova venda e uma mensagem de sucesso.
  */
 async function colocarPecaAVenda(req, res, next) {
   try {
@@ -411,7 +489,6 @@ async function colocarPecaAVenda(req, res, next) {
         .json({ mensagem: "O preço de venda deve ser superior a zero." });
     }
 
-    // Processa os métodos de pagamento em string para gravação na BD, com fallback padrão
     const metodosStr =
       metodosPagamento &&
       Array.isArray(metodosPagamento) &&
@@ -445,9 +522,23 @@ async function colocarPecaAVenda(req, res, next) {
 }
 
 /**
- * Edita todos os detalhes e metadados de uma peça de forma faseada.
- * Atualiza os dados base, os dados de venda e substitui a galeria de fotografias.
- * PUT /api/inventario/pecas/:id
+ * @async
+ * @function editarPeca
+ * @description Edita todos os detalhes e metadados de uma peça de forma faseada.
+ * Atualiza os dados base, os dados de venda e substitui a galeria de fotografias. (PUT /api/inventario/pecas/:id)
+ * @param {import('express').Request} req - O objeto do pedido (request) do Express.
+ * @param {string} req.params.id - O ID da peça a ser alterada.
+ * @param {Object} req.body - O corpo do pedido.
+ * @param {string} req.body.nome - O novo nome da peça.
+ * @param {string} req.body.descricao - A nova descrição.
+ * @param {string} req.body.tamanho - O novo tamanho.
+ * @param {string} req.body.estado - O novo estado físico.
+ * @param {number|string} [req.body.preco] - O novo preço da venda.
+ * @param {Array<string>} [req.body.fotos] - Array com os URLs/base64 das novas imagens da peça.
+ * @param {Array<string>} [req.body.metodosPagamento] - Os novos métodos de pagamento.
+ * @param {import('express').Response} res - O objeto da resposta (response) do Express.
+ * @param {import('express').NextFunction} next - A função para invocar o próximo middleware.
+ * @returns {Promise<import('express').Response|void>} Devolve uma mensagem a indicar que os dados foram guardados.
  */
 async function editarPeca(req, res, next) {
   try {
@@ -469,8 +560,6 @@ async function editarPeca(req, res, next) {
         ? metodosPagamento.join(",")
         : "MBWay,Transferência,Numerário";
 
-    // Atualização faseada para garantir a integridade da transação modular
-    // 1. Dados físicos e genéricos
     await inventarioModel.atualizarDadosCompletosPeca(idPeca, {
       nome,
       descricao,
@@ -478,7 +567,6 @@ async function editarPeca(req, res, next) {
       estado,
     });
 
-    // 2. Dados comerciais (se um novo preço foi submetido)
     if (preco !== undefined) {
       await inventarioModel.atualizarDadosVenda(
         idPeca,
@@ -489,7 +577,6 @@ async function editarPeca(req, res, next) {
       );
     }
 
-    // 3. Galeria de Imagens (substituição total caso seja enviada uma nova array)
     if (fotos && Array.isArray(fotos)) {
       await inventarioModel.atualizarFotosPeca(idPeca, fotos);
     }
@@ -511,8 +598,14 @@ async function editarPeca(req, res, next) {
 }
 
 /**
- * Apaga uma peça do catálogo de forma definitiva e irreversível do sistema.
- * DELETE /api/inventario/pecas/:id
+ * @async
+ * @function apagarPeca
+ * @description Apaga uma peça do catálogo de forma definitiva e irreversível do sistema. (DELETE /api/inventario/pecas/:id)
+ * @param {import('express').Request} req - O objeto do pedido (request) do Express.
+ * @param {string} req.params.id - O ID da peça a apagar.
+ * @param {import('express').Response} res - O objeto da resposta (response) do Express.
+ * @param {import('express').NextFunction} next - A função para invocar o próximo middleware.
+ * @returns {Promise<import('express').Response|void>} Devolve uma mensagem confirmando a remoção da peça.
  */
 async function apagarPeca(req, res, next) {
   try {
@@ -545,8 +638,17 @@ async function apagarPeca(req, res, next) {
 }
 
 /**
- * Regista o fecho formal de uma venda de uma peça, transferindo a posse lógica no sistema.
- * POST /api/inventario/vendas/:id/conclusao
+ * @async
+ * @function registarConclusaoVenda
+ * @description Regista o fecho formal de uma venda de uma peça, transferindo a posse lógica no sistema. (POST /api/inventario/vendas/:id/conclusao)
+ * @param {import('express').Request} req - O objeto do pedido (request) do Express.
+ * @param {string} req.params.id - O ID da venda a concluir.
+ * @param {Object} req.body - O corpo do pedido.
+ * @param {number|string} req.body.idComprador - O ID do utilizador que comprou a peça.
+ * @param {string} req.body.metodoPagamento - O método utilizado no pagamento.
+ * @param {import('express').Response} res - O objeto da resposta (response) do Express.
+ * @param {import('express').NextFunction} next - A função para invocar o próximo middleware.
+ * @returns {Promise<import('express').Response|void>} Devolve uma mensagem confirmando a transferência.
  */
 async function registarConclusaoVenda(req, res, next) {
   try {
@@ -581,7 +683,9 @@ async function registarConclusaoVenda(req, res, next) {
   }
 }
 
-// Exportação global dos métodos para utilização nas respetivas rotas do Express
+/**
+ * @module inventarioController
+ */
 module.exports = {
   getCatalogo,
   getPecaDetalhes,

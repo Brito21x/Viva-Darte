@@ -1,6 +1,6 @@
 /**
  * @fileoverview Controlador da Escola.
- * Responsável por gerir e fornecer dados base estruturais da escola, tais como
+ * @description Responsável por gerir e fornecer dados base estruturais da escola, tais como
  * Anos Letivos, Modalidades, Salas, Professores e as respetivas associações e horários.
  */
 
@@ -11,8 +11,13 @@ const escolaModel = require("../models/escolaModel");
 // ============================================================================
 
 /**
- * Obtém a lista de todos os anos letivos configurados no sistema.
- * GET /api/escola/anos-letivos
+ * @async
+ * @function getAnosLetivos
+ * @description Obtém a lista de todos os anos letivos configurados no sistema. (GET /api/escola/anos-letivos)
+ * @param {import('express').Request} req - O objeto do pedido (request) do Express.
+ * @param {import('express').Response} res - O objeto da resposta (response) do Express.
+ * @param {import('express').NextFunction} next - A função para invocar o próximo middleware.
+ * @returns {Promise<import('express').Response|void>} Devolve o array com os anos letivos.
  */
 async function getAnosLetivos(req, res, next) {
   try {
@@ -28,8 +33,13 @@ async function getAnosLetivos(req, res, next) {
 // ============================================================================
 
 /**
- * Obtém a lista de modalidades (disciplinas/instrumentos) atualmente ativas.
- * GET /api/escola/modalidades
+ * @async
+ * @function getModalidades
+ * @description Obtém a lista de modalidades (disciplinas/instrumentos) atualmente ativas. (GET /api/escola/modalidades)
+ * @param {import('express').Request} req - O objeto do pedido (request) do Express.
+ * @param {import('express').Response} res - O objeto da resposta (response) do Express.
+ * @param {import('express').NextFunction} next - A função para invocar o próximo middleware.
+ * @returns {Promise<import('express').Response|void>} Devolve o array com as modalidades ativas.
  */
 async function getModalidades(req, res, next) {
   try {
@@ -45,8 +55,13 @@ async function getModalidades(req, res, next) {
 // ============================================================================
 
 /**
- * Obtém a lista de todas as salas da escola (com as suas capacidades).
- * GET /api/escola/salas
+ * @async
+ * @function getSalas
+ * @description Obtém a lista de todas as salas da escola (com as suas capacidades). (GET /api/escola/salas)
+ * @param {import('express').Request} req - O objeto do pedido (request) do Express.
+ * @param {import('express').Response} res - O objeto da resposta (response) do Express.
+ * @param {import('express').NextFunction} next - A função para invocar o próximo middleware.
+ * @returns {Promise<import('express').Response|void>} Devolve o array com as salas.
  */
 async function getSalas(req, res, next) {
   try {
@@ -58,9 +73,14 @@ async function getSalas(req, res, next) {
 }
 
 /**
- * Obtém a matriz completa de compatibilidade entre as salas e as modalidades.
- * Útil para saber globalmente que salas estão equipadas para que aulas.
- * GET /api/escola/compatibilidade
+ * @async
+ * @function getCompatibilidade
+ * @description Obtém a matriz completa de compatibilidade entre as salas e as modalidades.
+ * Útil para saber globalmente que salas estão equipadas para que aulas. (GET /api/escola/compatibilidade)
+ * @param {import('express').Request} req - O objeto do pedido (request) do Express.
+ * @param {import('express').Response} res - O objeto da resposta (response) do Express.
+ * @param {import('express').NextFunction} next - A função para invocar o próximo middleware.
+ * @returns {Promise<import('express').Response|void>} Devolve a lista com as compatibilidades.
  */
 async function getCompatibilidade(req, res, next) {
   try {
@@ -73,9 +93,15 @@ async function getCompatibilidade(req, res, next) {
 }
 
 /**
- * Obtém apenas as salas adequadas/compatíveis para lecionar uma modalidade específica.
- * Usado habitualmente no formulário de aprovação de aulas pela Coordenação.
- * GET /api/escola/modalidades/:id/salas
+ * @async
+ * @function getSalasPorModalidade
+ * @description Obtém apenas as salas adequadas/compatíveis para lecionar uma modalidade específica.
+ * Usado habitualmente no formulário de aprovação de aulas pela Coordenação. (GET /api/escola/modalidades/:id/salas)
+ * @param {import('express').Request} req - O objeto do pedido (request) do Express.
+ * @param {string} req.params.id - O ID da modalidade a filtrar.
+ * @param {import('express').Response} res - O objeto da resposta (response) do Express.
+ * @param {import('express').NextFunction} next - A função para invocar o próximo middleware.
+ * @returns {Promise<import('express').Response|void>} Devolve o array de salas compatíveis ou uma mensagem de erro.
  */
 async function getSalasPorModalidade(req, res, next) {
   try {
@@ -97,9 +123,14 @@ async function getSalasPorModalidade(req, res, next) {
 // ============================================================================
 
 /**
- * US11 — Obtém a lista de todos os professores com estado ativo no sistema.
- * Útil para o painel de Administração ou Coordenação.
- * GET /api/escola/professores
+ * @async
+ * @function getProfessoresAtivos
+ * @description US11 — Obtém a lista de todos os professores com estado ativo no sistema.
+ * Útil para o painel de Administração ou Coordenação. (GET /api/escola/professores)
+ * @param {import('express').Request} req - O objeto do pedido (request) do Express.
+ * @param {import('express').Response} res - O objeto da resposta (response) do Express.
+ * @param {import('express').NextFunction} next - A função para invocar o próximo middleware.
+ * @returns {Promise<import('express').Response|void>} Devolve a lista de professores ativos.
  */
 async function getProfessoresAtivos(req, res, next) {
   try {
@@ -111,9 +142,15 @@ async function getProfessoresAtivos(req, res, next) {
 }
 
 /**
- * US05 — Obtém os professores habilitados a lecionar uma determinada modalidade.
- * Muito utilizado para popular as dropdowns aquando da submissão de um pedido de coaching pelo EE.
- * GET /api/escola/modalidades/:id/professores
+ * @async
+ * @function getProfessoresPorModalidade
+ * @description US05 — Obtém os professores habilitados a lecionar uma determinada modalidade.
+ * Muito utilizado para popular as dropdowns aquando da submissão de um pedido de coaching pelo EE. (GET /api/escola/modalidades/:id/professores)
+ * @param {import('express').Request} req - O objeto do pedido (request) do Express.
+ * @param {string} req.params.id - O ID da modalidade pretendida.
+ * @param {import('express').Response} res - O objeto da resposta (response) do Express.
+ * @param {import('express').NextFunction} next - A função para invocar o próximo middleware.
+ * @returns {Promise<import('express').Response|void>} Devolve a lista de professores ou uma mensagem de erro.
  */
 async function getProfessoresPorModalidade(req, res, next) {
   try {
@@ -132,8 +169,14 @@ async function getProfessoresPorModalidade(req, res, next) {
 }
 
 /**
- * Obtém as modalidades que um professor específico está apto a lecionar.
- * GET /api/escola/professores/:id/modalidades
+ * @async
+ * @function getModalidadesPorProfessor
+ * @description Obtém as modalidades que um professor específico está apto a lecionar. (GET /api/escola/professores/:id/modalidades)
+ * @param {import('express').Request} req - O objeto do pedido (request) do Express.
+ * @param {string} req.params.id - O ID do professor a consultar.
+ * @param {import('express').Response} res - O objeto da resposta (response) do Express.
+ * @param {import('express').NextFunction} next - A função para invocar o próximo middleware.
+ * @returns {Promise<import('express').Response|void>} Devolve a lista de modalidades associadas ao professor.
  */
 async function getModalidadesPorProfessor(req, res, next) {
   try {
@@ -152,17 +195,23 @@ async function getModalidadesPorProfessor(req, res, next) {
 }
 
 /**
- * US11 / RF13 — Associa uma nova modalidade a um professor (Coordenação).
- * Permite definir que o professor tem competência para dar aulas a essa disciplina.
- * POST /api/escola/professores/:id/modalidades
- * Body: { idModalidade }
+ * @async
+ * @function associarProfessorModalidade
+ * @description US11 / RF13 — Associa uma nova modalidade a um professor (Coordenação).
+ * Permite definir que o professor tem competência para dar aulas a essa disciplina. (POST /api/escola/professores/:id/modalidades)
+ * @param {import('express').Request} req - O objeto do pedido (request) do Express.
+ * @param {string} req.params.id - O ID do professor.
+ * @param {Object} req.body - O corpo do pedido.
+ * @param {number|string} req.body.idModalidade - O ID da modalidade a associar.
+ * @param {import('express').Response} res - O objeto da resposta (response) do Express.
+ * @param {import('express').NextFunction} next - A função para invocar o próximo middleware.
+ * @returns {Promise<import('express').Response|void>} Devolve uma mensagem de sucesso ou erro (ex: conflito).
  */
 async function associarProfessorModalidade(req, res, next) {
   try {
     const idProfessor = parseInt(req.params.id);
     const { idModalidade } = req.body;
 
-    // Validação de dados de entrada
     if (isNaN(idProfessor) || !idModalidade) {
       return res
         .status(400)
@@ -178,7 +227,6 @@ async function associarProfessorModalidade(req, res, next) {
       .status(201)
       .json({ mensagem: "Modalidade associada ao professor com sucesso." });
   } catch (error) {
-    // Trata conflitos caso a associação já exista na base de dados
     if (
       error.message.includes("já existe") ||
       error.message.includes("já está associado")
@@ -190,16 +238,22 @@ async function associarProfessorModalidade(req, res, next) {
 }
 
 /**
- * Remove a associação entre um professor e uma modalidade (Coordenação).
- * O professor deixa de estar disponível para lecionar essa disciplina.
- * DELETE /api/escola/professores/:id/modalidades/:idModalidade
+ * @async
+ * @function removerProfessorModalidade
+ * @description Remove a associação entre um professor e uma modalidade (Coordenação).
+ * O professor deixa de estar disponível para lecionar essa disciplina. (DELETE /api/escola/professores/:id/modalidades/:idModalidade)
+ * @param {import('express').Request} req - O objeto do pedido (request) do Express.
+ * @param {string} req.params.id - O ID do professor.
+ * @param {string} req.params.idModalidade - O ID da modalidade a remover.
+ * @param {import('express').Response} res - O objeto da resposta (response) do Express.
+ * @param {import('express').NextFunction} next - A função para invocar o próximo middleware.
+ * @returns {Promise<import('express').Response|void>} Devolve uma mensagem de sucesso ou erro caso não exista.
  */
 async function removerProfessorModalidade(req, res, next) {
   try {
     const idProfessor = parseInt(req.params.id);
     const idModalidade = parseInt(req.params.idModalidade);
 
-    // Validação de IDs passados nos parâmetros da rota
     if (isNaN(idProfessor) || isNaN(idModalidade)) {
       return res.status(400).json({ mensagem: "IDs inválidos." });
     }
@@ -209,7 +263,6 @@ async function removerProfessorModalidade(req, res, next) {
       idModalidade,
     );
 
-    // Se a base de dados não afetar nenhuma linha, significa que o vínculo não existia
     if (!sucesso) {
       return res.status(404).json({ mensagem: "Associação não encontrada." });
     }
@@ -227,21 +280,26 @@ async function removerProfessorModalidade(req, res, next) {
 // ============================================================================
 
 /**
- * Obtém os horários regulares de aulas (turmas fixas) da escola.
- * Permite filtrar por um Ano Letivo específico via query string.
- * GET /api/escola/horarios?idAnoLetivo=
+ * @async
+ * @function getHorarios
+ * @description Obtém os horários regulares de aulas (turmas fixas) da escola.
+ * Permite filtrar por um Ano Letivo específico via query string. (GET /api/escola/horarios?idAnoLetivo=)
+ * @param {import('express').Request} req - O objeto do pedido (request) do Express.
+ * @param {Object} req.query - Os parâmetros enviados na query string do pedido.
+ * @param {string} [req.query.idAnoLetivo] - O ID do ano letivo para filtrar os horários.
+ * @param {import('express').Response} res - O objeto da resposta (response) do Express.
+ * @param {import('express').NextFunction} next - A função para invocar o próximo middleware.
+ * @returns {Promise<import('express').Response|void>} Devolve a lista de horários.
  */
 async function getHorarios(req, res, next) {
   try {
     const { idAnoLetivo } = req.query;
 
-    // Parsing flexível para lidar com parâmetros nulos, vazios ou indefinidos
     const id =
       idAnoLetivo !== undefined && idAnoLetivo !== "" && idAnoLetivo != null
         ? parseInt(idAnoLetivo, 10)
         : null;
 
-    // Se foi enviado um valor mas não é numérico, devolve erro
     if (idAnoLetivo !== undefined && idAnoLetivo !== "" && Number.isNaN(id)) {
       return res.status(400).json({ mensagem: "idAnoLetivo inválido." });
     }
@@ -253,7 +311,9 @@ async function getHorarios(req, res, next) {
   }
 }
 
-// Exportação das funções do controlador
+/**
+ * @module escolaController
+ */
 module.exports = {
   getAnosLetivos,
   getModalidades,

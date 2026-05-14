@@ -1,11 +1,17 @@
 /**
  * @fileoverview Modelo de Dados para a Gestão de Coaching.
- * Interações com a BD SQL Server (Disponibilidades, Pedidos, Conflitos, Validação).
+ * @description Interações com a BD SQL Server (Disponibilidades, Pedidos, Conflitos, Validação).
  */
 
 const { poolPromise } = require("../config/db");
 const sql = require("mssql");
 
+/**
+ * @function normalizarHoraSql
+ * @description Normaliza uma string de hora para o formato aceite pelo SQL (HH:MM:SS).
+ * @param {string|any} valor - O valor da hora a normalizar.
+ * @returns {string|null} A hora formatada ou null caso seja inválida.
+ */
 function normalizarHoraSql(valor) {
   const s = String(valor ?? "").trim();
   const m = s.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
@@ -17,6 +23,12 @@ function normalizarHoraSql(valor) {
   return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")}`;
 }
 
+/**
+ * @function minutosDaHora
+ * @description Converte uma hora no formato HH:MM para o total em minutos.
+ * @param {string|any} valor - A hora a converter.
+ * @returns {number|null} O total de minutos ou null em caso de falha.
+ */
 function minutosDaHora(valor) {
   const h = normalizarHoraSql(valor);
   if (!h) return null;
@@ -24,10 +36,28 @@ function minutosDaHora(valor) {
   return hh * 60 + mm;
 }
 
+/**
+ * @function criarRequest
+ * @description Cria um objeto request a partir do pool de conexões ou de uma transação.
+ * @param {Object} db - O pool de base de dados ou objeto de transação.
+ * @returns {Object} O objeto de request do mssql.
+ */
 function criarRequest(db) {
   return db.request();
 }
 
+/**
+ * @async
+ * @function existeConflitoCoachingProfessor
+ * @description Verifica se existe algum conflito de horário para o professor com outros coachings agendados.
+ * @param {Object} db - A transação ou pool de base de dados.
+ * @param {Object} params - Parâmetros da verificação.
+ * @param {number} params.idProfessor - O ID do professor.
+ * @param {Date|string} params.dataAula - A data da aula.
+ * @param {string} params.horaInicio - A hora de início.
+ * @param {number} params.duracaoMinutos - A duração em minutos.
+ * @returns {Promise<boolean>} Retorna true se houver conflito, false caso contrário.
+ */
 async function existeConflitoCoachingProfessor(
   db,
   { idProfessor, dataAula, horaInicio, duracaoMinutos },
@@ -43,6 +73,18 @@ async function existeConflitoCoachingProfessor(
   return result.recordset.length > 0;
 }
 
+/**
+ * @async
+ * @function existeConflitoCoachingSala
+ * @description Verifica se existe algum conflito de horário na sala especificada com outros coachings.
+ * @param {Object} db - A transação ou pool de base de dados.
+ * @param {Object} params - Parâmetros da verificação.
+ * @param {number} params.idSala - O ID da sala.
+ * @param {Date|string} params.dataAula - A data da aula.
+ * @param {string} params.horaInicio - A hora de início.
+ * @param {number} params.duracaoMinutos - A duração em minutos.
+ * @returns {Promise<boolean>} Retorna true se houver conflito, false caso contrário.
+ */
 async function existeConflitoCoachingSala(
   db,
   { idSala, dataAula, horaInicio, duracaoMinutos },
@@ -58,6 +100,18 @@ async function existeConflitoCoachingSala(
   return result.recordset.length > 0;
 }
 
+/**
+ * @async
+ * @function existeConflitoHorarioProfessor
+ * @description Verifica se existe conflito com o horário letivo regular (turmas) do professor.
+ * @param {Object} db - A transação ou pool de base de dados.
+ * @param {Object} params - Parâmetros da verificação.
+ * @param {number} params.idProfessor - O ID do professor.
+ * @param {number} params.diaSemana - O dia da semana (1-7).
+ * @param {string} params.horaInicio - A hora de início.
+ * @param {number} params.duracaoMinutos - A duração em minutos.
+ * @returns {Promise<boolean>} Retorna true se houver conflito, false caso contrário.
+ */
 async function existeConflitoHorarioProfessor(
   db,
   { idProfessor, diaSemana, horaInicio, duracaoMinutos },
@@ -73,6 +127,18 @@ async function existeConflitoHorarioProfessor(
   return result.recordset.length > 0;
 }
 
+/**
+ * @async
+ * @function existeConflitoHorarioSala
+ * @description Verifica se existe conflito com o horário letivo regular (turmas) na sala.
+ * @param {Object} db - A transação ou pool de base de dados.
+ * @param {Object} params - Parâmetros da verificação.
+ * @param {number} params.idSala - O ID da sala.
+ * @param {number} params.diaSemana - O dia da semana (1-7).
+ * @param {string} params.horaInicio - A hora de início.
+ * @param {number} params.duracaoMinutos - A duração em minutos.
+ * @returns {Promise<boolean>} Retorna true se houver conflito, false caso contrário.
+ */
 async function existeConflitoHorarioSala(
   db,
   { idSala, diaSemana, horaInicio, duracaoMinutos },
@@ -88,6 +154,18 @@ async function existeConflitoHorarioSala(
   return result.recordset.length > 0;
 }
 
+/**
+ * @async
+ * @function adicionarDisponibilidadeProfessor
+ * @description Insere uma nova janela de disponibilidade na agenda de um professor.
+ * @param {Object} params - Os dados da disponibilidade.
+ * @param {number} params.diaSemana - O dia da semana (1-7).
+ * @param {string} params.horaInicio - A hora de início.
+ * @param {string} params.horaFim - A hora de fim.
+ * @param {number} params.idProfessor - O ID do professor.
+ * @returns {Promise<boolean>} True em caso de sucesso.
+ * @throws {Error} Lança erro caso a janela se sobreponha a uma existente.
+ */
 async function adicionarDisponibilidadeProfessor({
   diaSemana,
   horaInicio,
@@ -123,6 +201,13 @@ async function adicionarDisponibilidadeProfessor({
   return result.rowsAffected[0] > 0;
 }
 
+/**
+ * @async
+ * @function getDisponibilidadesProfessor
+ * @description Obtém a lista de disponibilidades registadas para um professor específico.
+ * @param {number} idProfessor - O ID do professor.
+ * @returns {Promise<Array<Object>>} O array com as disponibilidades.
+ */
 async function getDisponibilidadesProfessor(idProfessor) {
   const pool = await poolPromise;
   const result = await pool
@@ -134,6 +219,14 @@ async function getDisponibilidadesProfessor(idProfessor) {
   return result.recordset;
 }
 
+/**
+ * @async
+ * @function removerDisponibilidadeProfessor
+ * @description Remove uma disponibilidade de horário da agenda do professor.
+ * @param {number} idDisponibilidade - O ID do bloco de disponibilidade.
+ * @param {number} idProfessor - O ID do professor (para verificação de segurança).
+ * @returns {Promise<boolean>} True se foi removida.
+ */
 async function removerDisponibilidadeProfessor(idDisponibilidade, idProfessor) {
   const pool = await poolPromise;
   const result = await pool
@@ -146,6 +239,17 @@ async function removerDisponibilidadeProfessor(idDisponibilidade, idProfessor) {
   return result.rowsAffected[0] > 0;
 }
 
+/**
+ * @async
+ * @function getDisponibilidadeEfetiva
+ * @description Cruza as disponibilidades teóricas dos professores com a ocupação real (coachings e turmas) num dia.
+ * @param {number} idModalidade - A modalidade procurada.
+ * @param {number} diaSemanaExato - O dia da semana correspondente à data.
+ * @param {Date|string} dataEspecifica - A data exata para verificar ocupações.
+ * @param {number} [idProfessorFiltro=null] - (Opcional) Filtrar por um professor específico.
+ * @param {number} [idAnoLetivo=null] - (Opcional) Ano letivo em causa.
+ * @returns {Promise<Object>} Um objeto contendo os arrays `disponibilidades` e `ocupacoes`.
+ */
 async function getDisponibilidadeEfetiva(
   idModalidade,
   diaSemanaExato,
@@ -184,6 +288,15 @@ async function getDisponibilidadeEfetiva(
   };
 }
 
+/**
+ * @async
+ * @function getAgendaProfessor
+ * @description Obtém a lista de aulas de coaching agendadas para um professor num período.
+ * @param {number} idProfessor - O ID do professor.
+ * @param {Date|string} [dataInicio=null] - A data de início do intervalo.
+ * @param {Date|string} [dataFim=null] - A data de fim do intervalo.
+ * @returns {Promise<Array<Object>>} A lista de aulas marcadas.
+ */
 async function getAgendaProfessor(
   idProfessor,
   dataInicio = null,
@@ -220,6 +333,16 @@ async function getAgendaProfessor(
   return result.recordset;
 }
 
+/**
+ * @async
+ * @function criarPedidoCoaching
+ * @description Regista um novo pedido de coaching na base de dados (submetido pelo EE), incluindo os alunos participantes.
+ * @param {Object} dadosPedido - Os metadados do pedido a criar.
+ * @param {Array<number>} alunosIds - Array com os IDs dos alunos a integrar no pedido.
+ * @param {Object} [opts={}] - Opções extra.
+ * @returns {Promise<number>} O ID do novo pedido gerado.
+ * @throws {Error} Propaga erro em caso de falha transacional.
+ */
 async function criarPedidoCoaching(dadosPedido, alunosIds, opts = {}) {
   const pool = await poolPromise;
   const transaction = pool.transaction();
@@ -260,6 +383,13 @@ async function criarPedidoCoaching(dadosPedido, alunosIds, opts = {}) {
   }
 }
 
+/**
+ * @async
+ * @function getPedidosPorEncarregado
+ * @description Obtém o histórico de pedidos submetidos por um Encarregado de Educação específico.
+ * @param {number} idEncarregado - O ID do utilizador (EE).
+ * @returns {Promise<Array<Object>>} Lista de pedidos.
+ */
 async function getPedidosPorEncarregado(idEncarregado) {
   const pool = await poolPromise;
   const result = await pool
@@ -271,6 +401,14 @@ async function getPedidosPorEncarregado(idEncarregado) {
   return result.recordset;
 }
 
+/**
+ * @async
+ * @function cancelarPedidoPendenteEncarregado
+ * @description Cancela um pedido do EE apenas se o mesmo se encontrar no estado "Pendente".
+ * @param {number} idPedido - O ID do pedido.
+ * @param {number} idEncarregado - O ID do encarregado de educação (validação de propriedade).
+ * @returns {Promise<string>} "cancelado" se houve alteração, "nao_pendente" caso contrário.
+ */
 async function cancelarPedidoPendenteEncarregado(idPedido, idEncarregado) {
   const pool = await poolPromise;
   const upd = await pool
@@ -284,6 +422,15 @@ async function cancelarPedidoPendenteEncarregado(idPedido, idEncarregado) {
   return "nao_pendente";
 }
 
+/**
+ * @async
+ * @function getPedidosAtribuidosAoProfessorNoPeriodo
+ * @description Lista os pedidos pendentes que solicitam diretamente um professor específico.
+ * @param {number} idProfessor - O ID do professor requerido.
+ * @param {Date|string} dataInicio - Data de início do período a analisar.
+ * @param {Date|string} dataFim - Data final do período.
+ * @returns {Promise<Array<Object>>} Lista de pedidos atribuídos ou direcionados.
+ */
 async function getPedidosAtribuidosAoProfessorNoPeriodo(
   idProfessor,
   dataInicio,
@@ -301,6 +448,12 @@ async function getPedidosAtribuidosAoProfessorNoPeriodo(
   return result.recordset;
 }
 
+/**
+ * @async
+ * @function getPedidosPendentes
+ * @description Devolve todos os pedidos pendentes do sistema (para vista de Coordenação).
+ * @returns {Promise<Array<Object>>} Array com a lista de todos os pedidos por validar.
+ */
 async function getPedidosPendentes() {
   const pool = await poolPromise;
   const result = await pool.request().query(
@@ -334,6 +487,14 @@ async function getPedidosPendentes() {
   return result.recordset;
 }
 
+/**
+ * @async
+ * @function aprovarEAgendarCoaching
+ * @description Verifica os conflitos e efetua o agendamento final, marcando o pedido original como 'Aprovado' e inserindo na tabela COACHING.
+ * @param {Object} dadosAgendamento - Estrutura com os dados do agendamento (ID pedido, sala, professor, formato, valores, etc.).
+ * @returns {Promise<number>} O ID do novo registo na tabela COACHING.
+ * @throws {Error} Aborta e reverte transação se existirem conflitos de sala ou professor.
+ */
 async function aprovarEAgendarCoaching(dadosAgendamento) {
   const pool = await poolPromise;
   const transaction = pool.transaction();
@@ -387,6 +548,13 @@ async function aprovarEAgendarCoaching(dadosAgendamento) {
   }
 }
 
+/**
+ * @async
+ * @function professorTemDisponibilidadeNoSlot
+ * @description Verifica de forma binária se um professor registou a sua disponibilidade para um slot num determinado dia da semana.
+ * @param {Object} params - Os parâmetros de verificação de slot.
+ * @returns {Promise<boolean>} True se o professor informou estar livre nesse bloco.
+ */
 async function professorTemDisponibilidadeNoSlot({
   idProfessor,
   dataAula,
@@ -407,6 +575,13 @@ async function professorTemDisponibilidadeNoSlot({
   return r.recordset.length > 0;
 }
 
+/**
+ * @async
+ * @function verificarSlotLivreProfessor
+ * @description Retorna um objeto a informar se o slot se encontra livre e qual o motivo (se houver conflito).
+ * @param {Object} params - Dados da aula requerida.
+ * @returns {Promise<{livre: boolean, motivo: string|null}>} O estado e motivo do slot.
+ */
 async function verificarSlotLivreProfessor({
   idProfessor,
   dataAula,
@@ -425,6 +600,13 @@ async function verificarSlotLivreProfessor({
   return { livre: true, motivo: null };
 }
 
+/**
+ * @async
+ * @function getPedidoCoachingPorId
+ * @description Obtém o registo de um pedido a partir da tabela PEDIDO_COACHING.
+ * @param {number} idPedido - O identificador do pedido pretendido.
+ * @returns {Promise<Object|null>} Os dados do pedido ou null se inexistente.
+ */
 async function getPedidoCoachingPorId(idPedido) {
   const pool = await poolPromise;
   const result = await pool
@@ -436,6 +618,13 @@ async function getPedidoCoachingPorId(idPedido) {
   return result.recordset[0] || null;
 }
 
+/**
+ * @async
+ * @function rejeitarPedidoCoaching
+ * @description Rejeita formalmente o pedido se este se mantiver pendente.
+ * @param {number} idPedido - O identificador do pedido.
+ * @returns {Promise<boolean>} True se um registo foi afetado e o pedido rejeitado.
+ */
 async function rejeitarPedidoCoaching(idPedido) {
   const pool = await poolPromise;
   const result = await pool
@@ -447,6 +636,13 @@ async function rejeitarPedidoCoaching(idPedido) {
   return result.rowsAffected[0] > 0;
 }
 
+/**
+ * @async
+ * @function getCoachingCabecalhoCancelamento
+ * @description Resgata os dados críticos de um agendamento de coaching para o tentar cancelar (ex: para verificar regras de tempo-limite).
+ * @param {number} idCoaching - O ID do coaching a consultar.
+ * @returns {Promise<Object|null>} As informações da tabela COACHING ou null.
+ */
 async function getCoachingCabecalhoCancelamento(idCoaching) {
   const pool = await poolPromise;
   const result = await pool
@@ -458,6 +654,14 @@ async function getCoachingCabecalhoCancelamento(idCoaching) {
   return result.recordset[0] || null;
 }
 
+/**
+ * @async
+ * @function cancelarCoaching
+ * @description Efetua o cancelamento simultâneo do coaching agendado e do pedido que lhe deu origem via transação atómica.
+ * @param {number} idCoaching - O ID do coaching a ser anulado.
+ * @returns {Promise<boolean>} True mediante transação concluída sem erros.
+ * @throws {Error} Falha se não encontrar o coaching associado.
+ */
 async function cancelarCoaching(idCoaching) {
   const pool = await poolPromise;
   const transaction = pool.transaction();
@@ -490,6 +694,18 @@ async function cancelarCoaching(idCoaching) {
   }
 }
 
+/**
+ * @async
+ * @function registarValidacaoAula
+ * @description Guarda a validação submetida (ex: por Professor ou EE) e propaga o estado final (Realizado / Não_Realizado) na própria aula.
+ * @param {number} idCoaching - O ID do coaching validado.
+ * @param {number} idUtilizador - O ID do validador.
+ * @param {string} tipoValidador - Qual a função do validador no sistema.
+ * @param {string} estadoValidacao - 'Confirmado' ou 'Nao_Realizado'.
+ * @param {string} [observacoes=null] - Apontamentos do ato de validação.
+ * @returns {Promise<boolean>} True se finalizado com sucesso.
+ * @throws {Error} Aborta transação se houver falhas.
+ */
 async function registarValidacaoAula(
   idCoaching,
   idUtilizador,
@@ -502,7 +718,6 @@ async function registarValidacaoAula(
   await transaction.begin();
 
   try {
-    // 1. Guarda a validação na tabela de histórico de validações
     await transaction
       .request()
       .input("TipoValidador", sql.VarChar(50), tipoValidador)
@@ -514,7 +729,6 @@ async function registarValidacaoAula(
         `INSERT INTO VALIDACAO_COACHING (tipo_validador, estado_validacao, data_validacao, observacoes, UTILIZADORid_utilizador, COACHINGid_coaching) VALUES (@TipoValidador, @EstadoValidacao, GETDATE(), @Observacoes, @IdUtilizador, @IdCoaching);`,
       );
 
-    // 2. Atualiza imediatamente o estado da aula para a Coordenação ver!
     const novoEstado =
       estadoValidacao === "Confirmado" ? "Realizado" : "Nao_Realizado";
 
@@ -534,6 +748,17 @@ async function registarValidacaoAula(
   }
 }
 
+/**
+ * @async
+ * @function concluirCoachingPelaCoordenacao
+ * @description A Coordenação fecha a aula definitivamente (mesmo sem o registo das outras partes) via trancamento do estado final.
+ * @param {number} idCoaching - O ID da aula.
+ * @param {number} idCoordenador - O ID do admin a atuar na validação de trancamento.
+ * @param {string} estadoFinal - O estado final cimentado ("Realizado" etc.).
+ * @param {string} [observacoes] - Opinião ou justificação do trancamento.
+ * @returns {Promise<boolean>} True.
+ * @throws {Error} Reversão em caso de interrupção DB.
+ */
 async function concluirCoachingPelaCoordenacao(
   idCoaching,
   idCoordenador,
@@ -571,6 +796,12 @@ async function concluirCoachingPelaCoordenacao(
   }
 }
 
+/**
+ * @async
+ * @function listarCoachingsAbertosParaCoordenacao
+ * @description Extrai os coachings que constam como 'Agendado' ou 'Confirmado', para processamento/fecho por parte da administração.
+ * @returns {Promise<Array<Object>>} Lista de registos suscetíveis a validação administrativa pendente.
+ */
 async function listarCoachingsAbertosParaCoordenacao() {
   const pool = await poolPromise;
   const result = await pool
@@ -581,6 +812,14 @@ async function listarCoachingsAbertosParaCoordenacao() {
   return result.recordset;
 }
 
+/**
+ * @async
+ * @function coachingPertenceAEncarregado
+ * @description Verifica se um determinado coaching pertence à linhagem de um encarregado de educação (ligando ao PEDIDO_COACHING inicial).
+ * @param {number} idCoaching - O ID do agendamento.
+ * @param {number} idEncarregado - O ID do utilizador (EE).
+ * @returns {Promise<boolean>} True se for o proprietário legítimo.
+ */
 async function coachingPertenceAEncarregado(idCoaching, idEncarregado) {
   const pool = await poolPromise;
   const result = await pool
@@ -593,6 +832,14 @@ async function coachingPertenceAEncarregado(idCoaching, idEncarregado) {
   return result.recordset.length > 0;
 }
 
+/**
+ * @async
+ * @function coachingPertenceAProfessorAtivo
+ * @description Verifica se um dado professor está associado a este coaching (evitando manipulações indevidas de outros utilizadores).
+ * @param {number} idCoaching - O ID da aula registada.
+ * @param {number} idProfessor - O identificador do professor.
+ * @returns {Promise<boolean>} True mediante validação correta.
+ */
 async function coachingPertenceAProfessorAtivo(idCoaching, idProfessor) {
   const pool = await poolPromise;
   const result = await pool
@@ -605,6 +852,12 @@ async function coachingPertenceAProfessorAtivo(idCoaching, idProfessor) {
   return result.recordset.length > 0;
 }
 
+/**
+ * @async
+ * @function getHistoricoGeralCoachings
+ * @description Obtém a lista completa (histórico) de coachings agendados, com junção aos alunos, salas e modalidades, para vista administrativa.
+ * @returns {Promise<Array<Object>>} As instâncias de histórico registadas.
+ */
 async function getHistoricoGeralCoachings() {
   const pool = await poolPromise;
   const result = await pool.request().query(`
@@ -623,6 +876,9 @@ async function getHistoricoGeralCoachings() {
   return result.recordset;
 }
 
+/**
+ * @module coachingModel
+ */
 module.exports = {
   adicionarDisponibilidadeProfessor,
   getDisponibilidadesProfessor,

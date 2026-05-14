@@ -1,13 +1,16 @@
 /**
  * @fileoverview Controlador de Faturação Mensal.
- * Gere os endpoints de consulta, registo de pagamento e cancelamento de faturas.
+ * @description Gere os endpoints de consulta, registo de pagamento e cancelamento de faturas.
  *
- * ROTAS (registar no ficheiro de rotas do Express):
- *   GET    /api/faturacao              → listar faturas (filtros: ?ano=&mes=&estado=)
- *   GET    /api/faturacao/resumo       → totais/estatísticas
- *   GET    /api/faturacao/:id          → detalhe de uma fatura
- *   PUT    /api/faturacao/:id/pagamento → marcar como paga
- *   PUT    /api/faturacao/:id/cancelar  → cancelar fatura
+ * ROTAS
+ * GET    /api/faturacao               → listar faturas
+ * GET    /api/faturacao/resumo        → totais/estatísticas
+ * GET    /api/faturacao/:id           → detalhe de uma fatura
+ * GET    /api/faturacao/:id/linhas    → detalhe das linhas da fatura
+ * PUT    /api/faturacao/:id/pagamento → marcar como paga
+ * PUT    /api/faturacao/:id/cancelar  → cancelar fatura
+ * GET    /api/faturacao/precos        → listar tabela de preços
+ * PUT    /api/faturacao/precos/:id    → atualizar regra de preço
  */
 
 const faturacaoModel = require("../models/faturacaoModel");
@@ -18,8 +21,17 @@ const { registarAuditoria } = require("../helpers/auditoriaHelper");
 // ============================================================================
 
 /**
- * GET /api/faturacao
- * Lista faturas com filtros opcionais por ano, mês e estado de pagamento.
+ * @async
+ * @function getFaturas
+ * @description Lista faturas com filtros opcionais por ano, mês e estado de pagamento.
+ * @param {import('express').Request} req - O objeto do pedido (request) do Express.
+ * @param {Object} req.query - A query string da rota.
+ * @param {string|number} [req.query.ano] - O ano para filtrar as faturas.
+ * @param {string|number} [req.query.mes] - O mês para filtrar as faturas.
+ * @param {string} [req.query.estado] - O estado de pagamento (ex: 'Pendente', 'Pago', 'Cancelado').
+ * @param {import('express').Response} res - O objeto da resposta (response) do Express.
+ * @param {import('express').NextFunction} next - A função de propagação de erro.
+ * @returns {Promise<import('express').Response|void>} Devolve um array de objetos correspondentes às faturas.
  */
 async function getFaturas(req, res, next) {
   try {
@@ -32,8 +44,16 @@ async function getFaturas(req, res, next) {
 }
 
 /**
- * GET /api/faturacao/resumo
- * Devolve totais agregados para os StatCards do dashboard.
+ * @async
+ * @function getResumo
+ * @description Devolve totais agregados para popular os StatCards do dashboard.
+ * @param {import('express').Request} req - O objeto do pedido (request).
+ * @param {Object} req.query - A query string para filtrar o resumo.
+ * @param {string|number} [req.query.ano] - O ano a considerar no resumo.
+ * @param {string|number} [req.query.mes] - O mês a considerar no resumo.
+ * @param {import('express').Response} res - O objeto da resposta (response).
+ * @param {import('express').NextFunction} next - A função de propagação de erro.
+ * @returns {Promise<import('express').Response|void>} Devolve um objeto com os totais/estatísticas.
  */
 async function getResumo(req, res, next) {
   try {
@@ -46,8 +66,14 @@ async function getResumo(req, res, next) {
 }
 
 /**
- * GET /api/faturacao/:id
- * Detalhe completo de uma fatura específica.
+ * @async
+ * @function getFaturaPorId
+ * @description Obtém o detalhe completo de uma fatura específica através do seu ID.
+ * @param {import('express').Request} req - O objeto do pedido (request).
+ * @param {string} req.params.id - O ID da fatura.
+ * @param {import('express').Response} res - O objeto da resposta (response).
+ * @param {import('express').NextFunction} next - A função de propagação de erro.
+ * @returns {Promise<import('express').Response|void>} Devolve os dados da fatura ou um erro de não encontrada.
  */
 async function getFaturaPorId(req, res, next) {
   try {
@@ -71,9 +97,16 @@ async function getFaturaPorId(req, res, next) {
 // ============================================================================
 
 /**
- * PUT /api/faturacao/:id/pagamento
- * Marca a fatura como paga e regista o método e data de pagamento.
- * Body: { metodoPagamento: string }
+ * @async
+ * @function registarPagamento
+ * @description Marca uma fatura como paga e regista o método e data de pagamento. Aciona a auditoria.
+ * @param {import('express').Request} req - O pedido do Express.
+ * @param {string} req.params.id - O ID da fatura a pagar.
+ * @param {Object} req.body - O corpo do pedido.
+ * @param {string} req.body.metodoPagamento - O método utilizado para pagamento (ex: 'Transferência Bancária', 'MBWAY').
+ * @param {import('express').Response} res - A resposta do Express.
+ * @param {import('express').NextFunction} next - Função de propagação de erro.
+ * @returns {Promise<import('express').Response|void>} Mensagem de sucesso ou erro (se já estiver paga/cancelada).
  */
 async function registarPagamento(req, res, next) {
   try {
@@ -137,8 +170,14 @@ async function registarPagamento(req, res, next) {
 }
 
 /**
- * PUT /api/faturacao/:id/cancelar
- * Cancela uma fatura (apenas se estiver Pendente).
+ * @async
+ * @function cancelarFatura
+ * @description Cancela uma fatura (apenas aplicável se a mesma estiver "Pendente"). Aciona a auditoria.
+ * @param {import('express').Request} req - O pedido do Express.
+ * @param {string} req.params.id - O ID da fatura a cancelar.
+ * @param {import('express').Response} res - A resposta do Express.
+ * @param {import('express').NextFunction} next - Função de propagação de erro.
+ * @returns {Promise<import('express').Response|void>} Mensagem de sucesso ou erro (se já estiver paga).
  */
 async function cancelarFatura(req, res, next) {
   try {
@@ -182,6 +221,15 @@ async function cancelarFatura(req, res, next) {
   }
 }
 
+/**
+ * @async
+ * @function listarPrecos
+ * @description Lista a tabela com todas as regras de preços configuradas no sistema.
+ * @param {import('express').Request} req - O pedido do Express.
+ * @param {import('express').Response} res - A resposta do Express.
+ * @param {import('express').NextFunction} next - Função de propagação de erro.
+ * @returns {Promise<import('express').Response|void>} Array com os preços.
+ */
 async function listarPrecos(req, res, next) {
   try {
     const precos = await faturacaoModel.getTabelaPrecos();
@@ -191,6 +239,19 @@ async function listarPrecos(req, res, next) {
   }
 }
 
+/**
+ * @async
+ * @function atualizarRegraPreco
+ * @description Atualiza um valor ou o estado ativo de uma regra de preço existente.
+ * @param {import('express').Request} req - O pedido do Express.
+ * @param {string} req.params.id - O ID da regra de preço a atualizar.
+ * @param {Object} req.body - O corpo do pedido.
+ * @param {number} [req.body.preco] - O novo valor da regra de preço.
+ * @param {boolean} [req.body.ativo] - O novo estado ativo/inativo da regra.
+ * @param {import('express').Response} res - A resposta do Express.
+ * @param {import('express').NextFunction} next - Função de propagação de erro.
+ * @returns {Promise<import('express').Response|void>} Mensagem de sucesso ou erro.
+ */
 async function atualizarRegraPreco(req, res, next) {
   try {
     const idPreco = parseInt(req.params.id);
@@ -217,9 +278,15 @@ async function atualizarRegraPreco(req, res, next) {
 }
 
 /**
- * GET /api/faturacao/:id/linhas
- * Devolve o detalhe de uma fatura: cabeçalho + lista de aulas (coachings)
- * que a compõem (modalidade, data, hora, professor, sala, valor).
+ * @async
+ * @function getLinhasFatura
+ * @description Devolve o detalhe de uma fatura específica: o cabeçalho mais a lista de aulas (coachings)
+ * que a compõem (modalidade, data, hora, professor, sala, valor faturado).
+ * @param {import('express').Request} req - O pedido do Express.
+ * @param {string} req.params.id - O ID da fatura.
+ * @param {import('express').Response} res - A resposta do Express.
+ * @param {import('express').NextFunction} next - Função de propagação de erro.
+ * @returns {Promise<import('express').Response|void>} Devolve o objeto da fatura e as respetivas linhas de detalhe.
  */
 async function getLinhasFatura(req, res, next) {
   try {
@@ -238,6 +305,9 @@ async function getLinhasFatura(req, res, next) {
   }
 }
 
+/**
+ * @module faturacaoController
+ */
 module.exports = {
   getFaturas,
   getResumo,

@@ -1,6 +1,6 @@
 /**
  * @fileoverview Rotas da Estrutura Base da Escola.
- * Este ficheiro mapeia os endpoints da API para o catálogo principal da instituição,
+ * @description Este ficheiro mapeia os endpoints da API para o catálogo principal da instituição,
  * incluindo a gestão de Anos Letivos, Modalidades, Salas, Professores e Horários Regulares.
  */
 
@@ -21,15 +21,16 @@ router.use(autenticar);
 // ============================================================================
 
 /**
- * [PROTEGIDO] Obtém a lista de anos letivos registados na escola.
- * GET /api/escola/anos-letivos
+ * @route GET /api/escola/anos-letivos
+ * @description Obtém a lista de anos letivos registados na escola.
+ * @access Protegido
  */
 router.get("/anos-letivos", escolaController.getAnosLetivos);
 
 /**
- * [PROTEGIDO] Obtém a grelha de horários de aulas regulares (turmas fixas).
- * Pode receber a query string ?idAnoLetivo= para filtrar por um ano específico.
- * GET /api/escola/horarios
+ * @route GET /api/escola/horarios
+ * @description Obtém a grelha de horários de aulas regulares (turmas fixas). Pode ser filtrada por ?idAnoLetivo=.
+ * @access Protegido
  */
 router.get("/horarios", escolaController.getHorarios);
 
@@ -38,26 +39,30 @@ router.get("/horarios", escolaController.getHorarios);
 // ============================================================================
 
 /**
- * [PROTEGIDO] Obtém a lista de modalidades (disciplinas/instrumentos) lecionadas.
- * GET /api/escola/modalidades
+ * @route GET /api/escola/modalidades
+ * @description Obtém a lista de modalidades (disciplinas/instrumentos) lecionadas e ativas.
+ * @access Protegido
  */
 router.get("/modalidades", escolaController.getModalidades);
 
 /**
- * [PROTEGIDO] Obtém a lista de todas as salas da escola e as suas capacidades.
- * GET /api/escola/salas
+ * @route GET /api/escola/salas
+ * @description Obtém a lista de todas as salas da escola e as suas capacidades máximas.
+ * @access Protegido
  */
 router.get("/salas", escolaController.getSalas);
 
 /**
- * [PROTEGIDO] Obtém a matriz completa de compatibilidade (que salas dão para que modalidades).
- * GET /api/escola/compatibilidade
+ * @route GET /api/escola/compatibilidade
+ * @description Obtém a matriz completa de compatibilidade (que salas dão para lecionar que modalidades).
+ * @access Protegido
  */
 router.get("/compatibilidade", escolaController.getCompatibilidade);
 
 /**
- * [PROTEGIDO] Obtém apenas as salas adequadas/equipadas para lecionar uma modalidade específica.
- * GET /api/escola/modalidades/:id/salas
+ * @route GET /api/escola/modalidades/:id/salas
+ * @description Obtém apenas as salas adequadas/equipadas para lecionar uma modalidade específica.
+ * @access Protegido
  */
 router.get("/modalidades/:id/salas", escolaController.getSalasPorModalidade);
 
@@ -66,9 +71,9 @@ router.get("/modalidades/:id/salas", escolaController.getSalasPorModalidade);
 // ============================================================================
 
 /**
- * [PROTEGIDO] Obtém os professores habilitados a dar uma determinada modalidade.
- * Muito utilizado no Frontend para popular a dropdown do formulário de pedidos de Coaching (US05).
- * GET /api/escola/modalidades/:id/professores
+ * @route GET /api/escola/modalidades/:id/professores
+ * @description Obtém os professores habilitados a dar uma determinada modalidade (usado no dropdown de pedidos de coaching).
+ * @access Protegido
  */
 router.get(
   "/modalidades/:id/professores",
@@ -76,9 +81,9 @@ router.get(
 );
 
 /**
- * [PROTEGIDO: Admin] Lista todos os professores ativos no sistema.
- * Restrito à Coordenação/Administração (US11).
- * GET /api/escola/professores
+ * @route GET /api/escola/professores
+ * @description Lista todos os professores ativos no sistema (Restrito à Coordenação).
+ * @access Protegido (Admin)
  */
 router.get(
   "/professores",
@@ -87,8 +92,9 @@ router.get(
 );
 
 /**
- * [PROTEGIDO] Consulta as modalidades que um determinado professor leciona.
- * GET /api/escola/professores/:id/modalidades
+ * @route GET /api/escola/professores/:id/modalidades
+ * @description Consulta as modalidades que um determinado professor leciona.
+ * @access Protegido
  */
 router.get(
   "/professores/:id/modalidades",
@@ -96,9 +102,9 @@ router.get(
 );
 
 /**
- * [PROTEGIDO: Admin] Associa oficialmente um professor a uma modalidade.
- * O professor passa a ser elegível para dar essa disciplina. Restrito à Coordenação.
- * POST /api/escola/professores/:id/modalidades
+ * @route POST /api/escola/professores/:id/modalidades
+ * @description Associa oficialmente um professor a uma modalidade, tornando-o elegível para dar a disciplina.
+ * @access Protegido (Admin)
  */
 router.post(
   "/professores/:id/modalidades",
@@ -107,8 +113,9 @@ router.post(
 );
 
 /**
- * [PROTEGIDO: Admin] Remove a autorização de um professor para lecionar uma modalidade.
- * DELETE /api/escola/professores/:id/modalidades/:idModalidade
+ * @route DELETE /api/escola/professores/:id/modalidades/:idModalidade
+ * @description Remove a autorização de um professor para lecionar uma modalidade.
+ * @access Protegido (Admin)
  */
 router.delete(
   "/professores/:id/modalidades/:idModalidade",
@@ -116,5 +123,7 @@ router.delete(
   escolaController.removerProfessorModalidade,
 );
 
-// Exportação do router
+/**
+ * @module escolaRoutes
+ */
 module.exports = router;

@@ -1,0 +1,784 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: models/authModel.js</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: models/authModel.js</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>/**
+ * @fileoverview Modelo de Autenticação e Gestão de Utilizadores
+ * @description Este ficheiro centraliza todas as interações com a base de dados SQL Server
+ * referentes a utilizadores, perfis e tokens de segurança.
+ */
+
+const { poolPromise } = require("../config/db"); // Ligação à base de dados (Connection Pool)
+const sql = require("mssql"); // Biblioteca de driver do SQL Server
+
+// ============================================================================
+// 1. AUTENTICAÇÃO E PERFIS
+// ============================================================================
+
+/**
+ * @async
+ * @function getUtilizadorByEmail
+ * @description Procura e devolve as credenciais de um utilizador através do seu email.
+ * Uso de parâmetros (Input) previne ataques de SQL Injection.
+ * @param {string} email - O email do utilizador a pesquisar.
+ * @returns {Promise&lt;Object|null>} Os dados do utilizador ou null se não for encontrado.
+ * @throws {Error} Propaga eventuais erros de base de dados.
+ */
+async function getUtilizadorByEmail(email) {
+  try {
+    const pool = await poolPromise;
+    const query = `SELECT id_utilizador, nome, email, password, telefone, ativo FROM UTILIZADOR WHERE email = @Email;`;
+
+    const result = await pool
+      .request()
+      .input("Email", sql.VarChar(255), email)
+      .query(query);
+    return result.recordset[0] || null;
+  } catch (error) {
+    throw error;
+  }
+}
+
+/**
+ * @async
+ * @function getPerfisDoUtilizador
+ * @description Obtém a lista de nomes dos perfis associados a um determinado utilizador.
+ * @param {number} idUtilizador - O ID do utilizador na base de dados.
+ * @returns {Promise&lt;Array&lt;string>>} Um array com os nomes dos perfis.
+ * @throws {Error} Propaga eventuais erros de base de dados.
+ */
+async function getPerfisDoUtilizador(idUtilizador) {
+  try {
+    const pool = await poolPromise;
+    const query = `
+            SELECT p.nome AS perfil FROM UTILIZADOR_PERFIL up
+            JOIN PERFIL p ON up.PERFILid_perfil = p.id_perfil
+            WHERE up.UTILIZADORid_utilizador = @IdUtilizador;
+        `;
+    const result = await pool
+      .request()
+      .input("IdUtilizador", sql.Int, idUtilizador)
+      .query(query);
+    return result.recordset.map((row) => row.perfil);
+  } catch (error) {
+    throw error;
+  }
+}
+
+// ============================================================================
+// 2. GESTÃO DE CONTAS (Administração e Registo)
+// ============================================================================
+
+/**
+ * @async
+ * @function listarTodosUtilizadores
+ * @description Lista todos os utilizadores do sistema, agregando os seus perfis e modalidades numa única string.
+ * Útil para preencher tabelas no painel de administração (Coordenação).
+ * @returns {Promise&lt;Array&lt;Object>>} Um array com a informação tabular de todos os utilizadores.
+ * @throws {Error} Propaga eventuais erros de base de dados.
+ */
+async function listarTodosUtilizadores() {
+  try {
+    const pool = await poolPromise;
+    const query = `
+            SELECT 
+                u.id_utilizador, u.nome, u.email, u.telefone, u.ativo, u.data_criacao,
+                (
+                    SELECT STRING_AGG(p.nome, ', ')
+                    FROM UTILIZADOR_PERFIL up
+                    JOIN PERFIL p ON up.PERFILid_perfil = p.id_perfil
+                    WHERE up.UTILIZADORid_utilizador = u.id_utilizador
+                ) AS perfis,
+                (
+                    SELECT STRING_AGG(m.nome, ', ')
+                    FROM PROFESSOR_MODALIDADE pm
+                    JOIN MODALIDADE m ON pm.MODALIDADEid_modalidade = m.id_modalidade
+                    WHERE pm.UTILIZADORid_utilizador = u.id_utilizador
+                ) AS modalidades,
+                (
+                    SELECT TOP 1 a.nome
+                    FROM ENCARREGADO_ALUNO ea
+                    JOIN ALUNO a ON ea.ALUNOid_aluno = a.id_aluno
+                    WHERE ea.UTILIZADORid_utilizador = u.id_utilizador
+                    ORDER BY a.id_aluno DESC
+                ) AS nomeAluno,
+                (
+                    SELECT TOP 1 a.data_nascimento
+                    FROM ENCARREGADO_ALUNO ea
+                    JOIN ALUNO a ON ea.ALUNOid_aluno = a.id_aluno
+                    WHERE ea.UTILIZADORid_utilizador = u.id_utilizador
+                    ORDER BY a.id_aluno DESC
+                ) AS dataNascimentoAluno
+            FROM UTILIZADOR u
+            ORDER BY u.id_utilizador ASC;
+        `;
+    const result = await pool.request().query(query);
+    return result.recordset;
+  } catch (error) {
+    throw error;
+  }
+}
+
+/**
+ * @async
+ * @function criarUtilizador
+ * @description Regista um novo utilizador e atribui-lhe o respetivo perfil.
+ * Utiliza uma transação SQL para garantir que ambos os registos (utilizador e perfil)
+ * só são guardados se não ocorrerem erros.
+ * @param {Object} dados - O objeto com os dados de registo do utilizador.
+ * @param {string} dados.nome - O nome completo do utilizador.
+ * @param {string} dados.email - O e-mail do utilizador (único no sistema).
+ * @param {string} dados.passwordHash - A palavra-passe já cifrada (hashed).
+ * @param {string} [dados.telefone] - O contacto telefónico do utilizador.
+ * @param {string} dados.nomePerfil - O perfil pretendido (Professor, Admin, Encarregado).
+ * @param {number|boolean} [dados.ativo=0] - Estado de aprovação inicial da conta.
+ * @param {string} [dados.nomeAluno] - O nome do educando associado (apenas aplicável se for EE).
+ * @param {string} [dados.dataNascimentoAluno] - A data de nascimento do educando.
+ * @returns {Promise&lt;Object>} Devolve o objeto com os dados do novo utilizador criado.
+ * @throws {Error} Lança erro caso o e-mail já exista, se o perfil não for encontrado, ou por falha na BD.
+ */
+async function criarUtilizador({
+  nome,
+  email,
+  passwordHash,
+  telefone,
+  nomePerfil,
+  ativo = 0,
+  nomeAluno,
+  dataNascimentoAluno,
+}) {
+  const pool = await poolPromise;
+  const transaction = pool.transaction();
+  await transaction.begin();
+
+  try {
+    const emailExiste = await transaction
+      .request()
+      .input("Email", sql.VarChar(255), email)
+      .query("SELECT id_utilizador FROM UTILIZADOR WHERE email = @Email");
+
+    if (emailExiste.recordset.length > 0)
+      throw new Error("Já existe um utilizador com este email.");
+
+    let idPerfil = null;
+    if (nomePerfil === "Professor") {
+      const res = await transaction
+        .request()
+        .query("SELECT TOP 1 id_perfil FROM PERFIL WHERE nome LIKE '%Prof%'");
+      idPerfil = res.recordset[0]?.id_perfil;
+    } else if (nomePerfil === "Admin") {
+      const res = await transaction
+        .request()
+        .query(
+          "SELECT TOP 1 id_perfil FROM PERFIL WHERE nome LIKE '%Admin%' OR nome LIKE '%Coord%'",
+        );
+      idPerfil = res.recordset[0]?.id_perfil;
+    } else {
+      const res = await transaction
+        .request()
+        .query(
+          "SELECT TOP 1 id_perfil FROM PERFIL WHERE nome LIKE '%Encarregado%' OR nome LIKE '%Educação%' OR nome = 'EE'",
+        );
+      idPerfil = res.recordset[0]?.id_perfil;
+    }
+
+    if (!idPerfil) throw new Error("Perfil não encontrado.");
+
+    const insertUserQuery = `
+            INSERT INTO UTILIZADOR (nome, email, password, telefone, ativo, data_criacao)
+            OUTPUT INSERTED.id_utilizador
+            VALUES (@Nome, @Email, @Password, @Telefone, @Ativo, GETDATE());
+        `;
+    const novoUserResult = await transaction
+      .request()
+      .input("Nome", sql.VarChar(255), nome)
+      .input("Email", sql.VarChar(255), email)
+      .input("Password", sql.VarChar(255), passwordHash)
+      .input("Telefone", sql.VarChar(30), telefone || null)
+      .input("Ativo", sql.Bit, ativo)
+      .query(insertUserQuery);
+
+    const novoUtilizador = novoUserResult.recordset[0];
+
+    await transaction
+      .request()
+      .input("IdUser", sql.Int, novoUtilizador.id_utilizador)
+      .input("IdPerfil", sql.Int, idPerfil)
+      .query(
+        `INSERT INTO UTILIZADOR_PERFIL (UTILIZADORid_utilizador, PERFILid_perfil) VALUES (@IdUser, @IdPerfil);`,
+      );
+
+    if (nomePerfil !== "Professor" &amp;&amp; nomePerfil !== "Admin" &amp;&amp; nomeAluno) {
+      const insertAlunoQuery = `
+                INSERT INTO ALUNO (nome, data_nascimento, ativo, data_criacao)
+                OUTPUT INSERTED.id_aluno
+                VALUES (@NomeAluno, @DataNasc, @AtivoAluno, GETDATE());
+            `;
+      const novoAlunoResult = await transaction
+        .request()
+        .input("NomeAluno", sql.VarChar(255), nomeAluno)
+        .input("DataNasc", sql.Date, dataNascimentoAluno || null) // Passando a data
+        .input("AtivoAluno", sql.Bit, ativo)
+        .query(insertAlunoQuery);
+
+      const novoAlunoId = novoAlunoResult.recordset[0].id_aluno;
+
+      await transaction
+        .request()
+        .input("IdUtilizadorEnc", sql.Int, novoUtilizador.id_utilizador)
+        .input("IdAlunoNovo", sql.Int, novoAlunoId).query(`
+                    INSERT INTO ENCARREGADO_ALUNO (UTILIZADORid_utilizador, ALUNOid_aluno)
+                    VALUES (@IdUtilizadorEnc, @IdAlunoNovo);
+                `);
+    }
+
+    await transaction.commit();
+    return novoUtilizador;
+  } catch (error) {
+    if (transaction) await transaction.rollback();
+    throw error;
+  }
+}
+
+/**
+ * @async
+ * @function atualizarUtilizadorCompleto
+ * @description Atualiza todos os dados submetidos pelo Administrador para um utilizador específico.
+ * Lida com mudança de perfil e atualização ou criação de registos de aluno associado.
+ * @param {number} id - O ID numérico do utilizador.
+ * @param {Object} dados - Os campos a atualizar.
+ * @param {string} dados.nome - O novo nome do utilizador.
+ * @param {string} dados.email - O novo e-mail do utilizador.
+ * @param {string} [dados.telefone] - O novo telefone do utilizador.
+ * @param {string} [dados.passwordHash] - A nova palavra-passe cifrada (se alterada).
+ * @param {string} [dados.nomePerfil] - O novo nome do perfil (se alterado).
+ * @param {Array&lt;number>} [dados.idsModalidades] - Modalidades a atualizar (atualmente tratado noutra função ou injetado conforme contexto).
+ * @param {string} [dados.nomeAluno] - O novo nome do educando.
+ * @param {string} [dados.dataNascimentoAluno] - A nova data de nascimento do educando.
+ * @returns {Promise&lt;boolean>} Devolve true caso a atualização da transação decorra com sucesso.
+ * @throws {Error} Reverte e propaga a exceção em caso de falha de base de dados.
+ */
+async function atualizarUtilizadorCompleto(
+  id,
+  {
+    nome,
+    email,
+    telefone,
+    passwordHash,
+    nomePerfil,
+    idsModalidades,
+    nomeAluno,
+    dataNascimentoAluno,
+  },
+) {
+  const pool = await poolPromise;
+  const transaction = pool.transaction();
+  await transaction.begin();
+
+  try {
+    let queryUpdate = `UPDATE UTILIZADOR SET nome = @Nome, email = @Email, telefone = @Telefone`;
+    if (passwordHash) queryUpdate += `, password = @Password`;
+    queryUpdate += ` WHERE id_utilizador = @Id`;
+
+    const req = transaction
+      .request()
+      .input("Nome", sql.VarChar(255), nome)
+      .input("Email", sql.VarChar(255), email)
+      .input("Telefone", sql.VarChar(30), telefone || null)
+      .input("Id", sql.Int, id);
+
+    if (passwordHash) req.input("Password", sql.VarChar(255), passwordHash);
+
+    await req.query(queryUpdate);
+
+    if (nomePerfil) {
+      let idPerfil = null;
+      if (nomePerfil === "Professor") {
+        const res = await transaction
+          .request()
+          .query("SELECT TOP 1 id_perfil FROM PERFIL WHERE nome LIKE '%Prof%'");
+        idPerfil = res.recordset[0]?.id_perfil;
+      } else if (nomePerfil === "Admin") {
+        const res = await transaction
+          .request()
+          .query(
+            "SELECT TOP 1 id_perfil FROM PERFIL WHERE nome LIKE '%Admin%' OR nome LIKE '%Coord%'",
+          );
+        idPerfil = res.recordset[0]?.id_perfil;
+      } else {
+        const res = await transaction
+          .request()
+          .query(
+            "SELECT TOP 1 id_perfil FROM PERFIL WHERE nome LIKE '%Encarregado%' OR nome LIKE '%Educação%' OR nome = 'EE'",
+          );
+        idPerfil = res.recordset[0]?.id_perfil;
+      }
+
+      if (idPerfil) {
+        await transaction
+          .request()
+          .input("Id", sql.Int, id)
+          .query(
+            "DELETE FROM UTILIZADOR_PERFIL WHERE UTILIZADORid_utilizador = @Id",
+          );
+        await transaction
+          .request()
+          .input("Id", sql.Int, id)
+          .input("IdPerfil", sql.Int, idPerfil)
+          .query(
+            `INSERT INTO UTILIZADOR_PERFIL (UTILIZADORid_utilizador, PERFILid_perfil) VALUES (@Id, @IdPerfil);`,
+          );
+      }
+    }
+
+    if (nomeAluno) {
+      const dataNascTratada =
+        dataNascimentoAluno &amp;&amp; dataNascimentoAluno.trim() !== ""
+          ? dataNascimentoAluno
+          : null;
+
+      const checkAluno = await transaction
+        .request()
+        .input("IdUtilizador", sql.Int, id)
+        .query(
+          "SELECT ALUNOid_aluno FROM ENCARREGADO_ALUNO WHERE UTILIZADORid_utilizador = @IdUtilizador",
+        );
+
+      if (checkAluno.recordset.length > 0) {
+        await transaction
+          .request()
+          .input("IdUtilizador", sql.Int, id)
+          .input("NomeAluno", sql.VarChar(255), nomeAluno)
+          .input("DataNasc", sql.Date, dataNascTratada).query(`
+            UPDATE ALUNO 
+            SET nome = @NomeAluno, data_nascimento = @DataNasc 
+            WHERE id_aluno IN (
+                SELECT ALUNOid_aluno FROM ENCARREGADO_ALUNO WHERE UTILIZADORid_utilizador = @IdUtilizador
+            )
+          `);
+      } else {
+        const insertResult = await transaction
+          .request()
+          .input("NomeAluno", sql.VarChar(255), nomeAluno)
+          .input("DataNasc", sql.Date, dataNascTratada).query(`
+            INSERT INTO ALUNO (nome, data_nascimento, ativo, data_criacao)
+            OUTPUT INSERTED.id_aluno
+            VALUES (@NomeAluno, @DataNasc, 1, GETDATE());
+          `);
+
+        const novoAlunoId = insertResult.recordset[0].id_aluno;
+
+        await transaction
+          .request()
+          .input("IdUtilizador", sql.Int, id)
+          .input("IdAlunoNovo", sql.Int, novoAlunoId).query(`
+            INSERT INTO ENCARREGADO_ALUNO (UTILIZADORid_utilizador, ALUNOid_aluno)
+            VALUES (@IdUtilizador, @IdAlunoNovo);
+          `);
+      }
+    }
+
+    await transaction.commit();
+    return true;
+  } catch (error) {
+    await transaction.rollback();
+    throw error;
+  }
+}
+
+/**
+ * @async
+ * @function atualizarModalidadesProfessor
+ * @description Apaga e recria os vínculos de modalidades associadas a um professor através de transação.
+ * @param {number} idUtilizador - O ID do professor.
+ * @param {Array&lt;number>} idsModalidades - Array com os IDs das novas modalidades que leciona.
+ * @returns {Promise&lt;boolean>} Devolve true mediante o sucesso da atualização.
+ * @throws {Error} Reverte transação e propaga caso haja problemas.
+ */
+async function atualizarModalidadesProfessor(idUtilizador, idsModalidades) {
+  const pool = await poolPromise;
+  const transaction = pool.transaction();
+  await transaction.begin();
+  try {
+    await transaction
+      .request()
+      .input("Id", sql.Int, idUtilizador)
+      .query(
+        "DELETE FROM PROFESSOR_MODALIDADE WHERE UTILIZADORid_utilizador = @Id",
+      );
+
+    if (Array.isArray(idsModalidades) &amp;&amp; idsModalidades.length > 0) {
+      for (const idMod of idsModalidades) {
+        await transaction
+          .request()
+          .input("IdU", sql.Int, idUtilizador)
+          .input("IdM", sql.Int, idMod)
+          .query(
+            "INSERT INTO PROFESSOR_MODALIDADE (UTILIZADORid_utilizador, MODALIDADEid_modalidade) VALUES (@IdU, @IdM)",
+          );
+      }
+    }
+    await transaction.commit();
+    return true;
+  } catch (error) {
+    await transaction.rollback();
+    throw error;
+  }
+}
+
+/**
+ * @async
+ * @function alterarEstadoUtilizador
+ * @description Altera a flag booleana de estado (ativo/inativo) de um utilizador.
+ * Garante em cascata a ativação/inativação dos respetivos alunos caso se trate de um Encarregado de Educação.
+ * @param {number} idUtilizador - O ID do utilizador alvo.
+ * @param {boolean} estadoAtivo - O novo estado desejado (true para ativo, false para inativo).
+ * @returns {Promise&lt;boolean>} Devolve true assim que a transação for bem-sucedida.
+ * @throws {Error} Reverte a operação se der erro.
+ */
+async function alterarEstadoUtilizador(idUtilizador, estadoAtivo) {
+  const pool = await poolPromise;
+  const transaction = pool.transaction();
+  await transaction.begin();
+
+  try {
+    const status = estadoAtivo ? 1 : 0;
+
+    await transaction
+      .request()
+      .input("EstadoAtivo", sql.Bit, status)
+      .input("IdUtilizador", sql.Int, idUtilizador)
+      .query(
+        `UPDATE UTILIZADOR SET ativo = @EstadoAtivo WHERE id_utilizador = @IdUtilizador;`,
+      );
+
+    await transaction
+      .request()
+      .input("EstadoAtivo", sql.Bit, status)
+      .input("IdUtilizador", sql.Int, idUtilizador).query(`
+                UPDATE ALUNO 
+                SET ativo = @EstadoAtivo 
+                WHERE id_aluno IN (
+                    SELECT ALUNOid_aluno 
+                    FROM ENCARREGADO_ALUNO 
+                    WHERE UTILIZADORid_utilizador = @IdUtilizador
+                );
+            `);
+
+    await transaction.commit();
+    return true;
+  } catch (error) {
+    if (transaction) await transaction.rollback();
+    throw error;
+  }
+}
+
+/**
+ * @async
+ * @function apagarUtilizador
+ * @description Executa uma eliminação completa e segura de um utilizador da base de dados, limpando
+ * dependências como tokens, vínculos de perfis e alunos associados de forma atómica.
+ * @param {number} idUtilizador - O ID do utilizador a apagar.
+ * @returns {Promise&lt;boolean>} Devolve true se linhas foram afetadas e false caso contrário.
+ * @throws {Error} Propaga e reverte qualquer erro de DB.
+ */
+async function apagarUtilizador(idUtilizador) {
+  const pool = await poolPromise;
+  const transaction = pool.transaction();
+  await transaction.begin();
+
+  try {
+    await transaction
+      .request()
+      .input("Id", sql.Int, idUtilizador)
+      .query(
+        "DELETE FROM UTILIZADOR_PERFIL WHERE UTILIZADORid_utilizador = @Id",
+      );
+
+    await transaction
+      .request()
+      .input("Id", sql.Int, idUtilizador)
+      .query(
+        "DELETE FROM TOKEN_RECUPERACAO WHERE UTILIZADORid_utilizador = @Id",
+      );
+
+    const alunosResult = await transaction
+      .request()
+      .input("Id", sql.Int, idUtilizador)
+      .query(
+        "SELECT ALUNOid_aluno FROM ENCARREGADO_ALUNO WHERE UTILIZADORid_utilizador = @Id",
+      );
+
+    await transaction
+      .request()
+      .input("Id", sql.Int, idUtilizador)
+      .query(
+        "DELETE FROM ENCARREGADO_ALUNO WHERE UTILIZADORid_utilizador = @Id",
+      );
+
+    for (const row of alunosResult.recordset) {
+      await transaction
+        .request()
+        .input("IdAluno", sql.Int, row.ALUNOid_aluno)
+        .query("DELETE FROM ALUNO WHERE id_aluno = @IdAluno");
+    }
+
+    const result = await transaction
+      .request()
+      .input("Id", sql.Int, idUtilizador)
+      .query("DELETE FROM UTILIZADOR WHERE id_utilizador = @Id");
+
+    await transaction.commit();
+    return result.rowsAffected[0] > 0;
+  } catch (error) {
+    if (transaction) await transaction.rollback();
+    throw error;
+  }
+}
+
+// ============================================================================
+// 3. RECUPERAÇÃO DE PALAVRA-PASSE
+// ============================================================================
+
+/**
+ * @async
+ * @function guardarTokenRecuperacao
+ * @description Regista na base de dados um novo token temporário seguro para a recuperação da password.
+ * @param {number} idUtilizador - O ID numérico do utilizador requerente.
+ * @param {string} token - A hash ou string alfanumérica gerada.
+ * @returns {Promise&lt;boolean>} Devolve true após inserir com sucesso.
+ * @throws {Error} Erro da base de dados.
+ */
+async function guardarTokenRecuperacao(idUtilizador, token) {
+  try {
+    const pool = await poolPromise;
+    await pool
+      .request()
+      .input("Token", sql.VarChar(255), token)
+      .input("IdUtilizador", sql.Int, idUtilizador).query(`
+                INSERT INTO TOKEN_RECUPERACAO (token, data_expiracao, usado, data_criacao, UTILIZADORid_utilizador)
+                VALUES (@Token, DATEDIFF(SECOND, '1970-01-01', DATEADD(HOUR, 1, GETUTCDATE())), 0, GETDATE(), @IdUtilizador);
+            `);
+    return true;
+  } catch (error) {
+    throw error;
+  }
+}
+
+/**
+ * @async
+ * @function validarTokenRecuperacao
+ * @description Verifica se um token providenciado existe, se não foi já usado e se ainda não expirou temporalmente.
+ * @param {string} token - A chave do token a conferir.
+ * @returns {Promise&lt;Object|null>} Retorna os detalhes do registo do token ou null se inválido.
+ * @throws {Error} Erro da base de dados.
+ */
+async function validarTokenRecuperacao(token) {
+  try {
+    const pool = await poolPromise;
+    const tempoAtualUnix = Math.floor(Date.now() / 1000);
+
+    const result = await pool
+      .request()
+      .input("Token", sql.VarChar(255), token)
+      .input("TempoAtual", sql.Int, tempoAtualUnix).query(`
+                SELECT id_token_recuperacao, UTILIZADORid_utilizador 
+                FROM TOKEN_RECUPERACAO 
+                WHERE token = @Token AND usado = 0 AND data_expiracao > @TempoAtual;
+            `);
+
+    return result.recordset[0] || null;
+  } catch (error) {
+    throw error;
+  }
+}
+
+/**
+ * @async
+ * @function atualizarPassword
+ * @description Atualiza de facto a password na tabela UTILIZADOR e marca o respetivo token como usado (para evitar reutilização).
+ * @param {number} idUtilizador - O ID do utilizador dono da conta.
+ * @param {string} novaPasswordHash - A nova password criptografada.
+ * @param {number} idToken - O identificador do registo do token utilizado.
+ * @returns {Promise&lt;boolean>} Devolve true se finalizado corretamente.
+ * @throws {Error} Aciona rollback em caso de anomalia.
+ */
+async function atualizarPassword(idUtilizador, novaPasswordHash, idToken) {
+  const pool = await poolPromise;
+  const transaction = pool.transaction();
+  await transaction.begin();
+  try {
+    await transaction
+      .request()
+      .input("IdUtilizador", sql.Int, idUtilizador)
+      .input("NovaPassword", sql.VarChar(255), novaPasswordHash)
+      .query(
+        "UPDATE UTILIZADOR SET password = @NovaPassword WHERE id_utilizador = @IdUtilizador",
+      );
+
+    await transaction
+      .request()
+      .input("IdToken", sql.Int, idToken)
+      .query(
+        "UPDATE TOKEN_RECUPERACAO SET usado = 1 WHERE id_token_recuperacao = @IdToken",
+      );
+
+    await transaction.commit();
+    return true;
+  } catch (error) {
+    await transaction.rollback();
+    throw error;
+  }
+}
+
+// ============================================================================
+// 4. GESTÃO DOS ALUNOS DO ENCARREGADO DE EDUCAÇÃO (EE)
+// ============================================================================
+
+/**
+ * @async
+ * @function getAlunosPorEncarregado
+ * @description Vai buscar à base de dados todos os alunos ativos que estão associados à conta de um Encarregado de Educação.
+ * @param {number} idEncarregado - O ID do encarregado de educação (utilizador).
+ * @returns {Promise&lt;Array&lt;Object>>} O conjunto dos educandos registados.
+ * @throws {Error} Falha de base de dados.
+ */
+async function getAlunosPorEncarregado(idEncarregado) {
+  try {
+    const pool = await poolPromise;
+    const result = await pool.request().input("IdEE", sql.Int, idEncarregado)
+      .query(`
+        SELECT 
+          a.id_aluno, 
+          a.nome AS nome_aluno, 
+          a.data_nascimento
+        FROM ALUNO a
+        JOIN ENCARREGADO_ALUNO ea ON a.id_aluno = ea.ALUNOid_aluno
+        WHERE ea.UTILIZADORid_utilizador = @IdEE 
+          AND a.ativo = 1
+        ORDER BY a.nome ASC;
+      `);
+    return result.recordset;
+  } catch (error) {
+    throw error;
+  }
+}
+
+/**
+ * @async
+ * @function criarAlunoParaEncarregado
+ * @description Cria um novo aluno na tabela ALUNO e associa-o imediatamente à conta do Encarregado de Educação.
+ * Usa transação atómica para garantir que nada fica órfão em caso de erro.
+ * @param {number} idEncarregado - O ID numérico do Encarregado de Educação.
+ * @param {Object} aluno - Objeto com os dados do aluno.
+ * @param {string} aluno.nome - O nome completo do aluno.
+ * @param {string} [aluno.dataNascimento] - A data de nascimento do educando.
+ * @returns {Promise&lt;Object>} Um objeto contendo os detalhes gerados para o novo aluno.
+ * @throws {Error} Propaga e reverte se houver falha de escrita.
+ */
+async function criarAlunoParaEncarregado(
+  idEncarregado,
+  { nome, dataNascimento },
+) {
+  const pool = await poolPromise;
+  const transaction = pool.transaction();
+  await transaction.begin();
+
+  try {
+    const dataNascStr =
+      dataNascimento &amp;&amp; dataNascimento.trim() !== ""
+        ? dataNascimento.trim()
+        : null;
+
+    const resultAluno = await transaction
+      .request()
+      .input("Nome", sql.VarChar(255), nome)
+      .input("DataNasc", sql.VarChar(10), dataNascStr).query(`
+        INSERT INTO ALUNO (nome, data_nascimento, ativo, data_criacao)
+        OUTPUT INSERTED.id_aluno, INSERTED.nome AS nome_aluno
+        VALUES (@Nome, TRY_CONVERT(date, @DataNasc), 1, GETDATE());
+      `);
+
+    const novoAluno = resultAluno.recordset[0];
+
+    await transaction
+      .request()
+      .input("IdEE", sql.Int, idEncarregado)
+      .input("IdAluno", sql.Int, novoAluno.id_aluno).query(`
+        INSERT INTO ENCARREGADO_ALUNO (UTILIZADORid_utilizador, ALUNOid_aluno)
+        VALUES (@IdEE, @IdAluno);
+      `);
+
+    await transaction.commit();
+    return novoAluno;
+  } catch (error) {
+    await transaction.rollback();
+    throw error;
+  }
+}
+
+/**
+ * @module authModel
+ */
+module.exports = {
+  getUtilizadorByEmail,
+  getPerfisDoUtilizador,
+  listarTodosUtilizadores,
+  criarUtilizador,
+  atualizarUtilizadorCompleto,
+  atualizarModalidadesProfessor,
+  alterarEstadoUtilizador,
+  guardarTokenRecuperacao,
+  validarTokenRecuperacao,
+  atualizarPassword,
+  apagarUtilizador,
+  getAlunosPorEncarregado,
+  criarAlunoParaEncarregado,
+};
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Modules</h3><ul><li><a href="module-auditoriaController.html">auditoriaController</a></li><li><a href="module-auditoriaModel.html">auditoriaModel</a></li><li><a href="module-auditoriaRoutes.html">auditoriaRoutes</a></li><li><a href="module-authController.html">authController</a></li><li><a href="module-authModel.html">authModel</a></li><li><a href="module-authRoutes.html">authRoutes</a></li><li><a href="module-coachingController.html">coachingController</a></li><li><a href="module-coachingModel.html">coachingModel</a></li><li><a href="module-coachingRoutes.html">coachingRoutes</a></li><li><a href="module-escolaController.html">escolaController</a></li><li><a href="module-escolaModel.html">escolaModel</a></li><li><a href="module-escolaRoutes.html">escolaRoutes</a></li><li><a href="module-faturacaoController.html">faturacaoController</a></li><li><a href="module-faturacaoModel.html">faturacaoModel</a></li><li><a href="module-faturacaoRoutes.html">faturacaoRoutes</a></li><li><a href="module-inventarioController.html">inventarioController</a></li><li><a href="module-inventarioModel.html">inventarioModel</a></li><li><a href="module-inventarioRoutes.html">inventarioRoutes</a></li><li><a href="module-precoCoachingModel.html">precoCoachingModel</a></li></ul><h3>Global</h3><ul><li><a href="global.html#adicionarDisponibilidade">adicionarDisponibilidade</a></li><li><a href="global.html#adicionarDisponibilidadeProfessor">adicionarDisponibilidadeProfessor</a></li><li><a href="global.html#adicionarLinhaFaturaMensal">adicionarLinhaFaturaMensal</a></li><li><a href="global.html#adminCriarUtilizador">adminCriarUtilizador</a></li><li><a href="global.html#agendarDiretoAdmin">agendarDiretoAdmin</a></li><li><a href="global.html#alterarEstado">alterarEstado</a></li><li><a href="global.html#alterarEstadoUtilizador">alterarEstadoUtilizador</a></li><li><a href="global.html#apagarPeca">apagarPeca</a></li><li><a href="global.html#apagarUtilizador">apagarUtilizador</a></li><li><a href="global.html#aprovarEAgendarCoaching">aprovarEAgendarCoaching</a></li><li><a href="global.html#aprovarPedido">aprovarPedido</a></li><li><a href="global.html#associarProfessorModalidade">associarProfessorModalidade</a></li><li><a href="global.html#ativarUtilizador">ativarUtilizador</a></li><li><a href="global.html#atualizarDadosCompletosPeca">atualizarDadosCompletosPeca</a></li><li><a href="global.html#atualizarDadosVenda">atualizarDadosVenda</a></li><li><a href="global.html#atualizarEstadoPeca">atualizarEstadoPeca</a></li><li><a href="global.html#atualizarFotosPeca">atualizarFotosPeca</a></li><li><a href="global.html#atualizarModalidades">atualizarModalidades</a></li><li><a href="global.html#atualizarModalidadesProfessor">atualizarModalidadesProfessor</a></li><li><a href="global.html#atualizarPagamentoEmprestimo">atualizarPagamentoEmprestimo</a></li><li><a href="global.html#atualizarPassword">atualizarPassword</a></li><li><a href="global.html#atualizarPreco">atualizarPreco</a></li><li><a href="global.html#atualizarRegraPreco">atualizarRegraPreco</a></li><li><a href="global.html#atualizarUtilizadorCompleto">atualizarUtilizadorCompleto</a></li><li><a href="global.html#calcularCustoAutomatico">calcularCustoAutomatico</a></li><li><a href="global.html#cancelarCoaching">cancelarCoaching</a></li><li><a href="global.html#cancelarFatura">cancelarFatura</a></li><li><a href="global.html#cancelarMeuPedidoPendente">cancelarMeuPedidoPendente</a></li><li><a href="global.html#cancelarPedidoPendenteEncarregado">cancelarPedidoPendenteEncarregado</a></li><li><a href="global.html#coachingPertenceAEncarregado">coachingPertenceAEncarregado</a></li><li><a href="global.html#coachingPertenceAProfessorAtivo">coachingPertenceAProfessorAtivo</a></li><li><a href="global.html#colocarPecaAVenda">colocarPecaAVenda</a></li><li><a href="global.html#colunasTabelaPrecoCache">colunasTabelaPrecoCache</a></li><li><a href="global.html#concluirCoaching">concluirCoaching</a></li><li><a href="global.html#concluirCoachingPelaCoordenacao">concluirCoachingPelaCoordenacao</a></li><li><a href="global.html#consultarPrecoAula">consultarPrecoAula</a></li><li><a href="global.html#criarAlunoParaEncarregado">criarAlunoParaEncarregado</a></li><li><a href="global.html#criarMeuAluno">criarMeuAluno</a></li><li><a href="global.html#criarPedidoCoaching">criarPedidoCoaching</a></li><li><a href="global.html#criarRequest">criarRequest</a></li><li><a href="global.html#criarUtilizador">criarUtilizador</a></li><li><a href="global.html#desativarUtilizador">desativarUtilizador</a></li><li><a href="global.html#diaSemanaCoachingFromDateValue">diaSemanaCoachingFromDateValue</a></li><li><a href="global.html#diaSemanaPrecoFromDateValue">diaSemanaPrecoFromDateValue</a></li><li><a href="global.html#duracaoSlotMinutos">duracaoSlotMinutos</a></li><li><a href="global.html#editarPeca">editarPeca</a></li><li><a href="global.html#editarUtilizador">editarUtilizador</a></li><li><a href="global.html#editarUtilizadorCompleto">editarUtilizadorCompleto</a></li><li><a href="global.html#eliminarPecaCompleta">eliminarPecaCompleta</a></li><li><a href="global.html#eliminarUtilizador">eliminarUtilizador</a></li><li><a href="global.html#existeConflitoCoachingProfessor">existeConflitoCoachingProfessor</a></li><li><a href="global.html#existeConflitoCoachingSala">existeConflitoCoachingSala</a></li><li><a href="global.html#existeConflitoHorarioProfessor">existeConflitoHorarioProfessor</a></li><li><a href="global.html#existeConflitoHorarioSala">existeConflitoHorarioSala</a></li><li><a href="global.html#getAgenda">getAgenda</a></li><li><a href="global.html#getAgendaProfessor">getAgendaProfessor</a></li><li><a href="global.html#getAlunosPorEncarregado">getAlunosPorEncarregado</a></li><li><a href="global.html#getAnosLetivos">getAnosLetivos</a></li><li><a href="global.html#getCatalogo">getCatalogo</a></li><li><a href="global.html#getCatalogoPecas">getCatalogoPecas</a></li><li><a href="global.html#getCoachingCabecalhoCancelamento">getCoachingCabecalhoCancelamento</a></li><li><a href="global.html#getCompatibilidade">getCompatibilidade</a></li><li><a href="global.html#getCompatibilidadeSalasModalidades">getCompatibilidadeSalasModalidades</a></li><li><a href="global.html#getDisponibilidadeEfetiva">getDisponibilidadeEfetiva</a></li><li><a href="global.html#getDisponibilidades">getDisponibilidades</a></li><li><a href="global.html#getDisponibilidadesProfessor">getDisponibilidadesProfessor</a></li><li><a href="global.html#getFaturaPorId">getFaturaPorId</a></li><li><a href="global.html#getFaturas">getFaturas</a></li><li><a href="global.html#getHistoricoGeralCoachings">getHistoricoGeralCoachings</a></li><li><a href="global.html#getHorarios">getHorarios</a></li><li><a href="global.html#getHorariosPorAnoLetivo">getHorariosPorAnoLetivo</a></li><li><a href="global.html#getLinhasDaFatura">getLinhasDaFatura</a></li><li><a href="global.html#getLinhasFatura">getLinhasFatura</a></li><li><a href="global.html#getMeusAlunos">getMeusAlunos</a></li><li><a href="global.html#getModalidades">getModalidades</a></li><li><a href="global.html#getModalidadesAtivas">getModalidadesAtivas</a></li><li><a href="global.html#getModalidadesPorProfessor">getModalidadesPorProfessor</a></li><li><a href="global.html#getPecaDetalhes">getPecaDetalhes</a></li><li><a href="global.html#getPecasAVenda">getPecasAVenda</a></li><li><a href="global.html#getPedidoCoaching">getPedidoCoaching</a></li><li><a href="global.html#getPedidoCoachingPorId">getPedidoCoachingPorId</a></li><li><a href="global.html#getPedidosAtribuidosAoProfessorNoPeriodo">getPedidosAtribuidosAoProfessorNoPeriodo</a></li><li><a href="global.html#getPedidosAtribuidosProfessor">getPedidosAtribuidosProfessor</a></li><li><a href="global.html#getPedidosPendentes">getPedidosPendentes</a></li><li><a href="global.html#getPedidosPorEncarregado">getPedidosPorEncarregado</a></li><li><a href="global.html#getPendentesConclusaoCoordenacao">getPendentesConclusaoCoordenacao</a></li><li><a href="global.html#getPerfisDoUtilizador">getPerfisDoUtilizador</a></li><li><a href="global.html#getPrecoEstimado">getPrecoEstimado</a></li><li><a href="global.html#getProfessoresAtivos">getProfessoresAtivos</a></li><li><a href="global.html#getProfessoresDisponiveisAprovacao">getProfessoresDisponiveisAprovacao</a></li><li><a href="global.html#getProfessoresPorModalidade">getProfessoresPorModalidade</a></li><li><a href="global.html#getResumo">getResumo</a></li><li><a href="global.html#getResumoFaturacao">getResumoFaturacao</a></li><li><a href="global.html#getSalas">getSalas</a></li><li><a href="global.html#getSalasPorModalidade">getSalasPorModalidade</a></li><li><a href="global.html#getSlotLivre">getSlotLivre</a></li><li><a href="global.html#getTabelaPrecos">getTabelaPrecos</a></li><li><a href="global.html#getUtilizadorByEmail">getUtilizadorByEmail</a></li><li><a href="global.html#getVagasDisponiveis">getVagasDisponiveis</a></li><li><a href="global.html#guardarTokenRecuperacao">guardarTokenRecuperacao</a></li><li><a href="global.html#instanteFimCoaching">instanteFimCoaching</a></li><li><a href="global.html#instanteHoraReferencia">instanteHoraReferencia</a></li><li><a href="global.html#instanteInicioCoaching">instanteInicioCoaching</a></li><li><a href="global.html#listar">listar</a></li><li><a href="global.html#listarAuditoria">listarAuditoria</a></li><li><a href="global.html#listarCoachingsAbertosParaCoordenacao">listarCoachingsAbertosParaCoordenacao</a></li><li><a href="global.html#listarHistorico">listarHistorico</a></li><li><a href="global.html#listarMeusPedidosCoaching">listarMeusPedidosCoaching</a></li><li><a href="global.html#listarPrecos">listarPrecos</a></li><li><a href="global.html#listarTodosUtilizadores">listarTodosUtilizadores</a></li><li><a href="global.html#listarUtilizadores">listarUtilizadores</a></li><li><a href="global.html#login">login</a></li><li><a href="global.html#logout">logout</a></li><li><a href="global.html#minutosDaHora">minutosDaHora</a></li><li><a href="global.html#normalizarHoraSql">normalizarHoraSql</a></li><li><a href="global.html#normalizarHoraSqlTime">normalizarHoraSqlTime</a></li><li><a href="global.html#obterColunasTabelaPreco">obterColunasTabelaPreco</a></li><li><a href="global.html#parseDateParts">parseDateParts</a></li><li><a href="global.html#professorTemDisponibilidadeNoSlot">professorTemDisponibilidadeNoSlot</a></li><li><a href="global.html#redefinirPassword">redefinirPassword</a></li><li><a href="global.html#registar">registar</a></li><li><a href="global.html#registarConclusaoVenda">registarConclusaoVenda</a></li><li><a href="global.html#registarDevolucao">registarDevolucao</a></li><li><a href="global.html#registarDevolucaoEmprestimo">registarDevolucaoEmprestimo</a></li><li><a href="global.html#registarFotosPeca">registarFotosPeca</a></li><li><a href="global.html#registarNovaPeca">registarNovaPeca</a></li><li><a href="global.html#registarPagamento">registarPagamento</a></li><li><a href="global.html#registarPagamentoEmprestimo">registarPagamentoEmprestimo</a></li><li><a href="global.html#registarPeca">registarPeca</a></li><li><a href="global.html#registarPenalizacao">registarPenalizacao</a></li><li><a href="global.html#registarValidacao">registarValidacao</a></li><li><a href="global.html#registarValidacaoAula">registarValidacaoAula</a></li><li><a href="global.html#register">register</a></li><li><a href="global.html#rejeitarPedido">rejeitarPedido</a></li><li><a href="global.html#rejeitarPedidoCoaching">rejeitarPedidoCoaching</a></li><li><a href="global.html#removerDisponibilidade">removerDisponibilidade</a></li><li><a href="global.html#removerDisponibilidadeProfessor">removerDisponibilidadeProfessor</a></li><li><a href="global.html#removerProfessorModalidade">removerProfessorModalidade</a></li><li><a href="global.html#requisitarEmprestimo">requisitarEmprestimo</a></li><li><a href="global.html#solicitarRecuperacaoPassword">solicitarRecuperacaoPassword</a></li><li><a href="global.html#validarDuracaoAula">validarDuracaoAula</a></li><li><a href="global.html#validarFormatoAula">validarFormatoAula</a></li><li><a href="global.html#validarTokenRecuperacao">validarTokenRecuperacao</a></li><li><a href="global.html#verificarSlotLivreProfessor">verificarSlotLivreProfessor</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.5</a> on Thu May 14 2026 21:20:14 GMT+0100 (Hora de verão da Europa Ocidental)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

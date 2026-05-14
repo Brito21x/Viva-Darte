@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: controllers/faturacaoController.js</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: controllers/faturacaoController.js</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>/**
+ * @fileoverview Controlador de Faturação Mensal.
+ * @description Gere os endpoints de consulta, registo de pagamento e cancelamento de faturas.
+ *
+ * ROTAS
+ * GET    /api/faturacao               → listar faturas
+ * GET    /api/faturacao/resumo        → totais/estatísticas
+ * GET    /api/faturacao/:id           → detalhe de uma fatura
+ * GET    /api/faturacao/:id/linhas    → detalhe das linhas da fatura
+ * PUT    /api/faturacao/:id/pagamento → marcar como paga
+ * PUT    /api/faturacao/:id/cancelar  → cancelar fatura
+ * GET    /api/faturacao/precos        → listar tabela de preços
+ * PUT    /api/faturacao/precos/:id    → atualizar regra de preço
+ */
+
+const faturacaoModel = require("../models/faturacaoModel");
+const { registarAuditoria } = require("../helpers/auditoriaHelper");
+
+// ============================================================================
+// LISTAGEM E DETALHE
+// ============================================================================
+
+/**
+ * @async
+ * @function getFaturas
+ * @description Lista faturas com filtros opcionais por ano, mês e estado de pagamento.
+ * @param {import('express').Request} req - O objeto do pedido (request) do Express.
+ * @param {Object} req.query - A query string da rota.
+ * @param {string|number} [req.query.ano] - O ano para filtrar as faturas.
+ * @param {string|number} [req.query.mes] - O mês para filtrar as faturas.
+ * @param {string} [req.query.estado] - O estado de pagamento (ex: 'Pendente', 'Pago', 'Cancelado').
+ * @param {import('express').Response} res - O objeto da resposta (response) do Express.
+ * @param {import('express').NextFunction} next - A função de propagação de erro.
+ * @returns {Promise&lt;import('express').Response|void>} Devolve um array de objetos correspondentes às faturas.
+ */
+async function getFaturas(req, res, next) {
+  try {
+    const { ano, mes, estado } = req.query;
+    const faturas = await faturacaoModel.getFaturas({ ano, mes, estado });
+    return res.status(200).json(faturas);
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * @async
+ * @function getResumo
+ * @description Devolve totais agregados para popular os StatCards do dashboard.
+ * @param {import('express').Request} req - O objeto do pedido (request).
+ * @param {Object} req.query - A query string para filtrar o resumo.
+ * @param {string|number} [req.query.ano] - O ano a considerar no resumo.
+ * @param {string|number} [req.query.mes] - O mês a considerar no resumo.
+ * @param {import('express').Response} res - O objeto da resposta (response).
+ * @param {import('express').NextFunction} next - A função de propagação de erro.
+ * @returns {Promise&lt;import('express').Response|void>} Devolve um objeto com os totais/estatísticas.
+ */
+async function getResumo(req, res, next) {
+  try {
+    const { ano, mes } = req.query;
+    const resumo = await faturacaoModel.getResumoFaturacao({ ano, mes });
+    return res.status(200).json(resumo);
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * @async
+ * @function getFaturaPorId
+ * @description Obtém o detalhe completo de uma fatura específica através do seu ID.
+ * @param {import('express').Request} req - O objeto do pedido (request).
+ * @param {string} req.params.id - O ID da fatura.
+ * @param {import('express').Response} res - O objeto da resposta (response).
+ * @param {import('express').NextFunction} next - A função de propagação de erro.
+ * @returns {Promise&lt;import('express').Response|void>} Devolve os dados da fatura ou um erro de não encontrada.
+ */
+async function getFaturaPorId(req, res, next) {
+  try {
+    const idFaturacao = parseInt(req.params.id);
+    if (isNaN(idFaturacao)) {
+      return res.status(400).json({ mensagem: "ID de fatura inválido." });
+    }
+
+    const fatura = await faturacaoModel.getFaturaPorId(idFaturacao);
+    if (!fatura) {
+      return res.status(404).json({ mensagem: "Fatura não encontrada." });
+    }
+    return res.status(200).json(fatura);
+  } catch (error) {
+    next(error);
+  }
+}
+
+// ============================================================================
+// AÇÕES
+// ============================================================================
+
+/**
+ * @async
+ * @function registarPagamento
+ * @description Marca uma fatura como paga e regista o método e data de pagamento. Aciona a auditoria.
+ * @param {import('express').Request} req - O pedido do Express.
+ * @param {string} req.params.id - O ID da fatura a pagar.
+ * @param {Object} req.body - O corpo do pedido.
+ * @param {string} req.body.metodoPagamento - O método utilizado para pagamento (ex: 'Transferência Bancária', 'MBWAY').
+ * @param {import('express').Response} res - A resposta do Express.
+ * @param {import('express').NextFunction} next - Função de propagação de erro.
+ * @returns {Promise&lt;import('express').Response|void>} Mensagem de sucesso ou erro (se já estiver paga/cancelada).
+ */
+async function registarPagamento(req, res, next) {
+  try {
+    const idFaturacao = parseInt(req.params.id);
+    const { metodoPagamento } = req.body;
+
+    if (isNaN(idFaturacao)) {
+      return res.status(400).json({ mensagem: "ID de fatura inválido." });
+    }
+    if (!metodoPagamento || String(metodoPagamento).trim() === "") {
+      return res
+        .status(400)
+        .json({ mensagem: "O método de pagamento é obrigatório." });
+    }
+
+    // Verificar se a fatura existe e se já não está paga
+    const fatura = await faturacaoModel.getFaturaPorId(idFaturacao);
+    if (!fatura) {
+      return res.status(404).json({ mensagem: "Fatura não encontrada." });
+    }
+    if (fatura.estado_pagamento === "Pago") {
+      return res
+        .status(409)
+        .json({ mensagem: "Esta fatura já se encontra paga." });
+    }
+    if (fatura.estado_pagamento === "Cancelado") {
+      return res
+        .status(409)
+        .json({ mensagem: "Não é possível pagar uma fatura cancelada." });
+    }
+
+    const sucesso = await faturacaoModel.registarPagamento(
+      idFaturacao,
+      metodoPagamento.trim(),
+    );
+    if (!sucesso) {
+      return res
+        .status(500)
+        .json({ mensagem: "Não foi possível atualizar a fatura." });
+    }
+
+    registarAuditoria(req, {
+      tipo: "FATURA_PAGAR",
+      descricao: `Fatura #${idFaturacao} marcada como Paga (${metodoPagamento.trim()}) — ${fatura.nome_utilizador || "Utilizador #" + fatura.UTILIZADORid_utilizador}`,
+      entidadeTipo: "FATURA",
+      entidadeId: idFaturacao,
+      dadosExtra: {
+        metodoPagamento: metodoPagamento.trim(),
+        total: Number(fatura.total) || 0,
+        ano: fatura.ano,
+        mes: fatura.mes,
+      },
+    });
+
+    return res
+      .status(200)
+      .json({ mensagem: "Pagamento registado com sucesso." });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * @async
+ * @function cancelarFatura
+ * @description Cancela uma fatura (apenas aplicável se a mesma estiver "Pendente"). Aciona a auditoria.
+ * @param {import('express').Request} req - O pedido do Express.
+ * @param {string} req.params.id - O ID da fatura a cancelar.
+ * @param {import('express').Response} res - A resposta do Express.
+ * @param {import('express').NextFunction} next - Função de propagação de erro.
+ * @returns {Promise&lt;import('express').Response|void>} Mensagem de sucesso ou erro (se já estiver paga).
+ */
+async function cancelarFatura(req, res, next) {
+  try {
+    const idFaturacao = parseInt(req.params.id);
+    if (isNaN(idFaturacao)) {
+      return res.status(400).json({ mensagem: "ID de fatura inválido." });
+    }
+
+    const fatura = await faturacaoModel.getFaturaPorId(idFaturacao);
+    if (!fatura) {
+      return res.status(404).json({ mensagem: "Fatura não encontrada." });
+    }
+    if (fatura.estado_pagamento === "Pago") {
+      return res
+        .status(409)
+        .json({ mensagem: "Não é possível cancelar uma fatura já paga." });
+    }
+
+    const sucesso = await faturacaoModel.cancelarFatura(idFaturacao);
+    if (!sucesso) {
+      return res
+        .status(500)
+        .json({ mensagem: "Não foi possível cancelar a fatura." });
+    }
+
+    registarAuditoria(req, {
+      tipo: "FATURA_CANCELAR",
+      descricao: `Fatura #${idFaturacao} cancelada — ${fatura.nome_utilizador || "Utilizador #" + fatura.UTILIZADORid_utilizador}`,
+      entidadeTipo: "FATURA",
+      entidadeId: idFaturacao,
+      dadosExtra: {
+        total: Number(fatura.total) || 0,
+        ano: fatura.ano,
+        mes: fatura.mes,
+      },
+    });
+
+    return res.status(200).json({ mensagem: "Fatura cancelada com sucesso." });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * @async
+ * @function listarPrecos
+ * @description Lista a tabela com todas as regras de preços configuradas no sistema.
+ * @param {import('express').Request} req - O pedido do Express.
+ * @param {import('express').Response} res - A resposta do Express.
+ * @param {import('express').NextFunction} next - Função de propagação de erro.
+ * @returns {Promise&lt;import('express').Response|void>} Array com os preços.
+ */
+async function listarPrecos(req, res, next) {
+  try {
+    const precos = await faturacaoModel.getTabelaPrecos();
+    return res.status(200).json(precos);
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * @async
+ * @function atualizarRegraPreco
+ * @description Atualiza um valor ou o estado ativo de uma regra de preço existente.
+ * @param {import('express').Request} req - O pedido do Express.
+ * @param {string} req.params.id - O ID da regra de preço a atualizar.
+ * @param {Object} req.body - O corpo do pedido.
+ * @param {number} [req.body.preco] - O novo valor da regra de preço.
+ * @param {boolean} [req.body.ativo] - O novo estado ativo/inativo da regra.
+ * @param {import('express').Response} res - A resposta do Express.
+ * @param {import('express').NextFunction} next - Função de propagação de erro.
+ * @returns {Promise&lt;import('express').Response|void>} Mensagem de sucesso ou erro.
+ */
+async function atualizarRegraPreco(req, res, next) {
+  try {
+    const idPreco = parseInt(req.params.id);
+    const { preco, ativo } = req.body;
+
+    if (isNaN(idPreco)) {
+      return res.status(400).json({ mensagem: "ID de regra inválido." });
+    }
+
+    const sucesso = await faturacaoModel.atualizarPreco(idPreco, preco, ativo);
+
+    if (sucesso) {
+      return res
+        .status(200)
+        .json({ mensagem: "Preço atualizado com sucesso!" });
+    } else {
+      return res
+        .status(404)
+        .json({ mensagem: "Regra de preço não encontrada." });
+    }
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * @async
+ * @function getLinhasFatura
+ * @description Devolve o detalhe de uma fatura específica: o cabeçalho mais a lista de aulas (coachings)
+ * que a compõem (modalidade, data, hora, professor, sala, valor faturado).
+ * @param {import('express').Request} req - O pedido do Express.
+ * @param {string} req.params.id - O ID da fatura.
+ * @param {import('express').Response} res - A resposta do Express.
+ * @param {import('express').NextFunction} next - Função de propagação de erro.
+ * @returns {Promise&lt;import('express').Response|void>} Devolve o objeto da fatura e as respetivas linhas de detalhe.
+ */
+async function getLinhasFatura(req, res, next) {
+  try {
+    const idFaturacao = parseInt(req.params.id);
+    if (isNaN(idFaturacao)) {
+      return res.status(400).json({ mensagem: "ID de fatura inválido." });
+    }
+
+    const detalhe = await faturacaoModel.getLinhasDaFatura(idFaturacao);
+    if (!detalhe) {
+      return res.status(404).json({ mensagem: "Fatura não encontrada." });
+    }
+    return res.status(200).json(detalhe);
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * @module faturacaoController
+ */
+module.exports = {
+  getFaturas,
+  getResumo,
+  getFaturaPorId,
+  registarPagamento,
+  cancelarFatura,
+  listarPrecos,
+  atualizarRegraPreco,
+  getLinhasFatura,
+};
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Modules</h3><ul><li><a href="module-auditoriaController.html">auditoriaController</a></li><li><a href="module-auditoriaModel.html">auditoriaModel</a></li><li><a href="module-auditoriaRoutes.html">auditoriaRoutes</a></li><li><a href="module-authController.html">authController</a></li><li><a href="module-authModel.html">authModel</a></li><li><a href="module-authRoutes.html">authRoutes</a></li><li><a href="module-coachingController.html">coachingController</a></li><li><a href="module-coachingModel.html">coachingModel</a></li><li><a href="module-coachingRoutes.html">coachingRoutes</a></li><li><a href="module-escolaController.html">escolaController</a></li><li><a href="module-escolaModel.html">escolaModel</a></li><li><a href="module-escolaRoutes.html">escolaRoutes</a></li><li><a href="module-faturacaoController.html">faturacaoController</a></li><li><a href="module-faturacaoModel.html">faturacaoModel</a></li><li><a href="module-faturacaoRoutes.html">faturacaoRoutes</a></li><li><a href="module-inventarioController.html">inventarioController</a></li><li><a href="module-inventarioModel.html">inventarioModel</a></li><li><a href="module-inventarioRoutes.html">inventarioRoutes</a></li><li><a href="module-precoCoachingModel.html">precoCoachingModel</a></li></ul><h3>Global</h3><ul><li><a href="global.html#adicionarDisponibilidade">adicionarDisponibilidade</a></li><li><a href="global.html#adicionarDisponibilidadeProfessor">adicionarDisponibilidadeProfessor</a></li><li><a href="global.html#adicionarLinhaFaturaMensal">adicionarLinhaFaturaMensal</a></li><li><a href="global.html#adminCriarUtilizador">adminCriarUtilizador</a></li><li><a href="global.html#agendarDiretoAdmin">agendarDiretoAdmin</a></li><li><a href="global.html#alterarEstado">alterarEstado</a></li><li><a href="global.html#alterarEstadoUtilizador">alterarEstadoUtilizador</a></li><li><a href="global.html#apagarPeca">apagarPeca</a></li><li><a href="global.html#apagarUtilizador">apagarUtilizador</a></li><li><a href="global.html#aprovarEAgendarCoaching">aprovarEAgendarCoaching</a></li><li><a href="global.html#aprovarPedido">aprovarPedido</a></li><li><a href="global.html#associarProfessorModalidade">associarProfessorModalidade</a></li><li><a href="global.html#ativarUtilizador">ativarUtilizador</a></li><li><a href="global.html#atualizarDadosCompletosPeca">atualizarDadosCompletosPeca</a></li><li><a href="global.html#atualizarDadosVenda">atualizarDadosVenda</a></li><li><a href="global.html#atualizarEstadoPeca">atualizarEstadoPeca</a></li><li><a href="global.html#atualizarFotosPeca">atualizarFotosPeca</a></li><li><a href="global.html#atualizarModalidades">atualizarModalidades</a></li><li><a href="global.html#atualizarModalidadesProfessor">atualizarModalidadesProfessor</a></li><li><a href="global.html#atualizarPagamentoEmprestimo">atualizarPagamentoEmprestimo</a></li><li><a href="global.html#atualizarPassword">atualizarPassword</a></li><li><a href="global.html#atualizarPreco">atualizarPreco</a></li><li><a href="global.html#atualizarRegraPreco">atualizarRegraPreco</a></li><li><a href="global.html#atualizarUtilizadorCompleto">atualizarUtilizadorCompleto</a></li><li><a href="global.html#calcularCustoAutomatico">calcularCustoAutomatico</a></li><li><a href="global.html#cancelarCoaching">cancelarCoaching</a></li><li><a href="global.html#cancelarFatura">cancelarFatura</a></li><li><a href="global.html#cancelarMeuPedidoPendente">cancelarMeuPedidoPendente</a></li><li><a href="global.html#cancelarPedidoPendenteEncarregado">cancelarPedidoPendenteEncarregado</a></li><li><a href="global.html#coachingPertenceAEncarregado">coachingPertenceAEncarregado</a></li><li><a href="global.html#coachingPertenceAProfessorAtivo">coachingPertenceAProfessorAtivo</a></li><li><a href="global.html#colocarPecaAVenda">colocarPecaAVenda</a></li><li><a href="global.html#colunasTabelaPrecoCache">colunasTabelaPrecoCache</a></li><li><a href="global.html#concluirCoaching">concluirCoaching</a></li><li><a href="global.html#concluirCoachingPelaCoordenacao">concluirCoachingPelaCoordenacao</a></li><li><a href="global.html#consultarPrecoAula">consultarPrecoAula</a></li><li><a href="global.html#criarAlunoParaEncarregado">criarAlunoParaEncarregado</a></li><li><a href="global.html#criarMeuAluno">criarMeuAluno</a></li><li><a href="global.html#criarPedidoCoaching">criarPedidoCoaching</a></li><li><a href="global.html#criarRequest">criarRequest</a></li><li><a href="global.html#criarUtilizador">criarUtilizador</a></li><li><a href="global.html#desativarUtilizador">desativarUtilizador</a></li><li><a href="global.html#diaSemanaCoachingFromDateValue">diaSemanaCoachingFromDateValue</a></li><li><a href="global.html#diaSemanaPrecoFromDateValue">diaSemanaPrecoFromDateValue</a></li><li><a href="global.html#duracaoSlotMinutos">duracaoSlotMinutos</a></li><li><a href="global.html#editarPeca">editarPeca</a></li><li><a href="global.html#editarUtilizador">editarUtilizador</a></li><li><a href="global.html#editarUtilizadorCompleto">editarUtilizadorCompleto</a></li><li><a href="global.html#eliminarPecaCompleta">eliminarPecaCompleta</a></li><li><a href="global.html#eliminarUtilizador">eliminarUtilizador</a></li><li><a href="global.html#existeConflitoCoachingProfessor">existeConflitoCoachingProfessor</a></li><li><a href="global.html#existeConflitoCoachingSala">existeConflitoCoachingSala</a></li><li><a href="global.html#existeConflitoHorarioProfessor">existeConflitoHorarioProfessor</a></li><li><a href="global.html#existeConflitoHorarioSala">existeConflitoHorarioSala</a></li><li><a href="global.html#getAgenda">getAgenda</a></li><li><a href="global.html#getAgendaProfessor">getAgendaProfessor</a></li><li><a href="global.html#getAlunosPorEncarregado">getAlunosPorEncarregado</a></li><li><a href="global.html#getAnosLetivos">getAnosLetivos</a></li><li><a href="global.html#getCatalogo">getCatalogo</a></li><li><a href="global.html#getCatalogoPecas">getCatalogoPecas</a></li><li><a href="global.html#getCoachingCabecalhoCancelamento">getCoachingCabecalhoCancelamento</a></li><li><a href="global.html#getCompatibilidade">getCompatibilidade</a></li><li><a href="global.html#getCompatibilidadeSalasModalidades">getCompatibilidadeSalasModalidades</a></li><li><a href="global.html#getDisponibilidadeEfetiva">getDisponibilidadeEfetiva</a></li><li><a href="global.html#getDisponibilidades">getDisponibilidades</a></li><li><a href="global.html#getDisponibilidadesProfessor">getDisponibilidadesProfessor</a></li><li><a href="global.html#getFaturaPorId">getFaturaPorId</a></li><li><a href="global.html#getFaturas">getFaturas</a></li><li><a href="global.html#getHistoricoGeralCoachings">getHistoricoGeralCoachings</a></li><li><a href="global.html#getHorarios">getHorarios</a></li><li><a href="global.html#getHorariosPorAnoLetivo">getHorariosPorAnoLetivo</a></li><li><a href="global.html#getLinhasDaFatura">getLinhasDaFatura</a></li><li><a href="global.html#getLinhasFatura">getLinhasFatura</a></li><li><a href="global.html#getMeusAlunos">getMeusAlunos</a></li><li><a href="global.html#getModalidades">getModalidades</a></li><li><a href="global.html#getModalidadesAtivas">getModalidadesAtivas</a></li><li><a href="global.html#getModalidadesPorProfessor">getModalidadesPorProfessor</a></li><li><a href="global.html#getPecaDetalhes">getPecaDetalhes</a></li><li><a href="global.html#getPecasAVenda">getPecasAVenda</a></li><li><a href="global.html#getPedidoCoaching">getPedidoCoaching</a></li><li><a href="global.html#getPedidoCoachingPorId">getPedidoCoachingPorId</a></li><li><a href="global.html#getPedidosAtribuidosAoProfessorNoPeriodo">getPedidosAtribuidosAoProfessorNoPeriodo</a></li><li><a href="global.html#getPedidosAtribuidosProfessor">getPedidosAtribuidosProfessor</a></li><li><a href="global.html#getPedidosPendentes">getPedidosPendentes</a></li><li><a href="global.html#getPedidosPorEncarregado">getPedidosPorEncarregado</a></li><li><a href="global.html#getPendentesConclusaoCoordenacao">getPendentesConclusaoCoordenacao</a></li><li><a href="global.html#getPerfisDoUtilizador">getPerfisDoUtilizador</a></li><li><a href="global.html#getPrecoEstimado">getPrecoEstimado</a></li><li><a href="global.html#getProfessoresAtivos">getProfessoresAtivos</a></li><li><a href="global.html#getProfessoresDisponiveisAprovacao">getProfessoresDisponiveisAprovacao</a></li><li><a href="global.html#getProfessoresPorModalidade">getProfessoresPorModalidade</a></li><li><a href="global.html#getResumo">getResumo</a></li><li><a href="global.html#getResumoFaturacao">getResumoFaturacao</a></li><li><a href="global.html#getSalas">getSalas</a></li><li><a href="global.html#getSalasPorModalidade">getSalasPorModalidade</a></li><li><a href="global.html#getSlotLivre">getSlotLivre</a></li><li><a href="global.html#getTabelaPrecos">getTabelaPrecos</a></li><li><a href="global.html#getUtilizadorByEmail">getUtilizadorByEmail</a></li><li><a href="global.html#getVagasDisponiveis">getVagasDisponiveis</a></li><li><a href="global.html#guardarTokenRecuperacao">guardarTokenRecuperacao</a></li><li><a href="global.html#instanteFimCoaching">instanteFimCoaching</a></li><li><a href="global.html#instanteHoraReferencia">instanteHoraReferencia</a></li><li><a href="global.html#instanteInicioCoaching">instanteInicioCoaching</a></li><li><a href="global.html#listar">listar</a></li><li><a href="global.html#listarAuditoria">listarAuditoria</a></li><li><a href="global.html#listarCoachingsAbertosParaCoordenacao">listarCoachingsAbertosParaCoordenacao</a></li><li><a href="global.html#listarHistorico">listarHistorico</a></li><li><a href="global.html#listarMeusPedidosCoaching">listarMeusPedidosCoaching</a></li><li><a href="global.html#listarPrecos">listarPrecos</a></li><li><a href="global.html#listarTodosUtilizadores">listarTodosUtilizadores</a></li><li><a href="global.html#listarUtilizadores">listarUtilizadores</a></li><li><a href="global.html#login">login</a></li><li><a href="global.html#logout">logout</a></li><li><a href="global.html#minutosDaHora">minutosDaHora</a></li><li><a href="global.html#normalizarHoraSql">normalizarHoraSql</a></li><li><a href="global.html#normalizarHoraSqlTime">normalizarHoraSqlTime</a></li><li><a href="global.html#obterColunasTabelaPreco">obterColunasTabelaPreco</a></li><li><a href="global.html#parseDateParts">parseDateParts</a></li><li><a href="global.html#professorTemDisponibilidadeNoSlot">professorTemDisponibilidadeNoSlot</a></li><li><a href="global.html#redefinirPassword">redefinirPassword</a></li><li><a href="global.html#registar">registar</a></li><li><a href="global.html#registarConclusaoVenda">registarConclusaoVenda</a></li><li><a href="global.html#registarDevolucao">registarDevolucao</a></li><li><a href="global.html#registarDevolucaoEmprestimo">registarDevolucaoEmprestimo</a></li><li><a href="global.html#registarFotosPeca">registarFotosPeca</a></li><li><a href="global.html#registarNovaPeca">registarNovaPeca</a></li><li><a href="global.html#registarPagamento">registarPagamento</a></li><li><a href="global.html#registarPagamentoEmprestimo">registarPagamentoEmprestimo</a></li><li><a href="global.html#registarPeca">registarPeca</a></li><li><a href="global.html#registarPenalizacao">registarPenalizacao</a></li><li><a href="global.html#registarValidacao">registarValidacao</a></li><li><a href="global.html#registarValidacaoAula">registarValidacaoAula</a></li><li><a href="global.html#register">register</a></li><li><a href="global.html#rejeitarPedido">rejeitarPedido</a></li><li><a href="global.html#rejeitarPedidoCoaching">rejeitarPedidoCoaching</a></li><li><a href="global.html#removerDisponibilidade">removerDisponibilidade</a></li><li><a href="global.html#removerDisponibilidadeProfessor">removerDisponibilidadeProfessor</a></li><li><a href="global.html#removerProfessorModalidade">removerProfessorModalidade</a></li><li><a href="global.html#requisitarEmprestimo">requisitarEmprestimo</a></li><li><a href="global.html#solicitarRecuperacaoPassword">solicitarRecuperacaoPassword</a></li><li><a href="global.html#validarDuracaoAula">validarDuracaoAula</a></li><li><a href="global.html#validarFormatoAula">validarFormatoAula</a></li><li><a href="global.html#validarTokenRecuperacao">validarTokenRecuperacao</a></li><li><a href="global.html#verificarSlotLivreProfessor">verificarSlotLivreProfessor</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.5</a> on Thu May 14 2026 21:20:14 GMT+0100 (Hora de verão da Europa Ocidental)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

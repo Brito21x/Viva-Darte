@@ -1,0 +1,957 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: models/coachingModel.js</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: models/coachingModel.js</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>/**
+ * @fileoverview Modelo de Dados para a Gestão de Coaching.
+ * @description Interações com a BD SQL Server (Disponibilidades, Pedidos, Conflitos, Validação).
+ */
+
+const { poolPromise } = require("../config/db");
+const sql = require("mssql");
+
+/**
+ * @function normalizarHoraSql
+ * @description Normaliza uma string de hora para o formato aceite pelo SQL (HH:MM:SS).
+ * @param {string|any} valor - O valor da hora a normalizar.
+ * @returns {string|null} A hora formatada ou null caso seja inválida.
+ */
+function normalizarHoraSql(valor) {
+  const s = String(valor ?? "").trim();
+  const m = s.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+  if (!m) return null;
+  const hh = Number(m[1]),
+    mm = Number(m[2]),
+    ss = Number(m[3] ?? "0");
+  if (hh &lt; 0 || hh > 23 || mm &lt; 0 || mm > 59 || ss &lt; 0 || ss > 59) return null;
+  return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")}`;
+}
+
+/**
+ * @function minutosDaHora
+ * @description Converte uma hora no formato HH:MM para o total em minutos.
+ * @param {string|any} valor - A hora a converter.
+ * @returns {number|null} O total de minutos ou null em caso de falha.
+ */
+function minutosDaHora(valor) {
+  const h = normalizarHoraSql(valor);
+  if (!h) return null;
+  const [hh, mm] = h.split(":").map(Number);
+  return hh * 60 + mm;
+}
+
+/**
+ * @function criarRequest
+ * @description Cria um objeto request a partir do pool de conexões ou de uma transação.
+ * @param {Object} db - O pool de base de dados ou objeto de transação.
+ * @returns {Object} O objeto de request do mssql.
+ */
+function criarRequest(db) {
+  return db.request();
+}
+
+/**
+ * @async
+ * @function existeConflitoCoachingProfessor
+ * @description Verifica se existe algum conflito de horário para o professor com outros coachings agendados.
+ * @param {Object} db - A transação ou pool de base de dados.
+ * @param {Object} params - Parâmetros da verificação.
+ * @param {number} params.idProfessor - O ID do professor.
+ * @param {Date|string} params.dataAula - A data da aula.
+ * @param {string} params.horaInicio - A hora de início.
+ * @param {number} params.duracaoMinutos - A duração em minutos.
+ * @returns {Promise&lt;boolean>} Retorna true se houver conflito, false caso contrário.
+ */
+async function existeConflitoCoachingProfessor(
+  db,
+  { idProfessor, dataAula, horaInicio, duracaoMinutos },
+) {
+  const result = await criarRequest(db)
+    .input("IdProfessor", sql.Int, idProfessor)
+    .input("DataAula", sql.Date, dataAula)
+    .input("HoraInicio", sql.VarChar(8), normalizarHoraSql(horaInicio))
+    .input("Duracao", sql.Int, duracaoMinutos)
+    .query(
+      `SELECT 1 FROM COACHING c LEFT JOIN PEDIDO_COACHING pc ON c.PEDIDO_COACHINGid_pedido_coaching = pc.id_pedido_coaching WHERE (c.UTILIZADORid_utilizador = @IdProfessor OR pc.UTILIZADORid_utilizador2 = @IdProfessor) AND c.data_aula = @DataAula AND c.estado IN ('Agendado', 'Confirmado') AND c.hora_inicio &lt; CAST(DATEADD(MINUTE, @Duracao, CAST(TRY_CONVERT(time, @HoraInicio) AS datetime)) AS time) AND CAST(DATEADD(MINUTE, c.duracao_minutos, CAST(c.hora_inicio AS datetime)) AS time) > TRY_CONVERT(time, @HoraInicio);`,
+    );
+  return result.recordset.length > 0;
+}
+
+/**
+ * @async
+ * @function existeConflitoCoachingSala
+ * @description Verifica se existe algum conflito de horário na sala especificada com outros coachings.
+ * @param {Object} db - A transação ou pool de base de dados.
+ * @param {Object} params - Parâmetros da verificação.
+ * @param {number} params.idSala - O ID da sala.
+ * @param {Date|string} params.dataAula - A data da aula.
+ * @param {string} params.horaInicio - A hora de início.
+ * @param {number} params.duracaoMinutos - A duração em minutos.
+ * @returns {Promise&lt;boolean>} Retorna true se houver conflito, false caso contrário.
+ */
+async function existeConflitoCoachingSala(
+  db,
+  { idSala, dataAula, horaInicio, duracaoMinutos },
+) {
+  const result = await criarRequest(db)
+    .input("IdSala", sql.Int, idSala)
+    .input("DataAula", sql.Date, dataAula)
+    .input("HoraInicio", sql.VarChar(8), normalizarHoraSql(horaInicio))
+    .input("Duracao", sql.Int, duracaoMinutos)
+    .query(
+      `SELECT 1 FROM COACHING WHERE SALAid_sala = @IdSala AND data_aula = @DataAula AND estado IN ('Agendado', 'Confirmado') AND hora_inicio &lt; CAST(DATEADD(MINUTE, @Duracao, CAST(TRY_CONVERT(time, @HoraInicio) AS datetime)) AS time) AND CAST(DATEADD(MINUTE, duracao_minutos, CAST(hora_inicio AS datetime)) AS time) > TRY_CONVERT(time, @HoraInicio);`,
+    );
+  return result.recordset.length > 0;
+}
+
+/**
+ * @async
+ * @function existeConflitoHorarioProfessor
+ * @description Verifica se existe conflito com o horário letivo regular (turmas) do professor.
+ * @param {Object} db - A transação ou pool de base de dados.
+ * @param {Object} params - Parâmetros da verificação.
+ * @param {number} params.idProfessor - O ID do professor.
+ * @param {number} params.diaSemana - O dia da semana (1-7).
+ * @param {string} params.horaInicio - A hora de início.
+ * @param {number} params.duracaoMinutos - A duração em minutos.
+ * @returns {Promise&lt;boolean>} Retorna true se houver conflito, false caso contrário.
+ */
+async function existeConflitoHorarioProfessor(
+  db,
+  { idProfessor, diaSemana, horaInicio, duracaoMinutos },
+) {
+  const result = await criarRequest(db)
+    .input("IdProfessor", sql.Int, idProfessor)
+    .input("DiaSemana", sql.Int, diaSemana)
+    .input("HoraInicio", sql.VarChar(8), normalizarHoraSql(horaInicio))
+    .input("Duracao", sql.Int, duracaoMinutos)
+    .query(
+      `SELECT 1 FROM HORARIO WHERE UTILIZADORid_utilizador = @IdProfessor AND dia_semana = @DiaSemana AND ativo = 1 AND hora_inicio &lt; CAST(DATEADD(MINUTE, @Duracao, CAST(TRY_CONVERT(time, @HoraInicio) AS datetime)) AS time) AND hora_fim > TRY_CONVERT(time, @HoraInicio);`,
+    );
+  return result.recordset.length > 0;
+}
+
+/**
+ * @async
+ * @function existeConflitoHorarioSala
+ * @description Verifica se existe conflito com o horário letivo regular (turmas) na sala.
+ * @param {Object} db - A transação ou pool de base de dados.
+ * @param {Object} params - Parâmetros da verificação.
+ * @param {number} params.idSala - O ID da sala.
+ * @param {number} params.diaSemana - O dia da semana (1-7).
+ * @param {string} params.horaInicio - A hora de início.
+ * @param {number} params.duracaoMinutos - A duração em minutos.
+ * @returns {Promise&lt;boolean>} Retorna true se houver conflito, false caso contrário.
+ */
+async function existeConflitoHorarioSala(
+  db,
+  { idSala, diaSemana, horaInicio, duracaoMinutos },
+) {
+  const result = await criarRequest(db)
+    .input("IdSala", sql.Int, idSala)
+    .input("DiaSemana", sql.Int, diaSemana)
+    .input("HoraInicio", sql.VarChar(8), normalizarHoraSql(horaInicio))
+    .input("Duracao", sql.Int, duracaoMinutos)
+    .query(
+      `SELECT 1 FROM HORARIO WHERE SALAid_sala = @IdSala AND dia_semana = @DiaSemana AND ativo = 1 AND hora_inicio &lt; CAST(DATEADD(MINUTE, @Duracao, CAST(TRY_CONVERT(time, @HoraInicio) AS datetime)) AS time) AND hora_fim > TRY_CONVERT(time, @HoraInicio);`,
+    );
+  return result.recordset.length > 0;
+}
+
+/**
+ * @async
+ * @function adicionarDisponibilidadeProfessor
+ * @description Insere uma nova janela de disponibilidade na agenda de um professor.
+ * @param {Object} params - Os dados da disponibilidade.
+ * @param {number} params.diaSemana - O dia da semana (1-7).
+ * @param {string} params.horaInicio - A hora de início.
+ * @param {string} params.horaFim - A hora de fim.
+ * @param {number} params.idProfessor - O ID do professor.
+ * @returns {Promise&lt;boolean>} True em caso de sucesso.
+ * @throws {Error} Lança erro caso a janela se sobreponha a uma existente.
+ */
+async function adicionarDisponibilidadeProfessor({
+  diaSemana,
+  horaInicio,
+  horaFim,
+  idProfessor,
+}) {
+  const pool = await poolPromise;
+  const hI = normalizarHoraSql(horaInicio),
+    hF = normalizarHoraSql(horaFim);
+  const conflito = await pool
+    .request()
+    .input("IdProfessor", sql.Int, idProfessor)
+    .input("DiaSemana", sql.Int, diaSemana)
+    .input("HoraInicio", sql.VarChar(8), hI)
+    .input("HoraFim", sql.VarChar(8), hF)
+    .query(
+      `SELECT 1 FROM DISPONIBILIDADE_PROFESSOR WHERE UTILIZADORid_utilizador = @IdProfessor AND dia_semana = @DiaSemana AND hora_inicio &lt; TRY_CONVERT(time, @HoraFim) AND hora_fim > TRY_CONVERT(time, @HoraInicio);`,
+    );
+  if (conflito.recordset.length > 0)
+    throw new Error(
+      "Já existe uma disponibilidade que se sobrepõe a este horário.",
+    );
+
+  const result = await pool
+    .request()
+    .input("DiaSemana", sql.Int, diaSemana)
+    .input("HoraInicio", sql.VarChar(8), hI)
+    .input("HoraFim", sql.VarChar(8), hF)
+    .input("IdProfessor", sql.Int, idProfessor)
+    .query(
+      `INSERT INTO DISPONIBILIDADE_PROFESSOR (dia_semana, hora_inicio, hora_fim, UTILIZADORid_utilizador) VALUES (@DiaSemana, TRY_CONVERT(time, @HoraInicio), TRY_CONVERT(time, @HoraFim), @IdProfessor);`,
+    );
+  return result.rowsAffected[0] > 0;
+}
+
+/**
+ * @async
+ * @function getDisponibilidadesProfessor
+ * @description Obtém a lista de disponibilidades registadas para um professor específico.
+ * @param {number} idProfessor - O ID do professor.
+ * @returns {Promise&lt;Array&lt;Object>>} O array com as disponibilidades.
+ */
+async function getDisponibilidadesProfessor(idProfessor) {
+  const pool = await poolPromise;
+  const result = await pool
+    .request()
+    .input("IdProfessor", sql.Int, idProfessor)
+    .query(
+      `SELECT dp.id_disponibilidade, dp.dia_semana, dp.hora_inicio, dp.hora_fim, (SELECT TOP 1 m.nome FROM PROFESSOR_MODALIDADE pm JOIN MODALIDADE m ON pm.MODALIDADEid_modalidade = m.id_modalidade WHERE pm.UTILIZADORid_utilizador = @IdProfessor) AS modalidade FROM DISPONIBILIDADE_PROFESSOR dp WHERE UTILIZADORid_utilizador = @IdProfessor ORDER BY dia_semana ASC, hora_inicio ASC;`,
+    );
+  return result.recordset;
+}
+
+/**
+ * @async
+ * @function removerDisponibilidadeProfessor
+ * @description Remove uma disponibilidade de horário da agenda do professor.
+ * @param {number} idDisponibilidade - O ID do bloco de disponibilidade.
+ * @param {number} idProfessor - O ID do professor (para verificação de segurança).
+ * @returns {Promise&lt;boolean>} True se foi removida.
+ */
+async function removerDisponibilidadeProfessor(idDisponibilidade, idProfessor) {
+  const pool = await poolPromise;
+  const result = await pool
+    .request()
+    .input("IdDisponibilidade", sql.Int, idDisponibilidade)
+    .input("IdProfessor", sql.Int, idProfessor)
+    .query(
+      `DELETE FROM DISPONIBILIDADE_PROFESSOR WHERE id_disponibilidade = @IdDisponibilidade AND UTILIZADORid_utilizador = @IdProfessor;`,
+    );
+  return result.rowsAffected[0] > 0;
+}
+
+/**
+ * @async
+ * @function getDisponibilidadeEfetiva
+ * @description Cruza as disponibilidades teóricas dos professores com a ocupação real (coachings e turmas) num dia.
+ * @param {number} idModalidade - A modalidade procurada.
+ * @param {number} diaSemanaExato - O dia da semana correspondente à data.
+ * @param {Date|string} dataEspecifica - A data exata para verificar ocupações.
+ * @param {number} [idProfessorFiltro=null] - (Opcional) Filtrar por um professor específico.
+ * @param {number} [idAnoLetivo=null] - (Opcional) Ano letivo em causa.
+ * @returns {Promise&lt;Object>} Um objeto contendo os arrays `disponibilidades` e `ocupacoes`.
+ */
+async function getDisponibilidadeEfetiva(
+  idModalidade,
+  diaSemanaExato,
+  dataEspecifica,
+  idProfessorFiltro = null,
+  idAnoLetivo = null,
+) {
+  const pool = await poolPromise;
+  const resultDisponibilidade = await pool
+    .request()
+    .input("IdModalidade", sql.Int, idModalidade)
+    .input("DiaSemana", sql.Int, diaSemanaExato)
+    .input("IdProfessorFiltro", sql.Int, idProfessorFiltro)
+    .query(
+      `SELECT dp.id_disponibilidade, u.id_utilizador AS id_professor, u.nome AS nome_professor, dp.hora_inicio, dp.hora_fim FROM DISPONIBILIDADE_PROFESSOR dp JOIN UTILIZADOR u ON dp.UTILIZADORid_utilizador = u.id_utilizador JOIN UTILIZADOR_PERFIL up ON up.UTILIZADORid_utilizador = u.id_utilizador JOIN PERFIL p ON p.id_perfil = up.PERFILid_perfil WHERE dp.dia_semana = @DiaSemana AND p.nome LIKE '%Prof%' AND u.ativo = 1 AND EXISTS (SELECT 1 FROM PROFESSOR_MODALIDADE pm WHERE pm.UTILIZADORid_utilizador = u.id_utilizador AND pm.MODALIDADEid_modalidade = @IdModalidade) AND (@IdProfessorFiltro IS NULL OR u.id_utilizador = @IdProfessorFiltro);`,
+    );
+
+  const reqOcup = pool
+    .request()
+    .input("DataEspecifica", sql.Date, dataEspecifica);
+  const resultOcupacao = await reqOcup.query(
+    `SELECT c.UTILIZADORid_utilizador AS id_professor, c.hora_inicio, c.duracao_minutos, c.SALAid_sala FROM COACHING c WHERE c.data_aula = @DataEspecifica AND c.estado IN ('Agendado', 'Confirmado') UNION ALL SELECT pc.UTILIZADORid_utilizador2 AS id_professor, c.hora_inicio, c.duracao_minutos, c.SALAid_sala FROM COACHING c JOIN PEDIDO_COACHING pc ON c.PEDIDO_COACHINGid_pedido_coaching = pc.id_pedido_coaching WHERE c.data_aula = @DataEspecifica AND c.estado IN ('Agendado', 'Confirmado') AND pc.UTILIZADORid_utilizador2 IS NOT NULL;`,
+  );
+
+  const reqHor = pool.request().input("DiaSemana", sql.Int, diaSemanaExato);
+  const resultOcupacaoHorario = await reqHor.query(
+    `SELECT h.UTILIZADORid_utilizador AS id_professor, h.hora_inicio, DATEDIFF(MINUTE, h.hora_inicio, h.hora_fim) AS duracao_minutos, h.SALAid_sala FROM HORARIO h WHERE h.dia_semana = @DiaSemana AND h.ativo = 1;`,
+  );
+
+  return {
+    disponibilidades: resultDisponibilidade.recordset,
+    ocupacoes: [
+      ...resultOcupacao.recordset,
+      ...resultOcupacaoHorario.recordset,
+    ],
+  };
+}
+
+/**
+ * @async
+ * @function getAgendaProfessor
+ * @description Obtém a lista de aulas de coaching agendadas para um professor num período.
+ * @param {number} idProfessor - O ID do professor.
+ * @param {Date|string} [dataInicio=null] - A data de início do intervalo.
+ * @param {Date|string} [dataFim=null] - A data de fim do intervalo.
+ * @returns {Promise&lt;Array&lt;Object>>} A lista de aulas marcadas.
+ */
+async function getAgendaProfessor(
+  idProfessor,
+  dataInicio = null,
+  dataFim = null,
+) {
+  const pool = await poolPromise;
+  let filtroData =
+    dataInicio &amp;&amp; dataFim
+      ? "AND c.data_aula BETWEEN @DataInicio AND @DataFim"
+      : "";
+  const request = pool.request().input("IdProfessor", sql.Int, idProfessor);
+  if (dataInicio &amp;&amp; dataFim) {
+    request.input("DataInicio", sql.Date, dataInicio);
+    request.input("DataFim", sql.Date, dataFim);
+  }
+
+  const result = await request.query(
+    `SELECT 
+        c.id_coaching, c.data_aula, c.hora_inicio, c.duracao_minutos, 
+        c.formato_aula, c.numero_participantes, c.estado, c.valor_final, 
+        c.ANO_LETIVOid_ano_letivo, m.nome AS modalidade, s.nome AS sala, 
+        ee.nome AS encarregado,
+        -- ADICIONADO: Vai buscar o nome do(s) aluno(s)
+        (SELECT STRING_AGG(a.nome, ', ') FROM PEDIDO_COACHING_PARTICIPANTE pcp JOIN ALUNO a ON pcp.ALUNOid_aluno = a.id_aluno WHERE pcp.PEDIDO_COACHINGid_pedido_coaching = c.PEDIDO_COACHINGid_pedido_coaching) AS alunos
+     FROM COACHING c 
+     JOIN MODALIDADE m ON c.MODALIDADEid_modalidade = m.id_modalidade 
+     JOIN SALA s ON c.SALAid_sala = s.id_sala 
+     JOIN PEDIDO_COACHING pc ON c.PEDIDO_COACHINGid_pedido_coaching = pc.id_pedido_coaching 
+     JOIN UTILIZADOR ee ON pc.UTILIZADORid_utilizador = ee.id_utilizador 
+     WHERE c.UTILIZADORid_utilizador = @IdProfessor AND c.estado NOT IN ('Cancelado') 
+     ${filtroData} 
+     ORDER BY c.data_aula ASC, c.hora_inicio ASC;`,
+  );
+  return result.recordset;
+}
+
+/**
+ * @async
+ * @function criarPedidoCoaching
+ * @description Regista um novo pedido de coaching na base de dados (submetido pelo EE), incluindo os alunos participantes.
+ * @param {Object} dadosPedido - Os metadados do pedido a criar.
+ * @param {Array&lt;number>} alunosIds - Array com os IDs dos alunos a integrar no pedido.
+ * @param {Object} [opts={}] - Opções extra.
+ * @returns {Promise&lt;number>} O ID do novo pedido gerado.
+ * @throws {Error} Propaga erro em caso de falha transacional.
+ */
+async function criarPedidoCoaching(dadosPedido, alunosIds, opts = {}) {
+  const pool = await poolPromise;
+  const transaction = pool.transaction();
+  await transaction.begin();
+  try {
+    const idPedido = await transaction
+      .request()
+      .input("Formato", sql.VarChar(50), dadosPedido.formatoAula)
+      .input("Duracao", sql.Int, dadosPedido.duracaoMinutos)
+      .input("NumParticipantes", sql.Int, alunosIds.length)
+      .input("DataAula", sql.Date, dadosPedido.dataAula)
+      .input("HoraInicio", sql.VarChar(8), String(dadosPedido.horaInicio))
+      .input("CustoEstimado", sql.Decimal(10, 2), dadosPedido.custoEstimado)
+      .input("IdEncarregado", sql.Int, dadosPedido.idEncarregado)
+      .input("IdAnoLetivo", sql.Int, dadosPedido.idAnoLetivo)
+      .input("IdModalidade", sql.Int, dadosPedido.idModalidade)
+      .input("IdProfessor", sql.Int, dadosPedido.idProfessor || null)
+      .query(
+        `INSERT INTO PEDIDO_COACHING (formato_aula, duracao_minutos, numero_participantes, data_pedido, data_aula_pretendida, hora_inicio_pretendida, estado, custo_estimado, UTILIZADORid_utilizador, ANO_LETIVOid_ano_letivo, MODALIDADEid_modalidade, UTILIZADORid_utilizador2) OUTPUT INSERTED.id_pedido_coaching VALUES (@Formato, @Duracao, @NumParticipantes, GETDATE(), @DataAula, TRY_CONVERT(time, @HoraInicio), 'Pendente', @CustoEstimado, @IdEncarregado, @IdAnoLetivo, @IdModalidade, @IdProfessor);`,
+      )
+      .then((r) => r.recordset[0].id_pedido_coaching);
+
+    for (const idAluno of alunosIds) {
+      await transaction
+        .request()
+        .input("IdAluno", sql.Int, idAluno)
+        .input("IdPedido", sql.Int, idPedido)
+        .input("HoraInicio", sql.VarChar(8), String(dadosPedido.horaInicio))
+        .query(
+          `INSERT INTO PEDIDO_COACHING_PARTICIPANTE (ALUNOid_aluno, PEDIDO_COACHINGid_pedido_coaching, PEDIDO_COACHINGhora_inicio_pretendida) VALUES (@IdAluno, @IdPedido, TRY_CONVERT(time, @HoraInicio));`,
+        );
+    }
+    await transaction.commit();
+    return idPedido;
+  } catch (error) {
+    await transaction.rollback();
+    throw error;
+  }
+}
+
+/**
+ * @async
+ * @function getPedidosPorEncarregado
+ * @description Obtém o histórico de pedidos submetidos por um Encarregado de Educação específico.
+ * @param {number} idEncarregado - O ID do utilizador (EE).
+ * @returns {Promise&lt;Array&lt;Object>>} Lista de pedidos.
+ */
+async function getPedidosPorEncarregado(idEncarregado) {
+  const pool = await poolPromise;
+  const result = await pool
+    .request()
+    .input("IdEE", sql.Int, idEncarregado)
+    .query(
+      `SELECT pc.id_pedido_coaching, pc.formato_aula, pc.duracao_minutos, pc.data_aula_pretendida, pc.hora_inicio_pretendida, pc.estado, pc.custo_estimado, m.nome AS modalidade, prof.nome AS professor, cab.id_coaching, cab.estado AS estado_coaching, cab.data_aula AS data_aula_coaching, cab.hora_inicio AS hora_inicio_coaching, s.nome AS nome_sala, profAula.nome AS nome_professor_agendado FROM PEDIDO_COACHING pc JOIN MODALIDADE m ON pc.MODALIDADEid_modalidade = m.id_modalidade LEFT JOIN UTILIZADOR prof ON pc.UTILIZADORid_utilizador2 = prof.id_utilizador OUTER APPLY (SELECT TOP 1 c.id_coaching, c.estado, c.data_aula, c.hora_inicio, c.SALAid_sala, c.UTILIZADORid_utilizador FROM COACHING c WHERE c.PEDIDO_COACHINGid_pedido_coaching = pc.id_pedido_coaching AND c.estado &lt;> 'Cancelado' ORDER BY c.id_coaching DESC) AS cab LEFT JOIN SALA s ON cab.SALAid_sala = s.id_sala LEFT JOIN UTILIZADOR profAula ON cab.UTILIZADORid_utilizador = profAula.id_utilizador WHERE pc.UTILIZADORid_utilizador = @IdEE ORDER BY pc.data_pedido DESC, pc.id_pedido_coaching DESC;`,
+    );
+  return result.recordset;
+}
+
+/**
+ * @async
+ * @function cancelarPedidoPendenteEncarregado
+ * @description Cancela um pedido do EE apenas se o mesmo se encontrar no estado "Pendente".
+ * @param {number} idPedido - O ID do pedido.
+ * @param {number} idEncarregado - O ID do encarregado de educação (validação de propriedade).
+ * @returns {Promise&lt;string>} "cancelado" se houve alteração, "nao_pendente" caso contrário.
+ */
+async function cancelarPedidoPendenteEncarregado(idPedido, idEncarregado) {
+  const pool = await poolPromise;
+  const upd = await pool
+    .request()
+    .input("IdPedido", sql.Int, idPedido)
+    .input("IdEE", sql.Int, idEncarregado)
+    .query(
+      `UPDATE PEDIDO_COACHING SET estado = 'Cancelado' WHERE id_pedido_coaching = @IdPedido AND UTILIZADORid_utilizador = @IdEE AND estado = 'Pendente';`,
+    );
+  if (upd.rowsAffected[0] > 0) return "cancelado";
+  return "nao_pendente";
+}
+
+/**
+ * @async
+ * @function getPedidosAtribuidosAoProfessorNoPeriodo
+ * @description Lista os pedidos pendentes que solicitam diretamente um professor específico.
+ * @param {number} idProfessor - O ID do professor requerido.
+ * @param {Date|string} dataInicio - Data de início do período a analisar.
+ * @param {Date|string} dataFim - Data final do período.
+ * @returns {Promise&lt;Array&lt;Object>>} Lista de pedidos atribuídos ou direcionados.
+ */
+async function getPedidosAtribuidosAoProfessorNoPeriodo(
+  idProfessor,
+  dataInicio,
+  dataFim,
+) {
+  const pool = await poolPromise;
+  const result = await pool
+    .request()
+    .input("IdProf", sql.Int, idProfessor)
+    .input("DataInicio", sql.Date, dataInicio)
+    .input("DataFim", sql.Date, dataFim)
+    .query(
+      `SELECT pc.id_pedido_coaching, pc.data_aula_pretendida, pc.hora_inicio_pretendida, pc.formato_aula, pc.duracao_minutos, pc.estado, pc.custo_estimado, m.nome AS modalidade, ee.nome AS encarregado, ee.email AS email_encarregado FROM PEDIDO_COACHING pc JOIN UTILIZADOR ee ON pc.UTILIZADORid_utilizador = ee.id_utilizador JOIN MODALIDADE m ON pc.MODALIDADEid_modalidade = m.id_modalidade WHERE pc.UTILIZADORid_utilizador2 = @IdProf AND pc.estado = N'Pendente' AND pc.data_aula_pretendida BETWEEN @DataInicio AND @DataFim ORDER BY pc.data_aula_pretendida ASC, pc.hora_inicio_pretendida ASC;`,
+    );
+  return result.recordset;
+}
+
+/**
+ * @async
+ * @function getPedidosPendentes
+ * @description Devolve todos os pedidos pendentes do sistema (para vista de Coordenação).
+ * @returns {Promise&lt;Array&lt;Object>>} Array com a lista de todos os pedidos por validar.
+ */
+async function getPedidosPendentes() {
+  const pool = await poolPromise;
+  const result = await pool.request().query(
+    `SELECT 
+          pc.id_pedido_coaching, 
+          pc.MODALIDADEid_modalidade AS id_modalidade, 
+          pc.UTILIZADORid_utilizador2 AS id_professor_desejado, 
+          pc.data_aula_pretendida, 
+          pc.hora_inicio_pretendida, 
+          pc.formato_aula, 
+          pc.duracao_minutos, 
+          pc.estado, 
+          pc.custo_estimado, 
+          m.nome AS modalidade, 
+          ee.nome AS encarregado, 
+          ee.email AS email_requisitante, 
+          prof.nome AS professor,
+          (
+            SELECT STRING_AGG(a.nome, ', ') 
+            FROM PEDIDO_COACHING_PARTICIPANTE pcp 
+            JOIN ALUNO a ON pcp.ALUNOid_aluno = a.id_aluno 
+            WHERE pcp.PEDIDO_COACHINGid_pedido_coaching = pc.id_pedido_coaching
+          ) AS alunos
+      FROM PEDIDO_COACHING pc 
+      JOIN UTILIZADOR ee ON pc.UTILIZADORid_utilizador = ee.id_utilizador 
+      LEFT JOIN UTILIZADOR prof ON pc.UTILIZADORid_utilizador2 = prof.id_utilizador 
+      JOIN MODALIDADE m ON pc.MODALIDADEid_modalidade = m.id_modalidade 
+      WHERE pc.estado = 'Pendente' 
+      ORDER BY pc.data_aula_pretendida ASC;`,
+  );
+  return result.recordset;
+}
+
+/**
+ * @async
+ * @function aprovarEAgendarCoaching
+ * @description Verifica os conflitos e efetua o agendamento final, marcando o pedido original como 'Aprovado' e inserindo na tabela COACHING.
+ * @param {Object} dadosAgendamento - Estrutura com os dados do agendamento (ID pedido, sala, professor, formato, valores, etc.).
+ * @returns {Promise&lt;number>} O ID do novo registo na tabela COACHING.
+ * @throws {Error} Aborta e reverte transação se existirem conflitos de sala ou professor.
+ */
+async function aprovarEAgendarCoaching(dadosAgendamento) {
+  const pool = await poolPromise;
+  const transaction = pool.transaction();
+  await transaction.begin();
+  try {
+    const conflitoProf = await existeConflitoCoachingProfessor(transaction, {
+      idProfessor: dadosAgendamento.idProfessor,
+      dataAula: dadosAgendamento.dataAula,
+      horaInicio: dadosAgendamento.horaInicio,
+      duracaoMinutos: dadosAgendamento.duracaoMinutos,
+    });
+    if (conflitoProf) throw new Error("Conflito de horário no professor.");
+
+    const conflitoSala = await existeConflitoCoachingSala(transaction, {
+      idSala: dadosAgendamento.idSala,
+      dataAula: dadosAgendamento.dataAula,
+      horaInicio: dadosAgendamento.horaInicio,
+      duracaoMinutos: dadosAgendamento.duracaoMinutos,
+    });
+    if (conflitoSala) throw new Error("Conflito de sala.");
+
+    await transaction
+      .request()
+      .input("IdPedido", sql.Int, dadosAgendamento.idPedido)
+      .query(
+        `UPDATE PEDIDO_COACHING SET estado = 'Aprovado' WHERE id_pedido_coaching = @IdPedido;`,
+      );
+    const idCoachingFinal = await transaction
+      .request()
+      .input("Formato", sql.VarChar(50), dadosAgendamento.formatoAula)
+      .input("Duracao", sql.Int, dadosAgendamento.duracaoMinutos)
+      .input("NumParticipantes", sql.Int, dadosAgendamento.numeroParticipantes)
+      .input("DataAula", sql.Date, dadosAgendamento.dataAula)
+      .input("HoraInicio", sql.VarChar(8), dadosAgendamento.horaInicio)
+      .input("IdProfessor", sql.Int, dadosAgendamento.idProfessor)
+      .input("IdAnoLetivo", sql.Int, dadosAgendamento.idAnoLetivo)
+      .input("IdModalidade", sql.Int, dadosAgendamento.idModalidade)
+      .input("IdSala", sql.Int, dadosAgendamento.idSala)
+      .input("IdPedido", sql.Int, dadosAgendamento.idPedido)
+      .input("ValorFinal", sql.Decimal(10, 2), dadosAgendamento.valorFinal)
+      .query(
+        `INSERT INTO COACHING (formato_aula, duracao_minutos, numero_participantes, data_aula, hora_inicio, estado, UTILIZADORid_utilizador, ANO_LETIVOid_ano_letivo, MODALIDADEid_modalidade, SALAid_sala, PEDIDO_COACHINGid_pedido_coaching, valor_final) OUTPUT INSERTED.id_coaching VALUES (@Formato, @Duracao, @NumParticipantes, @DataAula, TRY_CONVERT(time, @HoraInicio), 'Agendado', @IdProfessor, @IdAnoLetivo, @IdModalidade, @IdSala, @IdPedido, @ValorFinal);`,
+      )
+      .then((r) => r.recordset[0].id_coaching);
+
+    await transaction.commit();
+    return idCoachingFinal;
+  } catch (error) {
+    await transaction.rollback();
+    throw error;
+  }
+}
+
+/**
+ * @async
+ * @function professorTemDisponibilidadeNoSlot
+ * @description Verifica de forma binária se um professor registou a sua disponibilidade para um slot num determinado dia da semana.
+ * @param {Object} params - Os parâmetros de verificação de slot.
+ * @returns {Promise&lt;boolean>} True se o professor informou estar livre nesse bloco.
+ */
+async function professorTemDisponibilidadeNoSlot({
+  idProfessor,
+  dataAula,
+  horaInicio,
+  duracaoMinutos,
+  diaSemanaCoaching,
+}) {
+  const pool = await poolPromise;
+  const r = await pool
+    .request()
+    .input("IdProfessor", sql.Int, idProfessor)
+    .input("DiaSemana", sql.Int, diaSemanaCoaching)
+    .input("HoraInicio", sql.VarChar(8), normalizarHoraSql(horaInicio))
+    .input("Duracao", sql.Int, Number(duracaoMinutos))
+    .query(
+      `SELECT TOP 1 1 AS ok FROM DISPONIBILIDADE_PROFESSOR WHERE UTILIZADORid_utilizador = @IdProfessor AND dia_semana = @DiaSemana AND hora_inicio &lt;= TRY_CONVERT(time, @HoraInicio) AND hora_fim >= CAST(DATEADD(MINUTE, @Duracao, CAST(TRY_CONVERT(time, @HoraInicio) AS datetime)) AS time);`,
+    );
+  return r.recordset.length > 0;
+}
+
+/**
+ * @async
+ * @function verificarSlotLivreProfessor
+ * @description Retorna um objeto a informar se o slot se encontra livre e qual o motivo (se houver conflito).
+ * @param {Object} params - Dados da aula requerida.
+ * @returns {Promise&lt;{livre: boolean, motivo: string|null}>} O estado e motivo do slot.
+ */
+async function verificarSlotLivreProfessor({
+  idProfessor,
+  dataAula,
+  horaInicio,
+  duracaoMinutos,
+  diaSemanaCoaching,
+}) {
+  const pool = await poolPromise;
+  const conflitoProf = await existeConflitoCoachingProfessor(pool, {
+    idProfessor,
+    dataAula,
+    horaInicio: normalizarHoraSql(horaInicio),
+    duracaoMinutos,
+  });
+  if (conflitoProf) return { livre: false, motivo: "Conflito." };
+  return { livre: true, motivo: null };
+}
+
+/**
+ * @async
+ * @function getPedidoCoachingPorId
+ * @description Obtém o registo de um pedido a partir da tabela PEDIDO_COACHING.
+ * @param {number} idPedido - O identificador do pedido pretendido.
+ * @returns {Promise&lt;Object|null>} Os dados do pedido ou null se inexistente.
+ */
+async function getPedidoCoachingPorId(idPedido) {
+  const pool = await poolPromise;
+  const result = await pool
+    .request()
+    .input("IdPedido", sql.Int, idPedido)
+    .query(
+      `SELECT * FROM PEDIDO_COACHING WHERE id_pedido_coaching = @IdPedido;`,
+    );
+  return result.recordset[0] || null;
+}
+
+/**
+ * @async
+ * @function rejeitarPedidoCoaching
+ * @description Rejeita formalmente o pedido se este se mantiver pendente.
+ * @param {number} idPedido - O identificador do pedido.
+ * @returns {Promise&lt;boolean>} True se um registo foi afetado e o pedido rejeitado.
+ */
+async function rejeitarPedidoCoaching(idPedido) {
+  const pool = await poolPromise;
+  const result = await pool
+    .request()
+    .input("IdPedido", sql.Int, idPedido)
+    .query(
+      `UPDATE PEDIDO_COACHING SET estado = 'Rejeitado' WHERE id_pedido_coaching = @IdPedido AND estado = 'Pendente';`,
+    );
+  return result.rowsAffected[0] > 0;
+}
+
+/**
+ * @async
+ * @function getCoachingCabecalhoCancelamento
+ * @description Resgata os dados críticos de um agendamento de coaching para o tentar cancelar (ex: para verificar regras de tempo-limite).
+ * @param {number} idCoaching - O ID do coaching a consultar.
+ * @returns {Promise&lt;Object|null>} As informações da tabela COACHING ou null.
+ */
+async function getCoachingCabecalhoCancelamento(idCoaching) {
+  const pool = await poolPromise;
+  const result = await pool
+    .request()
+    .input("IdCoaching", sql.Int, idCoaching)
+    .query(
+      `SELECT data_aula, hora_inicio, duracao_minutos, estado FROM COACHING WHERE id_coaching = @IdCoaching;`,
+    );
+  return result.recordset[0] || null;
+}
+
+/**
+ * @async
+ * @function cancelarCoaching
+ * @description Efetua o cancelamento simultâneo do coaching agendado e do pedido que lhe deu origem via transação atómica.
+ * @param {number} idCoaching - O ID do coaching a ser anulado.
+ * @returns {Promise&lt;boolean>} True mediante transação concluída sem erros.
+ * @throws {Error} Falha se não encontrar o coaching associado.
+ */
+async function cancelarCoaching(idCoaching) {
+  const pool = await poolPromise;
+  const transaction = pool.transaction();
+  await transaction.begin();
+  try {
+    const pedidoResult = await transaction
+      .request()
+      .input("IdCoaching", sql.Int, idCoaching)
+      .query(
+        `SELECT PEDIDO_COACHINGid_pedido_coaching AS id_pedido, estado FROM COACHING WHERE id_coaching = @IdCoaching;`,
+      );
+    if (pedidoResult.recordset.length === 0) throw new Error("Não encontrado.");
+    await transaction
+      .request()
+      .input("IdCoaching", sql.Int, idCoaching)
+      .query(
+        `UPDATE COACHING SET estado = 'Cancelado' WHERE id_coaching = @IdCoaching;`,
+      );
+    await transaction
+      .request()
+      .input("IdPedido", sql.Int, pedidoResult.recordset[0].id_pedido)
+      .query(
+        `UPDATE PEDIDO_COACHING SET estado = 'Cancelado' WHERE id_pedido_coaching = @IdPedido;`,
+      );
+    await transaction.commit();
+    return true;
+  } catch (error) {
+    await transaction.rollback();
+    throw error;
+  }
+}
+
+/**
+ * @async
+ * @function registarValidacaoAula
+ * @description Guarda a validação submetida (ex: por Professor ou EE) e propaga o estado final (Realizado / Não_Realizado) na própria aula.
+ * @param {number} idCoaching - O ID do coaching validado.
+ * @param {number} idUtilizador - O ID do validador.
+ * @param {string} tipoValidador - Qual a função do validador no sistema.
+ * @param {string} estadoValidacao - 'Confirmado' ou 'Nao_Realizado'.
+ * @param {string} [observacoes=null] - Apontamentos do ato de validação.
+ * @returns {Promise&lt;boolean>} True se finalizado com sucesso.
+ * @throws {Error} Aborta transação se houver falhas.
+ */
+async function registarValidacaoAula(
+  idCoaching,
+  idUtilizador,
+  tipoValidador,
+  estadoValidacao,
+  observacoes = null,
+) {
+  const pool = await poolPromise;
+  const transaction = pool.transaction();
+  await transaction.begin();
+
+  try {
+    await transaction
+      .request()
+      .input("TipoValidador", sql.VarChar(50), tipoValidador)
+      .input("EstadoValidacao", sql.VarChar(50), estadoValidacao)
+      .input("Observacoes", sql.VarChar(255), observacoes)
+      .input("IdUtilizador", sql.Int, idUtilizador)
+      .input("IdCoaching", sql.Int, idCoaching)
+      .query(
+        `INSERT INTO VALIDACAO_COACHING (tipo_validador, estado_validacao, data_validacao, observacoes, UTILIZADORid_utilizador, COACHINGid_coaching) VALUES (@TipoValidador, @EstadoValidacao, GETDATE(), @Observacoes, @IdUtilizador, @IdCoaching);`,
+      );
+
+    const novoEstado =
+      estadoValidacao === "Confirmado" ? "Realizado" : "Nao_Realizado";
+
+    await transaction
+      .request()
+      .input("NovoEstado", sql.VarChar(50), novoEstado)
+      .input("IdCoaching", sql.Int, idCoaching)
+      .query(
+        `UPDATE COACHING SET estado = @NovoEstado WHERE id_coaching = @IdCoaching;`,
+      );
+
+    await transaction.commit();
+    return true;
+  } catch (error) {
+    await transaction.rollback();
+    throw error;
+  }
+}
+
+/**
+ * @async
+ * @function concluirCoachingPelaCoordenacao
+ * @description A Coordenação fecha a aula definitivamente (mesmo sem o registo das outras partes) via trancamento do estado final.
+ * @param {number} idCoaching - O ID da aula.
+ * @param {number} idCoordenador - O ID do admin a atuar na validação de trancamento.
+ * @param {string} estadoFinal - O estado final cimentado ("Realizado" etc.).
+ * @param {string} [observacoes] - Opinião ou justificação do trancamento.
+ * @returns {Promise&lt;boolean>} True.
+ * @throws {Error} Reversão em caso de interrupção DB.
+ */
+async function concluirCoachingPelaCoordenacao(
+  idCoaching,
+  idCoordenador,
+  estadoFinal,
+  observacoes,
+) {
+  const pool = await poolPromise;
+  const transaction = pool.transaction();
+  await transaction.begin();
+  try {
+    await transaction
+      .request()
+      .input(
+        "Observacoes",
+        sql.VarChar(255),
+        observacoes || "Validado pela coordenação.",
+      )
+      .input("IdCoordenador", sql.Int, idCoordenador)
+      .input("IdCoaching", sql.Int, idCoaching)
+      .query(
+        `INSERT INTO VALIDACAO_COACHING (tipo_validador, estado_validacao, data_validacao, observacoes, UTILIZADORid_utilizador, COACHINGid_coaching) VALUES ('Coordenacao', 'Aprovacao_Final', GETDATE(), @Observacoes, @IdCoordenador, @IdCoaching);`,
+      );
+    await transaction
+      .request()
+      .input("EstadoFinal", sql.VarChar(50), estadoFinal)
+      .input("IdCoaching", sql.Int, idCoaching)
+      .query(
+        `UPDATE COACHING SET estado = @EstadoFinal WHERE id_coaching = @IdCoaching;`,
+      );
+    await transaction.commit();
+    return true;
+  } catch (error) {
+    await transaction.rollback();
+    throw error;
+  }
+}
+
+/**
+ * @async
+ * @function listarCoachingsAbertosParaCoordenacao
+ * @description Extrai os coachings que constam como 'Agendado' ou 'Confirmado', para processamento/fecho por parte da administração.
+ * @returns {Promise&lt;Array&lt;Object>>} Lista de registos suscetíveis a validação administrativa pendente.
+ */
+async function listarCoachingsAbertosParaCoordenacao() {
+  const pool = await poolPromise;
+  const result = await pool
+    .request()
+    .query(
+      `SELECT c.id_coaching, c.data_aula, c.hora_inicio, c.duracao_minutos, c.estado FROM COACHING c WHERE c.estado IN (N'Agendado', N'Confirmado') ORDER BY c.data_aula ASC, c.hora_inicio ASC;`,
+    );
+  return result.recordset;
+}
+
+/**
+ * @async
+ * @function coachingPertenceAEncarregado
+ * @description Verifica se um determinado coaching pertence à linhagem de um encarregado de educação (ligando ao PEDIDO_COACHING inicial).
+ * @param {number} idCoaching - O ID do agendamento.
+ * @param {number} idEncarregado - O ID do utilizador (EE).
+ * @returns {Promise&lt;boolean>} True se for o proprietário legítimo.
+ */
+async function coachingPertenceAEncarregado(idCoaching, idEncarregado) {
+  const pool = await poolPromise;
+  const result = await pool
+    .request()
+    .input("IdCoaching", sql.Int, idCoaching)
+    .input("IdEE", sql.Int, idEncarregado)
+    .query(
+      `SELECT 1 AS ok FROM COACHING c JOIN PEDIDO_COACHING pc ON c.PEDIDO_COACHINGid_pedido_coaching = pc.id_pedido_coaching WHERE c.id_coaching = @IdCoaching AND pc.UTILIZADORid_utilizador = @IdEE AND c.estado &lt;> 'Cancelado';`,
+    );
+  return result.recordset.length > 0;
+}
+
+/**
+ * @async
+ * @function coachingPertenceAProfessorAtivo
+ * @description Verifica se um dado professor está associado a este coaching (evitando manipulações indevidas de outros utilizadores).
+ * @param {number} idCoaching - O ID da aula registada.
+ * @param {number} idProfessor - O identificador do professor.
+ * @returns {Promise&lt;boolean>} True mediante validação correta.
+ */
+async function coachingPertenceAProfessorAtivo(idCoaching, idProfessor) {
+  const pool = await poolPromise;
+  const result = await pool
+    .request()
+    .input("IdCoaching", sql.Int, idCoaching)
+    .input("IdProf", sql.Int, idProfessor)
+    .query(
+      `SELECT 1 AS ok FROM COACHING WHERE id_coaching = @IdCoaching AND UTILIZADORid_utilizador = @IdProf AND estado NOT IN ('Cancelado');`,
+    );
+  return result.recordset.length > 0;
+}
+
+/**
+ * @async
+ * @function getHistoricoGeralCoachings
+ * @description Obtém a lista completa (histórico) de coachings agendados, com junção aos alunos, salas e modalidades, para vista administrativa.
+ * @returns {Promise&lt;Array&lt;Object>>} As instâncias de histórico registadas.
+ */
+async function getHistoricoGeralCoachings() {
+  const pool = await poolPromise;
+  const result = await pool.request().query(`
+    SELECT 
+      c.id_coaching, c.data_aula, c.hora_inicio, c.duracao_minutos, c.estado, c.valor_final,
+      m.nome AS modalidade, s.nome AS sala, prof.nome AS nome_professor, ee.nome AS encarregado,
+      (SELECT STRING_AGG(a.nome, ', ') FROM PEDIDO_COACHING_PARTICIPANTE pcp JOIN ALUNO a ON pcp.ALUNOid_aluno = a.id_aluno WHERE pcp.PEDIDO_COACHINGid_pedido_coaching = c.PEDIDO_COACHINGid_pedido_coaching) AS alunos
+    FROM COACHING c
+    JOIN MODALIDADE m ON c.MODALIDADEid_modalidade = m.id_modalidade
+    JOIN SALA s ON c.SALAid_sala = s.id_sala
+    JOIN UTILIZADOR prof ON c.UTILIZADORid_utilizador = prof.id_utilizador
+    JOIN PEDIDO_COACHING pc ON c.PEDIDO_COACHINGid_pedido_coaching = pc.id_pedido_coaching
+    JOIN UTILIZADOR ee ON pc.UTILIZADORid_utilizador = ee.id_utilizador
+    ORDER BY c.data_aula DESC, c.hora_inicio DESC;
+  `);
+  return result.recordset;
+}
+
+/**
+ * @module coachingModel
+ */
+module.exports = {
+  adicionarDisponibilidadeProfessor,
+  getDisponibilidadesProfessor,
+  removerDisponibilidadeProfessor,
+  getDisponibilidadeEfetiva,
+  getAgendaProfessor,
+  criarPedidoCoaching,
+  getPedidosPorEncarregado,
+  cancelarPedidoPendenteEncarregado,
+  getPedidosAtribuidosAoProfessorNoPeriodo,
+  getPedidosPendentes,
+  aprovarEAgendarCoaching,
+  professorTemDisponibilidadeNoSlot,
+  verificarSlotLivreProfessor,
+  getPedidoCoachingPorId,
+  rejeitarPedidoCoaching,
+  getCoachingCabecalhoCancelamento,
+  cancelarCoaching,
+  registarValidacaoAula,
+  concluirCoachingPelaCoordenacao,
+  listarCoachingsAbertosParaCoordenacao,
+  coachingPertenceAEncarregado,
+  coachingPertenceAProfessorAtivo,
+  getHistoricoGeralCoachings,
+};
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Modules</h3><ul><li><a href="module-auditoriaController.html">auditoriaController</a></li><li><a href="module-auditoriaModel.html">auditoriaModel</a></li><li><a href="module-auditoriaRoutes.html">auditoriaRoutes</a></li><li><a href="module-authController.html">authController</a></li><li><a href="module-authModel.html">authModel</a></li><li><a href="module-authRoutes.html">authRoutes</a></li><li><a href="module-coachingController.html">coachingController</a></li><li><a href="module-coachingModel.html">coachingModel</a></li><li><a href="module-coachingRoutes.html">coachingRoutes</a></li><li><a href="module-escolaController.html">escolaController</a></li><li><a href="module-escolaModel.html">escolaModel</a></li><li><a href="module-escolaRoutes.html">escolaRoutes</a></li><li><a href="module-faturacaoController.html">faturacaoController</a></li><li><a href="module-faturacaoModel.html">faturacaoModel</a></li><li><a href="module-faturacaoRoutes.html">faturacaoRoutes</a></li><li><a href="module-inventarioController.html">inventarioController</a></li><li><a href="module-inventarioModel.html">inventarioModel</a></li><li><a href="module-inventarioRoutes.html">inventarioRoutes</a></li><li><a href="module-precoCoachingModel.html">precoCoachingModel</a></li></ul><h3>Global</h3><ul><li><a href="global.html#adicionarDisponibilidade">adicionarDisponibilidade</a></li><li><a href="global.html#adicionarDisponibilidadeProfessor">adicionarDisponibilidadeProfessor</a></li><li><a href="global.html#adicionarLinhaFaturaMensal">adicionarLinhaFaturaMensal</a></li><li><a href="global.html#adminCriarUtilizador">adminCriarUtilizador</a></li><li><a href="global.html#agendarDiretoAdmin">agendarDiretoAdmin</a></li><li><a href="global.html#alterarEstado">alterarEstado</a></li><li><a href="global.html#alterarEstadoUtilizador">alterarEstadoUtilizador</a></li><li><a href="global.html#apagarPeca">apagarPeca</a></li><li><a href="global.html#apagarUtilizador">apagarUtilizador</a></li><li><a href="global.html#aprovarEAgendarCoaching">aprovarEAgendarCoaching</a></li><li><a href="global.html#aprovarPedido">aprovarPedido</a></li><li><a href="global.html#associarProfessorModalidade">associarProfessorModalidade</a></li><li><a href="global.html#ativarUtilizador">ativarUtilizador</a></li><li><a href="global.html#atualizarDadosCompletosPeca">atualizarDadosCompletosPeca</a></li><li><a href="global.html#atualizarDadosVenda">atualizarDadosVenda</a></li><li><a href="global.html#atualizarEstadoPeca">atualizarEstadoPeca</a></li><li><a href="global.html#atualizarFotosPeca">atualizarFotosPeca</a></li><li><a href="global.html#atualizarModalidades">atualizarModalidades</a></li><li><a href="global.html#atualizarModalidadesProfessor">atualizarModalidadesProfessor</a></li><li><a href="global.html#atualizarPagamentoEmprestimo">atualizarPagamentoEmprestimo</a></li><li><a href="global.html#atualizarPassword">atualizarPassword</a></li><li><a href="global.html#atualizarPreco">atualizarPreco</a></li><li><a href="global.html#atualizarRegraPreco">atualizarRegraPreco</a></li><li><a href="global.html#atualizarUtilizadorCompleto">atualizarUtilizadorCompleto</a></li><li><a href="global.html#calcularCustoAutomatico">calcularCustoAutomatico</a></li><li><a href="global.html#cancelarCoaching">cancelarCoaching</a></li><li><a href="global.html#cancelarFatura">cancelarFatura</a></li><li><a href="global.html#cancelarMeuPedidoPendente">cancelarMeuPedidoPendente</a></li><li><a href="global.html#cancelarPedidoPendenteEncarregado">cancelarPedidoPendenteEncarregado</a></li><li><a href="global.html#coachingPertenceAEncarregado">coachingPertenceAEncarregado</a></li><li><a href="global.html#coachingPertenceAProfessorAtivo">coachingPertenceAProfessorAtivo</a></li><li><a href="global.html#colocarPecaAVenda">colocarPecaAVenda</a></li><li><a href="global.html#colunasTabelaPrecoCache">colunasTabelaPrecoCache</a></li><li><a href="global.html#concluirCoaching">concluirCoaching</a></li><li><a href="global.html#concluirCoachingPelaCoordenacao">concluirCoachingPelaCoordenacao</a></li><li><a href="global.html#consultarPrecoAula">consultarPrecoAula</a></li><li><a href="global.html#criarAlunoParaEncarregado">criarAlunoParaEncarregado</a></li><li><a href="global.html#criarMeuAluno">criarMeuAluno</a></li><li><a href="global.html#criarPedidoCoaching">criarPedidoCoaching</a></li><li><a href="global.html#criarRequest">criarRequest</a></li><li><a href="global.html#criarUtilizador">criarUtilizador</a></li><li><a href="global.html#desativarUtilizador">desativarUtilizador</a></li><li><a href="global.html#diaSemanaCoachingFromDateValue">diaSemanaCoachingFromDateValue</a></li><li><a href="global.html#diaSemanaPrecoFromDateValue">diaSemanaPrecoFromDateValue</a></li><li><a href="global.html#duracaoSlotMinutos">duracaoSlotMinutos</a></li><li><a href="global.html#editarPeca">editarPeca</a></li><li><a href="global.html#editarUtilizador">editarUtilizador</a></li><li><a href="global.html#editarUtilizadorCompleto">editarUtilizadorCompleto</a></li><li><a href="global.html#eliminarPecaCompleta">eliminarPecaCompleta</a></li><li><a href="global.html#eliminarUtilizador">eliminarUtilizador</a></li><li><a href="global.html#existeConflitoCoachingProfessor">existeConflitoCoachingProfessor</a></li><li><a href="global.html#existeConflitoCoachingSala">existeConflitoCoachingSala</a></li><li><a href="global.html#existeConflitoHorarioProfessor">existeConflitoHorarioProfessor</a></li><li><a href="global.html#existeConflitoHorarioSala">existeConflitoHorarioSala</a></li><li><a href="global.html#getAgenda">getAgenda</a></li><li><a href="global.html#getAgendaProfessor">getAgendaProfessor</a></li><li><a href="global.html#getAlunosPorEncarregado">getAlunosPorEncarregado</a></li><li><a href="global.html#getAnosLetivos">getAnosLetivos</a></li><li><a href="global.html#getCatalogo">getCatalogo</a></li><li><a href="global.html#getCatalogoPecas">getCatalogoPecas</a></li><li><a href="global.html#getCoachingCabecalhoCancelamento">getCoachingCabecalhoCancelamento</a></li><li><a href="global.html#getCompatibilidade">getCompatibilidade</a></li><li><a href="global.html#getCompatibilidadeSalasModalidades">getCompatibilidadeSalasModalidades</a></li><li><a href="global.html#getDisponibilidadeEfetiva">getDisponibilidadeEfetiva</a></li><li><a href="global.html#getDisponibilidades">getDisponibilidades</a></li><li><a href="global.html#getDisponibilidadesProfessor">getDisponibilidadesProfessor</a></li><li><a href="global.html#getFaturaPorId">getFaturaPorId</a></li><li><a href="global.html#getFaturas">getFaturas</a></li><li><a href="global.html#getHistoricoGeralCoachings">getHistoricoGeralCoachings</a></li><li><a href="global.html#getHorarios">getHorarios</a></li><li><a href="global.html#getHorariosPorAnoLetivo">getHorariosPorAnoLetivo</a></li><li><a href="global.html#getLinhasDaFatura">getLinhasDaFatura</a></li><li><a href="global.html#getLinhasFatura">getLinhasFatura</a></li><li><a href="global.html#getMeusAlunos">getMeusAlunos</a></li><li><a href="global.html#getModalidades">getModalidades</a></li><li><a href="global.html#getModalidadesAtivas">getModalidadesAtivas</a></li><li><a href="global.html#getModalidadesPorProfessor">getModalidadesPorProfessor</a></li><li><a href="global.html#getPecaDetalhes">getPecaDetalhes</a></li><li><a href="global.html#getPecasAVenda">getPecasAVenda</a></li><li><a href="global.html#getPedidoCoaching">getPedidoCoaching</a></li><li><a href="global.html#getPedidoCoachingPorId">getPedidoCoachingPorId</a></li><li><a href="global.html#getPedidosAtribuidosAoProfessorNoPeriodo">getPedidosAtribuidosAoProfessorNoPeriodo</a></li><li><a href="global.html#getPedidosAtribuidosProfessor">getPedidosAtribuidosProfessor</a></li><li><a href="global.html#getPedidosPendentes">getPedidosPendentes</a></li><li><a href="global.html#getPedidosPorEncarregado">getPedidosPorEncarregado</a></li><li><a href="global.html#getPendentesConclusaoCoordenacao">getPendentesConclusaoCoordenacao</a></li><li><a href="global.html#getPerfisDoUtilizador">getPerfisDoUtilizador</a></li><li><a href="global.html#getPrecoEstimado">getPrecoEstimado</a></li><li><a href="global.html#getProfessoresAtivos">getProfessoresAtivos</a></li><li><a href="global.html#getProfessoresDisponiveisAprovacao">getProfessoresDisponiveisAprovacao</a></li><li><a href="global.html#getProfessoresPorModalidade">getProfessoresPorModalidade</a></li><li><a href="global.html#getResumo">getResumo</a></li><li><a href="global.html#getResumoFaturacao">getResumoFaturacao</a></li><li><a href="global.html#getSalas">getSalas</a></li><li><a href="global.html#getSalasPorModalidade">getSalasPorModalidade</a></li><li><a href="global.html#getSlotLivre">getSlotLivre</a></li><li><a href="global.html#getTabelaPrecos">getTabelaPrecos</a></li><li><a href="global.html#getUtilizadorByEmail">getUtilizadorByEmail</a></li><li><a href="global.html#getVagasDisponiveis">getVagasDisponiveis</a></li><li><a href="global.html#guardarTokenRecuperacao">guardarTokenRecuperacao</a></li><li><a href="global.html#instanteFimCoaching">instanteFimCoaching</a></li><li><a href="global.html#instanteHoraReferencia">instanteHoraReferencia</a></li><li><a href="global.html#instanteInicioCoaching">instanteInicioCoaching</a></li><li><a href="global.html#listar">listar</a></li><li><a href="global.html#listarAuditoria">listarAuditoria</a></li><li><a href="global.html#listarCoachingsAbertosParaCoordenacao">listarCoachingsAbertosParaCoordenacao</a></li><li><a href="global.html#listarHistorico">listarHistorico</a></li><li><a href="global.html#listarMeusPedidosCoaching">listarMeusPedidosCoaching</a></li><li><a href="global.html#listarPrecos">listarPrecos</a></li><li><a href="global.html#listarTodosUtilizadores">listarTodosUtilizadores</a></li><li><a href="global.html#listarUtilizadores">listarUtilizadores</a></li><li><a href="global.html#login">login</a></li><li><a href="global.html#logout">logout</a></li><li><a href="global.html#minutosDaHora">minutosDaHora</a></li><li><a href="global.html#normalizarHoraSql">normalizarHoraSql</a></li><li><a href="global.html#normalizarHoraSqlTime">normalizarHoraSqlTime</a></li><li><a href="global.html#obterColunasTabelaPreco">obterColunasTabelaPreco</a></li><li><a href="global.html#parseDateParts">parseDateParts</a></li><li><a href="global.html#professorTemDisponibilidadeNoSlot">professorTemDisponibilidadeNoSlot</a></li><li><a href="global.html#redefinirPassword">redefinirPassword</a></li><li><a href="global.html#registar">registar</a></li><li><a href="global.html#registarConclusaoVenda">registarConclusaoVenda</a></li><li><a href="global.html#registarDevolucao">registarDevolucao</a></li><li><a href="global.html#registarDevolucaoEmprestimo">registarDevolucaoEmprestimo</a></li><li><a href="global.html#registarFotosPeca">registarFotosPeca</a></li><li><a href="global.html#registarNovaPeca">registarNovaPeca</a></li><li><a href="global.html#registarPagamento">registarPagamento</a></li><li><a href="global.html#registarPagamentoEmprestimo">registarPagamentoEmprestimo</a></li><li><a href="global.html#registarPeca">registarPeca</a></li><li><a href="global.html#registarPenalizacao">registarPenalizacao</a></li><li><a href="global.html#registarValidacao">registarValidacao</a></li><li><a href="global.html#registarValidacaoAula">registarValidacaoAula</a></li><li><a href="global.html#register">register</a></li><li><a href="global.html#rejeitarPedido">rejeitarPedido</a></li><li><a href="global.html#rejeitarPedidoCoaching">rejeitarPedidoCoaching</a></li><li><a href="global.html#removerDisponibilidade">removerDisponibilidade</a></li><li><a href="global.html#removerDisponibilidadeProfessor">removerDisponibilidadeProfessor</a></li><li><a href="global.html#removerProfessorModalidade">removerProfessorModalidade</a></li><li><a href="global.html#requisitarEmprestimo">requisitarEmprestimo</a></li><li><a href="global.html#solicitarRecuperacaoPassword">solicitarRecuperacaoPassword</a></li><li><a href="global.html#validarDuracaoAula">validarDuracaoAula</a></li><li><a href="global.html#validarFormatoAula">validarFormatoAula</a></li><li><a href="global.html#validarTokenRecuperacao">validarTokenRecuperacao</a></li><li><a href="global.html#verificarSlotLivreProfessor">verificarSlotLivreProfessor</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.5</a> on Thu May 14 2026 21:20:14 GMT+0100 (Hora de verão da Europa Ocidental)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

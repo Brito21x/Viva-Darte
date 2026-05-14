@@ -1,6 +1,6 @@
 /**
  * @fileoverview Modelo de Autenticação e Gestão de Utilizadores
- * Este ficheiro centraliza todas as interações com a base de dados SQL Server
+ * @description Este ficheiro centraliza todas as interações com a base de dados SQL Server
  * referentes a utilizadores, perfis e tokens de segurança.
  */
 
@@ -12,16 +12,19 @@ const sql = require("mssql"); // Biblioteca de driver do SQL Server
 // ============================================================================
 
 /**
- * Procura e devolve as credenciais de um utilizador através do seu email.
+ * @async
+ * @function getUtilizadorByEmail
+ * @description Procura e devolve as credenciais de um utilizador através do seu email.
+ * Uso de parâmetros (Input) previne ataques de SQL Injection.
  * @param {string} email - O email do utilizador a pesquisar.
- * @returns {Object|null} Os dados do utilizador ou null se não for encontrado.
+ * @returns {Promise<Object|null>} Os dados do utilizador ou null se não for encontrado.
+ * @throws {Error} Propaga eventuais erros de base de dados.
  */
 async function getUtilizadorByEmail(email) {
   try {
     const pool = await poolPromise;
     const query = `SELECT id_utilizador, nome, email, password, telefone, ativo FROM UTILIZADOR WHERE email = @Email;`;
 
-    // Uso de parâmetros (Input) previne ataques de SQL Injection
     const result = await pool
       .request()
       .input("Email", sql.VarChar(255), email)
@@ -33,9 +36,12 @@ async function getUtilizadorByEmail(email) {
 }
 
 /**
- * Obtém a lista de nomes dos perfis associados a um determinado utilizador.
+ * @async
+ * @function getPerfisDoUtilizador
+ * @description Obtém a lista de nomes dos perfis associados a um determinado utilizador.
  * @param {number} idUtilizador - O ID do utilizador na base de dados.
- * @returns {Array<string>} Um array com os nomes dos perfis
+ * @returns {Promise<Array<string>>} Um array com os nomes dos perfis.
+ * @throws {Error} Propaga eventuais erros de base de dados.
  */
 async function getPerfisDoUtilizador(idUtilizador) {
   try {
@@ -49,7 +55,7 @@ async function getPerfisDoUtilizador(idUtilizador) {
       .request()
       .input("IdUtilizador", sql.Int, idUtilizador)
       .query(query);
-    return result.recordset.map((row) => row.perfil); // Mapeia os objetos da BD para um array simples de strings
+    return result.recordset.map((row) => row.perfil);
   } catch (error) {
     throw error;
   }
@@ -60,8 +66,12 @@ async function getPerfisDoUtilizador(idUtilizador) {
 // ============================================================================
 
 /**
- * Lista todos os utilizadores do sistema, agregando os seus perfis numa única string.
- * Útil para popular tabelas no painel de administração (Coordenação).
+ * @async
+ * @function listarTodosUtilizadores
+ * @description Lista todos os utilizadores do sistema, agregando os seus perfis e modalidades numa única string.
+ * Útil para preencher tabelas no painel de administração (Coordenação).
+ * @returns {Promise<Array<Object>>} Um array com a informação tabular de todos os utilizadores.
+ * @throws {Error} Propaga eventuais erros de base de dados.
  */
 async function listarTodosUtilizadores() {
   try {
@@ -106,9 +116,22 @@ async function listarTodosUtilizadores() {
 }
 
 /**
- * Regista um novo utilizador e atribui-lhe o respetivo perfil.
+ * @async
+ * @function criarUtilizador
+ * @description Regista um novo utilizador e atribui-lhe o respetivo perfil.
  * Utiliza uma transação SQL para garantir que ambos os registos (utilizador e perfil)
  * só são guardados se não ocorrerem erros.
+ * @param {Object} dados - O objeto com os dados de registo do utilizador.
+ * @param {string} dados.nome - O nome completo do utilizador.
+ * @param {string} dados.email - O e-mail do utilizador (único no sistema).
+ * @param {string} dados.passwordHash - A palavra-passe já cifrada (hashed).
+ * @param {string} [dados.telefone] - O contacto telefónico do utilizador.
+ * @param {string} dados.nomePerfil - O perfil pretendido (Professor, Admin, Encarregado).
+ * @param {number|boolean} [dados.ativo=0] - Estado de aprovação inicial da conta.
+ * @param {string} [dados.nomeAluno] - O nome do educando associado (apenas aplicável se for EE).
+ * @param {string} [dados.dataNascimentoAluno] - A data de nascimento do educando.
+ * @returns {Promise<Object>} Devolve o objeto com os dados do novo utilizador criado.
+ * @throws {Error} Lança erro caso o e-mail já exista, se o perfil não for encontrado, ou por falha na BD.
  */
 async function criarUtilizador({
   nome,
@@ -157,7 +180,6 @@ async function criarUtilizador({
 
     if (!idPerfil) throw new Error("Perfil não encontrado.");
 
-    // Inserção do Utilizador
     const insertUserQuery = `
             INSERT INTO UTILIZADOR (nome, email, password, telefone, ativo, data_criacao)
             OUTPUT INSERTED.id_utilizador
@@ -174,7 +196,6 @@ async function criarUtilizador({
 
     const novoUtilizador = novoUserResult.recordset[0];
 
-    // Ligação Perfil
     await transaction
       .request()
       .input("IdUser", sql.Int, novoUtilizador.id_utilizador)
@@ -183,7 +204,6 @@ async function criarUtilizador({
         `INSERT INTO UTILIZADOR_PERFIL (UTILIZADORid_utilizador, PERFILid_perfil) VALUES (@IdUser, @IdPerfil);`,
       );
 
-    // Inserção do Aluno (Inativo se o EE for inativo)
     if (nomePerfil !== "Professor" && nomePerfil !== "Admin" && nomeAluno) {
       const insertAlunoQuery = `
                 INSERT INTO ALUNO (nome, data_nascimento, ativo, data_criacao)
@@ -217,7 +237,22 @@ async function criarUtilizador({
 }
 
 /**
- * Atualiza todos os dados submetidos pelo Administrador para um utilizador específico.
+ * @async
+ * @function atualizarUtilizadorCompleto
+ * @description Atualiza todos os dados submetidos pelo Administrador para um utilizador específico.
+ * Lida com mudança de perfil e atualização ou criação de registos de aluno associado.
+ * @param {number} id - O ID numérico do utilizador.
+ * @param {Object} dados - Os campos a atualizar.
+ * @param {string} dados.nome - O novo nome do utilizador.
+ * @param {string} dados.email - O novo e-mail do utilizador.
+ * @param {string} [dados.telefone] - O novo telefone do utilizador.
+ * @param {string} [dados.passwordHash] - A nova palavra-passe cifrada (se alterada).
+ * @param {string} [dados.nomePerfil] - O novo nome do perfil (se alterado).
+ * @param {Array<number>} [dados.idsModalidades] - Modalidades a atualizar (atualmente tratado noutra função ou injetado conforme contexto).
+ * @param {string} [dados.nomeAluno] - O novo nome do educando.
+ * @param {string} [dados.dataNascimentoAluno] - A nova data de nascimento do educando.
+ * @returns {Promise<boolean>} Devolve true caso a atualização da transação decorra com sucesso.
+ * @throws {Error} Reverte e propaga a exceção em caso de falha de base de dados.
  */
 async function atualizarUtilizadorCompleto(
   id,
@@ -250,10 +285,8 @@ async function atualizarUtilizadorCompleto(
 
     if (passwordHash) req.input("Password", sql.VarChar(255), passwordHash);
 
-    // Executa atualização principal de dados
     await req.query(queryUpdate);
 
-    // Se houver alteração de perfil, remove a antiga e insere a nova ligação
     if (nomePerfil) {
       let idPerfil = null;
       if (nomePerfil === "Professor") {
@@ -295,13 +328,11 @@ async function atualizarUtilizadorCompleto(
     }
 
     if (nomeAluno) {
-      // Tratar a data corretamente para evitar que strings vazias causem erro no SQL
       const dataNascTratada =
         dataNascimentoAluno && dataNascimentoAluno.trim() !== ""
           ? dataNascimentoAluno
           : null;
 
-      // 1. Verifica se este EE já tem algum aluno associado
       const checkAluno = await transaction
         .request()
         .input("IdUtilizador", sql.Int, id)
@@ -310,7 +341,6 @@ async function atualizarUtilizadorCompleto(
         );
 
       if (checkAluno.recordset.length > 0) {
-        // Já tem aluno associado -> Atualiza o registo existente
         await transaction
           .request()
           .input("IdUtilizador", sql.Int, id)
@@ -323,7 +353,6 @@ async function atualizarUtilizadorCompleto(
             )
           `);
       } else {
-        // Não tem aluno -> Cria um novo aluno na tabela ALUNO
         const insertResult = await transaction
           .request()
           .input("NomeAluno", sql.VarChar(255), nomeAluno)
@@ -335,7 +364,6 @@ async function atualizarUtilizadorCompleto(
 
         const novoAlunoId = insertResult.recordset[0].id_aluno;
 
-        // Cria o vínculo entre o EE e este novo aluno
         await transaction
           .request()
           .input("IdUtilizador", sql.Int, id)
@@ -354,6 +382,15 @@ async function atualizarUtilizadorCompleto(
   }
 }
 
+/**
+ * @async
+ * @function atualizarModalidadesProfessor
+ * @description Apaga e recria os vínculos de modalidades associadas a um professor através de transação.
+ * @param {number} idUtilizador - O ID do professor.
+ * @param {Array<number>} idsModalidades - Array com os IDs das novas modalidades que leciona.
+ * @returns {Promise<boolean>} Devolve true mediante o sucesso da atualização.
+ * @throws {Error} Reverte transação e propaga caso haja problemas.
+ */
 async function atualizarModalidadesProfessor(idUtilizador, idsModalidades) {
   const pool = await poolPromise;
   const transaction = pool.transaction();
@@ -386,7 +423,14 @@ async function atualizarModalidadesProfessor(idUtilizador, idsModalidades) {
 }
 
 /**
- * Altera a flag booleana de estado (ativo/inativo) de um utilizador.
+ * @async
+ * @function alterarEstadoUtilizador
+ * @description Altera a flag booleana de estado (ativo/inativo) de um utilizador.
+ * Garante em cascata a ativação/inativação dos respetivos alunos caso se trate de um Encarregado de Educação.
+ * @param {number} idUtilizador - O ID do utilizador alvo.
+ * @param {boolean} estadoAtivo - O novo estado desejado (true para ativo, false para inativo).
+ * @returns {Promise<boolean>} Devolve true assim que a transação for bem-sucedida.
+ * @throws {Error} Reverte a operação se der erro.
  */
 async function alterarEstadoUtilizador(idUtilizador, estadoAtivo) {
   const pool = await poolPromise;
@@ -426,7 +470,13 @@ async function alterarEstadoUtilizador(idUtilizador, estadoAtivo) {
 }
 
 /**
- * Executa uma eliminação completa e segura de um utilizador da base de dados.
+ * @async
+ * @function apagarUtilizador
+ * @description Executa uma eliminação completa e segura de um utilizador da base de dados, limpando
+ * dependências como tokens, vínculos de perfis e alunos associados de forma atómica.
+ * @param {number} idUtilizador - O ID do utilizador a apagar.
+ * @returns {Promise<boolean>} Devolve true se linhas foram afetadas e false caso contrário.
+ * @throws {Error} Propaga e reverte qualquer erro de DB.
  */
 async function apagarUtilizador(idUtilizador) {
   const pool = await poolPromise;
@@ -486,6 +536,15 @@ async function apagarUtilizador(idUtilizador) {
 // 3. RECUPERAÇÃO DE PALAVRA-PASSE
 // ============================================================================
 
+/**
+ * @async
+ * @function guardarTokenRecuperacao
+ * @description Regista na base de dados um novo token temporário seguro para a recuperação da password.
+ * @param {number} idUtilizador - O ID numérico do utilizador requerente.
+ * @param {string} token - A hash ou string alfanumérica gerada.
+ * @returns {Promise<boolean>} Devolve true após inserir com sucesso.
+ * @throws {Error} Erro da base de dados.
+ */
 async function guardarTokenRecuperacao(idUtilizador, token) {
   try {
     const pool = await poolPromise;
@@ -502,6 +561,14 @@ async function guardarTokenRecuperacao(idUtilizador, token) {
   }
 }
 
+/**
+ * @async
+ * @function validarTokenRecuperacao
+ * @description Verifica se um token providenciado existe, se não foi já usado e se ainda não expirou temporalmente.
+ * @param {string} token - A chave do token a conferir.
+ * @returns {Promise<Object|null>} Retorna os detalhes do registo do token ou null se inválido.
+ * @throws {Error} Erro da base de dados.
+ */
 async function validarTokenRecuperacao(token) {
   try {
     const pool = await poolPromise;
@@ -522,6 +589,16 @@ async function validarTokenRecuperacao(token) {
   }
 }
 
+/**
+ * @async
+ * @function atualizarPassword
+ * @description Atualiza de facto a password na tabela UTILIZADOR e marca o respetivo token como usado (para evitar reutilização).
+ * @param {number} idUtilizador - O ID do utilizador dono da conta.
+ * @param {string} novaPasswordHash - A nova password criptografada.
+ * @param {number} idToken - O identificador do registo do token utilizado.
+ * @returns {Promise<boolean>} Devolve true se finalizado corretamente.
+ * @throws {Error} Aciona rollback em caso de anomalia.
+ */
 async function atualizarPassword(idUtilizador, novaPasswordHash, idToken) {
   const pool = await poolPromise;
   const transaction = pool.transaction();
@@ -555,7 +632,12 @@ async function atualizarPassword(idUtilizador, novaPasswordHash, idToken) {
 // ============================================================================
 
 /**
- * Vai buscar à base de dados todos os alunos ativos que estão associados à conta de um Encarregado de Educação.
+ * @async
+ * @function getAlunosPorEncarregado
+ * @description Vai buscar à base de dados todos os alunos ativos que estão associados à conta de um Encarregado de Educação.
+ * @param {number} idEncarregado - O ID do encarregado de educação (utilizador).
+ * @returns {Promise<Array<Object>>} O conjunto dos educandos registados.
+ * @throws {Error} Falha de base de dados.
  */
 async function getAlunosPorEncarregado(idEncarregado) {
   try {
@@ -579,8 +661,16 @@ async function getAlunosPorEncarregado(idEncarregado) {
 }
 
 /**
- * Cria um novo aluno na tabela ALUNO e associa-o imediatamente à conta do Encarregado de Educação.
+ * @async
+ * @function criarAlunoParaEncarregado
+ * @description Cria um novo aluno na tabela ALUNO e associa-o imediatamente à conta do Encarregado de Educação.
  * Usa transação atómica para garantir que nada fica órfão em caso de erro.
+ * @param {number} idEncarregado - O ID numérico do Encarregado de Educação.
+ * @param {Object} aluno - Objeto com os dados do aluno.
+ * @param {string} aluno.nome - O nome completo do aluno.
+ * @param {string} [aluno.dataNascimento] - A data de nascimento do educando.
+ * @returns {Promise<Object>} Um objeto contendo os detalhes gerados para o novo aluno.
+ * @throws {Error} Propaga e reverte se houver falha de escrita.
  */
 async function criarAlunoParaEncarregado(
   idEncarregado,
@@ -591,13 +681,11 @@ async function criarAlunoParaEncarregado(
   await transaction.begin();
 
   try {
-    // Trata a string da data para prevenir erros de parsing do SQL Server se vier vazia
     const dataNascStr =
       dataNascimento && dataNascimento.trim() !== ""
         ? dataNascimento.trim()
         : null;
 
-    // 1. Inserir na Tabela ALUNO
     const resultAluno = await transaction
       .request()
       .input("Nome", sql.VarChar(255), nome)
@@ -609,7 +697,6 @@ async function criarAlunoParaEncarregado(
 
     const novoAluno = resultAluno.recordset[0];
 
-    // 2. Inserir na Tabela de Vínculo ENCARREGADO_ALUNO
     await transaction
       .request()
       .input("IdEE", sql.Int, idEncarregado)
@@ -626,7 +713,9 @@ async function criarAlunoParaEncarregado(
   }
 }
 
-// Exportação dos métodos da camada Model
+/**
+ * @module authModel
+ */
 module.exports = {
   getUtilizadorByEmail,
   getPerfisDoUtilizador,

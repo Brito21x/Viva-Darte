@@ -1,6 +1,6 @@
 /**
  * @fileoverview Rotas do Módulo de Coaching.
- * Este ficheiro mapeia os endpoints da API referentes à gestão de aulas de coaching
+ * @description Este ficheiro mapeia os endpoints da API referentes à gestão de aulas de coaching
  * (marcações extra-curriculares). Centraliza a proteção de rotas através da injeção
  * de middlewares de autenticação e de autorização baseada em perfis (RBAC - Role-Based Access Control).
  */
@@ -23,8 +23,9 @@ router.use(autenticar);
 // ============================================================================
 
 /**
- * [PROTEGIDO: Professor] Obtém a lista de horários de disponibilidade do professor autenticado.
- * GET /api/coaching/disponibilidades
+ * @route GET /api/coaching/disponibilidades
+ * @description Obtém a lista de horários de disponibilidade do professor autenticado.
+ * @access Protegido (Professor)
  */
 router.get(
   "/disponibilidades",
@@ -33,8 +34,9 @@ router.get(
 );
 
 /**
- * [PROTEGIDO: Professor] Regista um novo bloco de disponibilidade na agenda do professor.
- * POST /api/coaching/disponibilidades
+ * @route POST /api/coaching/disponibilidades
+ * @description Regista um novo bloco de disponibilidade na agenda do professor.
+ * @access Protegido (Professor)
  */
 router.post(
   "/disponibilidades",
@@ -43,8 +45,9 @@ router.post(
 );
 
 /**
- * [PROTEGIDO: Professor] Remove um bloco de disponibilidade previamente configurado.
- * DELETE /api/coaching/disponibilidades/:id
+ * @route DELETE /api/coaching/disponibilidades/:id
+ * @description Remove um bloco de disponibilidade previamente configurado.
+ * @access Protegido (Professor)
  */
 router.delete(
   "/disponibilidades/:id",
@@ -57,16 +60,16 @@ router.delete(
 // ============================================================================
 
 /**
- * [PROTEGIDO: EE] Consulta as janelas de horário que ainda se encontram livres para pedir aulas.
- * Query Params obrigatórios: idModalidade, diaSemana, data
- * GET /api/coaching/vagas
+ * @route GET /api/coaching/vagas
+ * @description Consulta as janelas de horário que ainda se encontram livres para pedir aulas.
+ * @access Protegido (Encarregado de Educação)
  */
 router.get("/vagas", autorizar("EE"), coachingController.getVagasDisponiveis);
 
 /**
- * [PROTEGIDO: Admin] Retorna a lista de professores que efetivamente têm disponibilidade
- * para aprovar um pedido específico que foi feito por um Encarregado de Educação.
- * GET /api/coaching/professores-disponiveis
+ * @route GET /api/coaching/professores-disponiveis
+ * @description Retorna a lista de professores que efetivamente têm disponibilidade para aprovar um pedido específico.
+ * @access Protegido (Admin)
  */
 router.get(
   "/professores-disponiveis",
@@ -75,9 +78,9 @@ router.get(
 );
 
 /**
- * [PROTEGIDO: Professor] Verifica ativamente se existe algum conflito de horário/sala
- * num determinado slot antes de permitir uma ação.
- * GET /api/coaching/slot-livre
+ * @route GET /api/coaching/slot-livre
+ * @description Verifica ativamente se existe algum conflito de horário/sala num determinado slot antes de permitir uma ação.
+ * @access Protegido (Professor)
  */
 router.get(
   "/slot-livre",
@@ -90,16 +93,16 @@ router.get(
 // ============================================================================
 
 /**
- * [PROTEGIDO: Professor] Obtém a agenda formatada do professor com as aulas já agendadas.
- * Query Params opcionais: dataInicio, dataFim
- * GET /api/coaching/agenda
+ * @route GET /api/coaching/agenda
+ * @description Obtém a agenda formatada do professor com as aulas já agendadas. (Query Params opcionais: dataInicio, dataFim).
+ * @access Protegido (Professor)
  */
 router.get("/agenda", autorizar("Professor"), coachingController.getAgenda);
 
 /**
- * [PROTEGIDO: EE] Devolve o custo financeiro estimado para um pedido de coaching,
- * consultando dinamicamente as tabelas de preços do sistema.
- * GET /api/coaching/preco-estimado
+ * @route GET /api/coaching/preco-estimado
+ * @description Devolve o custo financeiro estimado para um pedido de coaching, consultando dinamicamente as tabelas de preços do sistema.
+ * @access Protegido (Encarregado de Educação)
  */
 router.get(
   "/preco-estimado",
@@ -112,8 +115,9 @@ router.get(
 // ============================================================================
 
 /**
- * [PROTEGIDO: EE] Submete um novo pedido de coaching para a coordenação aprovar.
- * POST /api/coaching/pedidos
+ * @route POST /api/coaching/pedidos
+ * @description Submete um novo pedido de coaching para a coordenação aprovar.
+ * @access Protegido (Encarregado de Educação)
  */
 router.post(
   "/pedidos",
@@ -122,8 +126,9 @@ router.post(
 );
 
 /**
- * [PROTEGIDO: Admin] Lista global de pedidos de coaching pendentes de aprovação na escola.
- * GET /api/coaching/pedidos/pendentes
+ * @route GET /api/coaching/pedidos/pendentes
+ * @description Lista global de pedidos de coaching pendentes de aprovação na escola.
+ * @access Protegido (Admin)
  */
 router.get(
   "/pedidos/pendentes",
@@ -131,6 +136,11 @@ router.get(
   coachingController.getPedidosPendentes,
 );
 
+/**
+ * @route GET /api/coaching/pedidos/meus
+ * @description Lista o histórico de pedidos submetidos pelo encarregado de educação.
+ * @access Protegido (Encarregado de Educação)
+ */
 router.get(
   "/pedidos/meus",
   autorizar("EE"),
@@ -138,9 +148,9 @@ router.get(
 );
 
 /**
- * [PROTEGIDO: Professor] Lista de pedidos pendentes em que o professor autenticado
- * foi especificamente solicitado pelo Encarregado de Educação.
- * GET /api/coaching/pedidos/atribuidos-professor
+ * @route GET /api/coaching/pedidos/atribuidos-professor
+ * @description Lista de pedidos pendentes em que o professor autenticado foi especificamente solicitado.
+ * @access Protegido (Professor)
  */
 router.get(
   "/pedidos/atribuidos-professor",
@@ -149,9 +159,9 @@ router.get(
 );
 
 /**
- * [PROTEGIDO: EE] Cancela um pedido de coaching que o próprio submeteu,
- * desde que ainda esteja no estado 'Pendente'.
- * DELETE /api/coaching/pedidos/:id/pendente
+ * @route DELETE /api/coaching/pedidos/:id/pendente
+ * @description Cancela um pedido de coaching submetido, desde que ainda esteja no estado 'Pendente'.
+ * @access Protegido (Encarregado de Educação)
  */
 router.delete(
   "/pedidos/:id/pendente",
@@ -160,8 +170,9 @@ router.delete(
 );
 
 /**
- * [PROTEGIDO: Admin ou EE Dono do Pedido] Consulta os detalhes completos de um pedido específico.
- * GET /api/coaching/pedidos/:id
+ * @route GET /api/coaching/pedidos/:id
+ * @description Consulta os detalhes completos de um pedido específico.
+ * @access Protegido (Admin, Encarregado de Educação)
  */
 router.get(
   "/pedidos/:id",
@@ -170,8 +181,9 @@ router.get(
 );
 
 /**
- * [PROTEGIDO: Admin] A Coordenação aprova o pedido, designa a sala, o professor e finaliza o agendamento da aula.
- * POST /api/coaching/pedidos/:id/aprovar
+ * @route POST /api/coaching/pedidos/:id/aprovar
+ * @description A Coordenação aprova o pedido, designa a sala, o professor e finaliza o agendamento da aula.
+ * @access Protegido (Admin)
  */
 router.post(
   "/pedidos/:id/aprovar",
@@ -180,8 +192,9 @@ router.post(
 );
 
 /**
- * [PROTEGIDO: Admin] A Coordenação rejeita o pedido, exigindo o envio obrigatório de uma justificação.
- * POST /api/coaching/pedidos/:id/rejeitar
+ * @route POST /api/coaching/pedidos/:id/rejeitar
+ * @description A Coordenação rejeita o pedido, exigindo o envio obrigatório de uma justificação.
+ * @access Protegido (Admin)
  */
 router.post(
   "/pedidos/:id/rejeitar",
@@ -194,9 +207,9 @@ router.post(
 // ============================================================================
 
 /**
- * [PROTEGIDO: Admin] Lista de coachings agendados cuja data e hora já passaram.
- * Usado pela Coordenação para monitorizar o que falta validar e faturar.
- * GET /api/coaching/pendentes-conclusao
+ * @route GET /api/coaching/pendentes-conclusao
+ * @description Lista de coachings agendados cuja data e hora já passaram (monitorização).
+ * @access Protegido (Admin)
  */
 router.get(
   "/pendentes-conclusao",
@@ -205,9 +218,9 @@ router.get(
 );
 
 /**
- * [PROTEGIDO: EE ou Admin] Cancela um coaching que já se encontrava agendado/confirmado.
- * Liberta a sala e a agenda do professor.
- * DELETE /api/coaching/:id
+ * @route DELETE /api/coaching/:id
+ * @description Cancela um coaching que já se encontrava agendado/confirmado, libertando a sala e agenda.
+ * @access Protegido (Admin, Encarregado de Educação)
  */
 router.delete(
   "/:id",
@@ -216,9 +229,9 @@ router.delete(
 );
 
 /**
- * [PROTEGIDO: Professor ou EE] Confirma formalmente no sistema se a aula aconteceu
- * ou não após o horário estipulado.
- * POST /api/coaching/:id/validar
+ * @route POST /api/coaching/:id/validar
+ * @description Confirma formalmente no sistema se a aula aconteceu ou não após o horário estipulado.
+ * @access Protegido (Professor, Encarregado de Educação)
  */
 router.post(
   "/:id/validar",
@@ -227,9 +240,9 @@ router.post(
 );
 
 /**
- * [PROTEGIDO: Admin] Passo final de reconciliação: a Coordenação dá o fecho do processo
- * (define como faturável ou não realizado).
- * POST /api/coaching/:id/concluir
+ * @route POST /api/coaching/:id/concluir
+ * @description Passo final de reconciliação: a Coordenação dá o fecho do processo definindo se foi faturável ou não.
+ * @access Protegido (Admin)
  */
 router.post(
   "/:id/concluir",
@@ -237,16 +250,29 @@ router.post(
   coachingController.concluirCoaching,
 );
 
+/**
+ * @route GET /api/coaching/historico
+ * @description Obtém o histórico geral e listagem completa dos coachings finalizados para registo.
+ * @access Protegido (Admin)
+ */
 router.get(
   "/historico",
   autorizar("Admin"),
   coachingController.listarHistorico,
-); //
+);
 
+/**
+ * @route POST /api/coaching/agendar-admin
+ * @description Permite à coordenação forçar um agendamento direto na agenda sem pedido prévio pelo EE.
+ * @access Protegido (Admin)
+ */
 router.post(
   "/agendar-admin",
   autorizar("Admin"),
   coachingController.agendarDiretoAdmin,
 );
 
+/**
+ * @module coachingRoutes
+ */
 module.exports = router;

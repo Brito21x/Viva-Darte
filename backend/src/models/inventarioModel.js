@@ -1,6 +1,6 @@
 /**
  * @fileoverview Modelo de Dados do Inventário
- * Este ficheiro centraliza a comunicação com a base de dados SQL Server para gerir
+ * @description Este ficheiro centraliza a comunicação com a base de dados SQL Server para gerir
  * peças, fotografias, empréstimos, multas e transações do mercado de segunda mão.
  */
 
@@ -12,9 +12,13 @@ const sql = require("mssql");
 // ============================================================================
 
 /**
- * Obtém a lista completa do catálogo de peças.
+ * @async
+ * @function getCatalogoPecas
+ * @description Obtém a lista completa do catálogo de peças.
  * Utiliza junções complexas (JOIN e OUTER APPLY) para trazer os dados da peça,
  * a foto principal, e o estado do empréstimo ativo no momento.
+ * @returns {Promise<Array<Object>>} Um array com o catálogo atualizado de peças.
+ * @throws {Error} Propaga qualquer erro de consulta DB.
  */
 async function getCatalogoPecas() {
   try {
@@ -79,7 +83,12 @@ async function getCatalogoPecas() {
 }
 
 /**
- * Devolve os detalhes detalhados de uma única peça, incluindo a galeria completa de fotos.
+ * @async
+ * @function getPecaDetalhes
+ * @description Devolve as informações detalhadas de uma única peça, incluindo a galeria completa de fotos e estado.
+ * @param {number} idPeca - O ID numérico da peça a consultar.
+ * @returns {Promise<Object|null>} Os detalhes da peça ou null se não encontrada.
+ * @throws {Error} Caso encontre erros de execução.
  */
 async function getPecaDetalhes(idPeca) {
   try {
@@ -97,7 +106,6 @@ async function getPecaDetalhes(idPeca) {
 
     if (resultPeca.recordset.length === 0) return null;
 
-    // Pedido secundário para ir buscar a galeria de fotos associada
     const resultFotos = await pool
       .request()
       .input("IdPeca", sql.Int, idPeca)
@@ -112,8 +120,23 @@ async function getPecaDetalhes(idPeca) {
 }
 
 /**
- * Cria uma nova peça e, se necessário, configura automaticamente o seu perfil de empréstimo.
+ * @async
+ * @function registarNovaPeca
+ * @description Cria uma nova peça e, se necessário, configura automaticamente o seu perfil de empréstimo.
  * Tudo protegido por uma Transação SQL (Se falhar a configuração do empréstimo, a peça não é guardada).
+ * @param {Object} dadosPeca - Dados e especificações do item.
+ * @param {string} dadosPeca.nome - O nome do item.
+ * @param {string} [dadosPeca.descricao] - Descrição opcional.
+ * @param {string} [dadosPeca.tamanho] - O tamanho aplicável.
+ * @param {string} [dadosPeca.estado] - Estado ou condição física.
+ * @param {number} dadosPeca.idUtilizador - O ID do criador da peça.
+ * @param {number} dadosPeca.idCategoria - Categoria classificativa.
+ * @param {boolean} dadosPeca.isEmprestimo - Se fica disponível para aluguer.
+ * @param {boolean} dadosPeca.isVenda - Se fica disponível no mercado.
+ * @param {number} [dadosPeca.valor_dia] - Preço por dia.
+ * @param {string} [dadosPeca.metodosStr] - Métodos de pagamento definidos.
+ * @returns {Promise<number>} Devolve o novo ID gerado pela base de dados para a peça.
+ * @throws {Error} Reverte transação em caso de erro na DB.
  */
 async function registarNovaPeca(dadosPeca) {
   const pool = await poolPromise;
@@ -121,7 +144,6 @@ async function registarNovaPeca(dadosPeca) {
   await transaction.begin();
 
   try {
-    // 1. Inserção do registo base da Peça (utiliza OUTPUT para capturar o ID gerado)
     const resultPeca = await transaction
       .request()
       .input("Nome", sql.VarChar(255), dadosPeca.nome)
@@ -139,7 +161,6 @@ async function registarNovaPeca(dadosPeca) {
 
     const idPeca = resultPeca.recordset[0].id_peca;
 
-    // 2. Se for para empréstimo, cria a estrutura inicial de empréstimo)
     if (dadosPeca.isEmprestimo) {
       const resultEmp = await transaction
         .request()
@@ -153,7 +174,6 @@ async function registarNovaPeca(dadosPeca) {
 
       const idEmprestimo = resultEmp.recordset[0].id_emprestimo;
 
-      // Liga a peça ao registo de empréstimo gerado
       await transaction
         .request()
         .input("IdPeca", sql.Int, idPeca)
@@ -163,16 +183,26 @@ async function registarNovaPeca(dadosPeca) {
         );
     }
 
-    await transaction.commit(); // Consagra as alterações
+    await transaction.commit();
     return idPeca;
   } catch (error) {
-    await transaction.rollback(); // Reverte tudo em caso de falha
+    await transaction.rollback();
     throw error;
   }
 }
 
 /**
- * Atualiza sinaléticas de disponibilidade (Venda/Empréstimo).
+ * @async
+ * @function atualizarEstadoPeca
+ * @description Atualiza sinaléticas de disponibilidade (Venda/Empréstimo), assim como localização.
+ * @param {number} idPeca - ID da peça em atualização.
+ * @param {Object} opcoes - Conjunto de parâmetros.
+ * @param {string} opcoes.estado - Estado de conservação atual da peça.
+ * @param {boolean} opcoes.disponivelEmprestimo - Se é ou não emprestável.
+ * @param {boolean} opcoes.disponivelVenda - Se a venda está ativa.
+ * @param {string|null} [opcoes.localizacao] - Armazém/Gabinete onde se encontra.
+ * @returns {Promise<boolean>} True mediante sucesso da query.
+ * @throws {Error} Falhas de execução SQL.
  */
 async function atualizarEstadoPeca(
   idPeca,
@@ -197,8 +227,13 @@ async function atualizarEstadoPeca(
 }
 
 /**
- * Eliminação destrutiva e em cascata (Manual) de uma peça do sistema.
- * Feito via transação para evitar que a Foreign Key viole a integridade se falhar a meio.
+ * @async
+ * @function eliminarPecaCompleta
+ * @description Eliminação destrutiva e em cascata (Manual) de uma peça do sistema.
+ * Feito via transação atómica para evitar que a Foreign Key viole a integridade se falhar a meio.
+ * @param {number} idPeca - O ID do objeto a purgar da BD.
+ * @returns {Promise<boolean>} True se apagada sem problemas.
+ * @throws {Error} Reverte transação e propaga caso aconteça um erro de Foreign Key.
  */
 async function eliminarPecaCompleta(idPeca) {
   const pool = await poolPromise;
@@ -206,7 +241,6 @@ async function eliminarPecaCompleta(idPeca) {
   try {
     await transaction.begin();
 
-    // 1. Identificar todos os empréstimos onde a peça está envolvida
     const emprestimos = await transaction
       .request()
       .input("IdPeca", sql.Int, idPeca)
@@ -219,26 +253,22 @@ async function eliminarPecaCompleta(idPeca) {
     if (idsEmp.length > 0) {
       const idsStr = idsEmp.join(",");
 
-      // 2. Apagar penalizações penduradas nestes empréstimos
       await transaction
         .request()
         .query(
           `DELETE FROM PENALIZACAO_PECA WHERE EMPRESTIMOid_emprestimo IN (${idsStr})`,
         );
 
-      // 3. Apagar o histórico da peça nas linhas de empréstimo
       await transaction
         .request()
         .input("IdPeca", sql.Int, idPeca)
         .query(`DELETE FROM EMPRESTIMO_ITEM WHERE PECAid_peca = @IdPeca`);
 
-      // 4. Apagar os cabecalhos do empréstimo
       await transaction
         .request()
         .query(`DELETE FROM EMPRESTIMO WHERE id_emprestimo IN (${idsStr})`);
     }
 
-    // 5. Limpar dependências de ficheiros (Fotos) e do Mercado de Vendas
     await transaction
       .request()
       .input("IdPeca", sql.Int, idPeca)
@@ -249,7 +279,6 @@ async function eliminarPecaCompleta(idPeca) {
       .input("IdPeca", sql.Int, idPeca)
       .query("DELETE FROM VENDA_PECA WHERE PECAid_peca = @IdPeca");
 
-    // 6. Por fim, sem amarras, apagar o registo primário da Peça
     const result = await transaction
       .request()
       .input("IdPeca", sql.Int, idPeca)
@@ -265,7 +294,16 @@ async function eliminarPecaCompleta(idPeca) {
 }
 
 /**
- * Permite a edição dos detalhes informativos e físicos da peça.
+ * @async
+ * @function atualizarDadosCompletosPeca
+ * @description Permite a edição abrangente dos detalhes informativos e descritivos da peça física.
+ * @param {number} idPeca - O ID da peça a ser afetada.
+ * @param {Object} dados - Estrutura dos dados submetidos.
+ * @param {string} dados.nome - O nome principal da peça.
+ * @param {string} dados.descricao - A descrição textual.
+ * @param {string} dados.tamanho - A dimensão ou tamanho aplicável.
+ * @param {string} dados.estado - A condição de conservação.
+ * @returns {Promise<void>} Atualização sem retorno.
  */
 async function atualizarDadosCompletosPeca(idPeca, dados) {
   const pool = await poolPromise;
@@ -286,7 +324,15 @@ async function atualizarDadosCompletosPeca(idPeca, dados) {
 // ============================================================================
 
 /**
- * Sincroniza as alterações de uma peça com o seu anúncio de venda caso esteja online.
+ * @async
+ * @function atualizarDadosVenda
+ * @description Sincroniza as alterações de uma peça com o seu anúncio de venda caso esteja online.
+ * @param {number} idPeca - ID da peça em comercialização.
+ * @param {number} preco - O preço de mercado revisto.
+ * @param {string} nome - O título descritivo para venda.
+ * @param {string} condicao - A condição comercial.
+ * @param {string} metodosAceites - String formatada de métodos.
+ * @returns {Promise<void>}
  */
 async function atualizarDadosVenda(
   idPeca,
@@ -310,15 +356,20 @@ async function atualizarDadosVenda(
 }
 
 /**
- * Atualiza a galeria de imagens. Limpa a antiga e insere as novas fotos em Base64.
+ * @async
+ * @function atualizarFotosPeca
+ * @description Atualiza a galeria de imagens. Limpa a antiga e insere as novas fotos em Base64.
  * Vincula automaticamente à Venda, se a peça estiver à venda no momento.
+ * @param {number} idPeca - O ID da peça cujas fotos vão ser atualizadas.
+ * @param {Array<string>} fotosBase64 - Os base64 convertidos das fotos.
+ * @returns {Promise<boolean>} True a validar transação de remoção+inserção.
+ * @throws {Error} Reversão em caso de quebra transacional DB.
  */
 async function atualizarFotosPeca(idPeca, fotosBase64) {
   const pool = await poolPromise;
   const transaction = pool.transaction();
   await transaction.begin();
   try {
-    // Verifica se há venda ativa
     const vendaAtiva = await transaction
       .request()
       .input("IdPeca", sql.Int, idPeca)
@@ -329,13 +380,11 @@ async function atualizarFotosPeca(idPeca, fotosBase64) {
     const idVenda =
       vendaAtiva.recordset.length > 0 ? vendaAtiva.recordset[0].id_venda : null;
 
-    // Limpeza de fotos antigas
     await transaction
       .request()
       .input("IdPeca", sql.Int, idPeca)
       .query("DELETE FROM FOTO_PECA WHERE PECAid_peca = @IdPeca");
 
-    // Inserção iterativa
     for (const foto of fotosBase64) {
       await transaction
         .request()
@@ -359,8 +408,20 @@ async function atualizarFotosPeca(idPeca, fotosBase64) {
 // ============================================================================
 
 /**
- * Inicializa a requisição de um empréstimo aproveitando o registo de configuração base
- * que foi criado na inserção da peça.
+ * @async
+ * @function requisitarEmprestimo
+ * @description Inicializa a requisição de um empréstimo aproveitando o registo de configuração base
+ * que foi criado aquando da inserção original da peça (na flag disponivelEmprestimo).
+ * @param {Object} dados - O input recebido na requisição.
+ * @param {number} dados.idPeca - A peça pretendida.
+ * @param {number} dados.idUtilizador - O solicitador.
+ * @param {string|Date} dados.dataInicio - Início pretendido.
+ * @param {string|Date} dados.dataFim - Fim pretendido.
+ * @param {string} [dados.observacoes] - Notas enviadas.
+ * @param {string} dados.metodoPagamento - Método de liquidação.
+ * @param {string} dados.estadoEntrega - Estado apurado de entrega.
+ * @returns {Promise<void>}
+ * @throws {Error} Propaga ou reverte com mensagem de configuração inexistente.
  */
 async function requisitarEmprestimo(dados) {
   const pool = await poolPromise;
@@ -424,7 +485,15 @@ async function requisitarEmprestimo(dados) {
 }
 
 /**
- * Conclui um empréstimo. Assinala a data e anota o estado em que o material foi entregue.
+ * @async
+ * @function registarDevolucaoEmprestimo
+ * @description Conclui um empréstimo em curso. Assinala a data e anota o estado terminal com que o material foi entregue de volta.
+ * @param {number} idEmprestimo - O identificador do empréstimo.
+ * @param {string} estadoFinal - Flag de estado (ex: "Concluído", "Devolvido_com_Danos").
+ * @param {string} [observacoes] - Relato do estado ou motivo.
+ * @param {Array<Object>} itensDevolvidos - Lista de peças sendo devolvidas e seus respetivos estados finais de devolução.
+ * @returns {Promise<boolean>} Retorna true mediante sucesso.
+ * @throws {Error} Executa e sinaliza rollback caso contrário.
  */
 async function registarDevolucaoEmprestimo(
   idEmprestimo,
@@ -447,7 +516,6 @@ async function registarDevolucaoEmprestimo(
         `UPDATE EMPRESTIMO SET data_devolucao = GETDATE(), estado = @EstadoFinal, observacoes = ISNULL(observacoes, '') + @ObsAppend WHERE id_emprestimo = @IdEmprestimo;`,
       );
 
-    // Atualiza a linha do item específico devolvido
     for (const item of itensDevolvidos) {
       await transaction
         .request()
@@ -471,7 +539,16 @@ async function registarDevolucaoEmprestimo(
 // ============================================================================
 
 /**
- * Cria uma entrada de penalização/multa associada a um empréstimo atrasado/danificado.
+ * @async
+ * @function registarPenalizacao
+ * @description Cria uma entrada de penalização/multa associada a um empréstimo cuja devolução resultou atrasada, ou peças foram danificadas.
+ * @param {Object} dadosPenalizacao - Payload da multa.
+ * @param {number} dadosPenalizacao.valor - O montante a penalizar.
+ * @param {string} dadosPenalizacao.tipo - Dano/Perda/Atraso.
+ * @param {string} [dadosPenalizacao.descricao] - Notas contextuais.
+ * @param {number} dadosPenalizacao.idEmprestimo - O empréstimo gerador.
+ * @returns {Promise<number>} O id gerado na inserção da penalização.
+ * @throws {Error} DB Error.
  */
 async function registarPenalizacao(dadosPenalizacao) {
   try {
@@ -479,7 +556,6 @@ async function registarPenalizacao(dadosPenalizacao) {
     const result = await pool
       .request()
       .input("Valor", sql.Decimal(10, 2), dadosPenalizacao.valor)
-      // Junta o tipo da multa e descrição formatada
       .input(
         "Motivo",
         sql.VarChar(255),
@@ -497,7 +573,15 @@ async function registarPenalizacao(dadosPenalizacao) {
 }
 
 /**
- * Regista o valor monetário real recebido pelo empréstimo.
+ * @async
+ * @function atualizarPagamentoEmprestimo
+ * @description Regista o valor monetário real recebido pelo fecho ou extensão do empréstimo.
+ * @param {number} idEmprestimo - O id base do registo de requisição.
+ * @param {number} valor - O montante a atualizar nos registos textuais.
+ * @param {string} metodoPagamento - Meio usado para tal pagamento.
+ * @param {string} estadoPagamento - O novo flag de pagamento.
+ * @returns {Promise<boolean>} True mediante conclusão com êxito.
+ * @throws {Error} Falhas provenientes da ligação à DB.
  */
 async function atualizarPagamentoEmprestimo(
   idEmprestimo,
@@ -507,7 +591,6 @@ async function atualizarPagamentoEmprestimo(
 ) {
   try {
     const pool = await poolPromise;
-    // Proteger o valor_dia original. O pagamento feito regista-se no histórico de texto
     let obsAppend = ` | Valor Pago: ${valor}€`;
 
     const result = await pool
@@ -534,7 +617,11 @@ async function atualizarPagamentoEmprestimo(
 // ============================================================================
 
 /**
- * Obtém os anúncios ativos e o histórico de vendas. Agrupa fotos no SQL para poupar chamadas.
+ * @async
+ * @function getPecasAVenda
+ * @description Obtém os anúncios ativos e o histórico de vendas. Agrupa fotos num payload string-SQL para poupar chamadas iterativas de rede.
+ * @returns {Promise<Array<Object>>} Uma lista mapeada com todas as instâncias comerciais disponíveis ou fechadas.
+ * @throws {Error} Se ocorrerem erros na consulta.
  */
 async function getPecasAVenda() {
   try {
@@ -559,7 +646,6 @@ async function getPecasAVenda() {
             ORDER BY vp.data_colocacao DESC;
         `);
 
-    // Descompacta as strings de foto criadas pelo STRING_AGG
     return result.recordset.map((row) => ({
       ...row,
       fotos: row.fotos_agrupadas ? row.fotos_agrupadas.split("|||") : [],
@@ -570,7 +656,17 @@ async function getPecasAVenda() {
 }
 
 /**
- * Promove uma peça que estava no inventário geral para os classificados de Venda.
+ * @async
+ * @function colocarPecaAVenda
+ * @description Promove uma peça que se encontrava no inventário geral para os classificados de Venda com um PVP fixo.
+ * @param {number} idPeca - O ID original do bem material no catálogo PECA.
+ * @param {number} preco - O PVP.
+ * @param {number} idVendedor - ID do utilizador autor da venda.
+ * @param {string|null} [nomePeca=null] - Overrided name a mostrar no anúncio de venda.
+ * @param {string|null} [condicaoPeca=null] - Overrided condition a anunciar.
+ * @param {string} [metodosAceites=""] - Os canais aceites para receber valor.
+ * @returns {Promise<number>} O id do registo em VENDA_PECA.
+ * @throws {Error} Rollbacks provenientes da invalidação (ex: se o artigo já está num anúncio a decorrer).
  */
 async function colocarPecaAVenda(
   idPeca,
@@ -584,7 +680,6 @@ async function colocarPecaAVenda(
   const transaction = pool.transaction();
   await transaction.begin();
   try {
-    // Verifica a pré-existência da peça
     const pecaResult = await transaction
       .request()
       .input("IdPeca", sql.Int, idPeca)
@@ -592,8 +687,6 @@ async function colocarPecaAVenda(
 
     if (pecaResult.recordset.length === 0)
       throw new Error("Peça não encontrada.");
-
-    // Regra de Negócio: Uma peça à venda é suspensa dos empréstimos imediatamente.
     await transaction
       .request()
       .input("IdPeca", sql.Int, idPeca)
@@ -604,7 +697,6 @@ async function colocarPecaAVenda(
     const nomeFinal = nomePeca || pecaResult.recordset[0].nome;
     const condicaoFinal = condicaoPeca || pecaResult.recordset[0].estado;
 
-    // Impede duplicação de vendas ativas para a mesma peça
     const vendaExiste = await transaction
       .request()
       .input("IdPeca", sql.Int, idPeca)
@@ -632,7 +724,6 @@ async function colocarPecaAVenda(
       )
       .then((r) => r.recordset[0].id_venda);
 
-    // Atualiza a galeria da peça ligando-a ao anúncio de Venda
     await transaction
       .request()
       .input("IdVenda", sql.Int, idVenda)
@@ -650,7 +741,14 @@ async function colocarPecaAVenda(
 }
 
 /**
- * Fecha e regista na Base de dados que a transação ocorreu para o comprador indicado.
+ * @async
+ * @function registarConclusaoVenda
+ * @description Fecha a oportunidade no sistema e regista que a transação ocorreu para o comprador final indicado.
+ * @param {number} idVenda - ID da listagem comercial de venda.
+ * @param {number} idComprador - ID do utilizador adquirente.
+ * @param {string} metodoPagamento - O meio utilizado.
+ * @returns {Promise<boolean>} True na perfeição da validação SQL.
+ * @throws {Error} Devolve erro a indicar inconsistência se a peça já não se encontrar comitente (concluída por outro, etc).
  */
 async function registarConclusaoVenda(idVenda, idComprador, metodoPagamento) {
   const pool = await poolPromise;
@@ -693,7 +791,13 @@ async function registarConclusaoVenda(idVenda, idComprador, metodoPagamento) {
 }
 
 /**
- * Utilitário isolado para registar as imagens (Base64) de uma peça.
+ * @async
+ * @function registarFotosPeca
+ * @description Utilitário complementar e isolado para registar as imagens (Base64) de uma peça sem iniciar transações complexas.
+ * @param {number} idPeca - ID da peça destino do binário.
+ * @param {Array<string>} fotosBase64 - Strings em codificação pura Base64 das fotos.
+ * @returns {Promise<boolean>} True se finalizou a iteração das inserções com sucesso.
+ * @throws {Error} DB Error.
  */
 async function registarFotosPeca(idPeca, fotosBase64) {
   const pool = await poolPromise;
@@ -713,7 +817,9 @@ async function registarFotosPeca(idPeca, fotosBase64) {
   }
 }
 
-// Exportação modular do objeto Model completo
+/**
+ * @module inventarioModel
+ */
 module.exports = {
   getCatalogoPecas,
   getPecaDetalhes,

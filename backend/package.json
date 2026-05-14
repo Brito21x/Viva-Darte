@@ -7,7 +7,8 @@
     "start": "node app.js",
     "dev": "nodemon --exec \"node scripts/free-port.js 3000 && node app.js\"",
     "test": "vitest",
-    "test:run": "vitest run"
+    "test:run": "vitest run",
+    "docs": "jsdoc -d docs/ src/controllers/ src/models/ src/routes/"
   },
   "dependencies": {
     "bcrypt": "^6.0.0",

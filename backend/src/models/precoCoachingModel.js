@@ -1,6 +1,6 @@
 /**
  * @fileoverview Modelo de Dados para o Cálculo de Preços de Coaching.
- * Responsável por consultar a TABELA_PRECO e calcular dinamicamente o custo
+ * @description Responsável por consultar a TABELA_PRECO e calcular dinamicamente o custo
  * estimado de uma aula com base em múltiplos fatores (formato, duração, dia da semana,
  * modalidade e professor). Suporta um sistema de "fallback" (preço específico vs. preço genérico).
  */
@@ -15,14 +15,15 @@ const sql = require("mssql");
 let colunasTabelaPrecoCache = null;
 
 /**
- * Inspeciona o esquema da base de dados (sys.columns) para detetar que colunas
+ * @async
+ * @function obterColunasTabelaPreco
+ * @description Inspeciona o esquema da base de dados (sys.columns) para detetar que colunas
  * existem atualmente na TABELA_PRECO. Isto permite que o código seja retrocompatível
  * caso a base de dados ainda não tenha as colunas de 'Modalidade' ou 'Professor'.
- * * @param {sql.ConnectionPool} pool - O pool de ligações ativo do SQL Server.
- * @returns {Promise<Set<string>>} Um Set contendo os nomes de todas as colunas da tabela.
+ * @param {sql.ConnectionPool} pool - O pool de ligações ativo do SQL Server.
+ * @returns {Promise<Set<string>>} Um Set contendo os nomes de todas as colunas existentes na tabela.
  */
 async function obterColunasTabelaPreco(pool) {
-  // Se a cache já foi populada, retorna de imediato poupando processamento
   if (colunasTabelaPrecoCache) return colunasTabelaPrecoCache;
 
   try {
@@ -32,28 +33,27 @@ async function obterColunasTabelaPreco(pool) {
             INNER JOIN sys.tables t ON c.object_id = t.object_id
             WHERE t.name = 'TABELA_PRECO' AND SCHEMA_NAME(t.schema_id) = 'dbo'
         `);
-    // Converte o recordset num Set (lista de valores únicos) para buscas rápidas (O(1))
     colunasTabelaPrecoCache = new Set(
       (r.recordset || []).map((row) => row.name),
     );
   } catch {
-    // Em caso de erro (ex: falta de permissões no sys.columns), assume um Set vazio
-    // para não quebrar o fluxo principal da aplicação.
     colunasTabelaPrecoCache = new Set();
   }
   return colunasTabelaPrecoCache;
 }
 
 /**
- * Calcula o custo estimado de uma sessão de coaching.
+ * @async
+ * @function calcularCustoAutomatico
+ * @description Calcula o custo estimado de uma sessão de coaching.
  * Constrói uma query dinâmica que procura o preço mais exato. Se não encontrar
- * um preço específico para o Professor/Modalidade, tenta encontrar o preço genérico (NULL na BD).
- * * @param {string} formatoAula - O formato da aula (ex: 'Solo', 'Dueto').
+ * um preço específico para o Professor/Modalidade, tenta encontrar o preço genérico (NULL na BD) seguindo uma ordem de desgraduação por prioridade.
+ * @param {string} formatoAula - O formato da aula (ex: 'Solo', 'Dueto').
  * @param {number} duracaoMinutos - Duração da aula pretendida.
  * @param {number} diaSemanaPreco - ID do dia para tabela de preços (1 = Dias Úteis, 2 = Fim de semana).
  * @param {number|null} idModalidade - ID da modalidade pretendida (opcional).
  * @param {number|null} idProfessor - ID do professor pretendido (opcional).
- * @returns {Promise<number|null>} Retorna o valor numérico do preço ou null se não existir tarifário aplicável.
+ * @returns {Promise<number|null>} Retorna o valor numérico (double) do preço, ou null se não existir nenhum tarifário aplicável que contemple a combinação.
  */
 async function calcularCustoAutomatico(
   formatoAula,
@@ -65,7 +65,6 @@ async function calcularCustoAutomatico(
   const pool = await poolPromise;
   const cols = await obterColunasTabelaPreco(pool);
 
-  // Verifica de forma segura se a base de dados suporta estes filtros avançados
   const temModalidade = cols.has("MODALIDADEid_modalidade");
   const temProfessor = cols.has("UTILIZADORid_utilizador");
 
@@ -75,11 +74,9 @@ async function calcularCustoAutomatico(
     .input("Dur", sql.Int, duracaoMinutos)
     .input("Dia", sql.Int, diaSemanaPreco);
 
-  // Condições Base: Formato, Duração e Dia são sempre obrigatórios para encontrar um preço
   let where =
     "WHERE tp.formato_aula = @Formato AND tp.duracao_minutos = @Dur AND tp.dia_semana = @Dia AND tp.ativo = 1";
 
-  // Construção dinâmica da cláusula WHERE com lógica de Fallback (OR IS NULL)
   if (
     temModalidade &&
     idModalidade != null &&
@@ -100,13 +97,7 @@ async function calcularCustoAutomatico(
       " AND (tp.UTILIZADORid_utilizador = @IdProf OR tp.UTILIZADORid_utilizador IS NULL)";
   }
 
-  // Lógica de Priorização (ORDER BY inteligente)
-  // O objetivo é devolver o preço mais específico. O 'CASE WHEN ... THEN 0 ELSE 1' garante que:
-  // 1º: Preço exato para o Professor + Modalidade.
-  // 2º: Preço para o Professor (Modalidade Genérica).
-  // 3º: Preço para a Modalidade (Professor Genérico).
-  // 4º: Preço totalmente Genérico (Ambos NULL).
-  const orderParts = ["tp.preco ASC"]; // Se houver empates de especificidade, retorna o mais barato.
+  const orderParts = ["tp.preco ASC"];
 
   if (
     temModalidade &&
@@ -140,11 +131,14 @@ async function calcularCustoAutomatico(
   const result = await req.query(querySql);
   const row = result.recordset?.[0];
 
-  if (row?.preco == null) return null; // Não encontrou qualquer regra de preço compatível
+  if (row?.preco == null) return null;
 
   return Number(row.preco);
 }
 
+/**
+ * @module precoCoachingModel
+ */
 module.exports = {
   calcularCustoAutomatico,
 };

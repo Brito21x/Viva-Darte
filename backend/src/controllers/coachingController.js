@@ -1,6 +1,6 @@
 /**
  * @fileoverview Controlador de Gestão de Coaching.
- * Implementa as User Stories RF04 a RF16 (Disponibilidades, Aprovação de Coordenação,
+ * @description Implementa as User Stories RF04 a RF16 (Disponibilidades, Aprovação de Coordenação,
  * Submissão de Pedidos EE, Cálculo de Preços, Validações de conflitos).
  */
 
@@ -17,6 +17,12 @@ const DURACOES_AULA_VALIDAS = [30, 60, 90, 120];
 const ESTADOS_VALIDACAO_VALIDOS = ["Confirmado", "Nao_Realizado"];
 const ESTADOS_FINAIS_VALIDOS = ["Realizado", "Nao_Realizado"];
 
+/**
+ * @function normalizarHoraSqlTime
+ * @description Normaliza uma string ou data para o formato de hora SQL (HH:MM:SS).
+ * @param {Date|string} valor - O valor da hora a normalizar.
+ * @returns {string|null} A hora formatada ou null se for inválida.
+ */
 function normalizarHoraSqlTime(valor) {
   if (valor instanceof Date && !Number.isNaN(valor.getTime())) {
     const hh = String(valor.getUTCHours()).padStart(2, "0");
@@ -43,18 +49,36 @@ function normalizarHoraSqlTime(valor) {
   return `${String(hh).padStart(2, "0")}:${mm}:00`;
 }
 
+/**
+ * @function validarFormatoAula
+ * @description Valida se o formato da aula está entre os permitidos.
+ * @param {string} formatoAula - O formato da aula.
+ * @returns {string|null} Mensagem de erro ou null se for válido.
+ */
 function validarFormatoAula(formatoAula) {
   return FORMATOS_AULA_VALIDOS.includes(formatoAula)
     ? null
     : `Formato inválido. Valores aceites: ${FORMATOS_AULA_VALIDOS.join(", ")}.`;
 }
 
+/**
+ * @function validarDuracaoAula
+ * @description Valida se a duração da aula está entre as permitidas.
+ * @param {number|string} duracaoMinutos - A duração em minutos.
+ * @returns {string|null} Mensagem de erro ou null se for válida.
+ */
 function validarDuracaoAula(duracaoMinutos) {
   return DURACOES_AULA_VALIDAS.includes(Number(duracaoMinutos))
     ? null
     : `Duração inválida. Valores aceites: ${DURACOES_AULA_VALIDAS.join(", ")} minutos.`;
 }
 
+/**
+ * @function parseDateParts
+ * @description Extrai a data ignorando potenciais problemas de fuso horário.
+ * @param {Date|string} dataValor - A data a extrair.
+ * @returns {Date|null} O objeto Date gerado ou null se for inválido.
+ */
 function parseDateParts(dataValor) {
   if (!dataValor) return null;
   const s =
@@ -66,6 +90,12 @@ function parseDateParts(dataValor) {
   return new Date(y, m - 1, d);
 }
 
+/**
+ * @function diaSemanaPrecoFromDateValue
+ * @description Determina o tipo de dia da semana para cálculo de preço (1 para dia útil, 2 para fim-de-semana).
+ * @param {Date|string} dataValor - A data a avaliar.
+ * @returns {number} 1 ou 2.
+ */
 function diaSemanaPrecoFromDateValue(dataValor) {
   const dt = parseDateParts(dataValor);
   if (!dt) return 1;
@@ -73,6 +103,12 @@ function diaSemanaPrecoFromDateValue(dataValor) {
   return [0, 6].includes(day) ? 2 : 1;
 }
 
+/**
+ * @function diaSemanaCoachingFromDateValue
+ * @description Converte o dia da semana padrão do JS (0-6) para o modelo de BD (1-7 onde 7 é Domingo).
+ * @param {Date|string} dataValor - A data a converter.
+ * @returns {number} O dia da semana de 1 a 7.
+ */
 function diaSemanaCoachingFromDateValue(dataValor) {
   const dt = parseDateParts(dataValor);
   if (!dt) return 1;
@@ -80,6 +116,14 @@ function diaSemanaCoachingFromDateValue(dataValor) {
   return day === 0 ? 7 : day;
 }
 
+/**
+ * @function instanteInicioCoaching
+ * @description Cria um objeto Date combinado com a data e a hora de início.
+ * @param {Object} cab - Objeto com os detalhes do coaching.
+ * @param {Date|string} cab.data_aula - A data da aula.
+ * @param {Date|string} cab.hora_inicio - A hora de início.
+ * @returns {Date|null} O Date exato de início.
+ */
 function instanteInicioCoaching({ data_aula, hora_inicio }) {
   const d =
     data_aula instanceof Date ? new Date(data_aula) : parseDateParts(data_aula);
@@ -102,6 +146,12 @@ function instanteInicioCoaching({ data_aula, hora_inicio }) {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate(), hh, mm, ss);
 }
 
+/**
+ * @function instanteFimCoaching
+ * @description Calcula a hora final de uma aula com base na hora de início e duração.
+ * @param {Object} cab - Objeto do coaching (com data, hora_inicio e duracao_minutos).
+ * @returns {Date|null} O Date exato de fim.
+ */
 function instanteFimCoaching(cab) {
   const inicio = instanteInicioCoaching(cab);
   if (!inicio) return null;
@@ -110,6 +160,13 @@ function instanteFimCoaching(cab) {
   return new Date(inicio.getTime() + minutos * 60000);
 }
 
+/**
+ * @function duracaoSlotMinutos
+ * @description Calcula a duração em minutos entre duas horas (strings).
+ * @param {string} horaInicio - A hora inicial.
+ * @param {string} horaFim - A hora final.
+ * @returns {number} Duração do slot em minutos.
+ */
 function duracaoSlotMinutos(horaInicio, horaFim) {
   const t0 = new Date(`${DATA_REF_COMPARACAO_HORAS}T${horaInicio}`).getTime();
   const t1 = new Date(`${DATA_REF_COMPARACAO_HORAS}T${horaFim}`).getTime();
@@ -117,6 +174,12 @@ function duracaoSlotMinutos(horaInicio, horaFim) {
   return Math.round((t1 - t0) / 60000);
 }
 
+/**
+ * @function instanteHoraReferencia
+ * @description Obtém um timestamp (milissegundos) para uma hora específica, usando uma data base.
+ * @param {string} horaValor - A hora a converter.
+ * @returns {number|null} Timestamp ou null em caso de erro.
+ */
 function instanteHoraReferencia(horaValor) {
   const horaNorm = normalizarHoraSqlTime(horaValor);
   if (!horaNorm) return null;
@@ -124,7 +187,15 @@ function instanteHoraReferencia(horaValor) {
   return Number.isFinite(t) ? t : null;
 }
 
-// RF11. O sistema deve permitir ao professor definir e atualizar a sua disponibilidade.
+/**
+ * @async
+ * @function adicionarDisponibilidade
+ * @description  Adiciona uma disponibilidade de horário para o professor autenticado.
+ * @param {import('express').Request} req - O pedido Express.
+ * @param {import('express').Response} res - A resposta Express.
+ * @param {import('express').NextFunction} next - Função de propagação de erro.
+ * @returns {Promise<import('express').Response|void>} Confirmação de registo ou erro de conflito.
+ */
 async function adicionarDisponibilidade(req, res, next) {
   try {
     const idProfessor = req.utilizador.id;
@@ -162,6 +233,15 @@ async function adicionarDisponibilidade(req, res, next) {
   }
 }
 
+/**
+ * @async
+ * @function getDisponibilidades
+ * @description Obtém a lista de todas as disponibilidades do professor atual.
+ * @param {import('express').Request} req - O pedido Express.
+ * @param {import('express').Response} res - A resposta Express.
+ * @param {import('express').NextFunction} next - Função de propagação de erro.
+ * @returns {Promise<import('express').Response|void>} Lista de disponibilidades.
+ */
 async function getDisponibilidades(req, res, next) {
   try {
     const disponibilidades = await coachingModel.getDisponibilidadesProfessor(
@@ -173,6 +253,15 @@ async function getDisponibilidades(req, res, next) {
   }
 }
 
+/**
+ * @async
+ * @function removerDisponibilidade
+ * @description Remove um registo de disponibilidade do professor atual pelo seu ID.
+ * @param {import('express').Request} req - O pedido Express (com id nos parâmetros).
+ * @param {import('express').Response} res - A resposta Express.
+ * @param {import('express').NextFunction} next - Função de propagação de erro.
+ * @returns {Promise<import('express').Response|void>} Confirmação de remoção.
+ */
 async function removerDisponibilidade(req, res, next) {
   try {
     const sucesso = await coachingModel.removerDisponibilidadeProfessor(
@@ -191,7 +280,15 @@ async function removerDisponibilidade(req, res, next) {
   }
 }
 
-// RF18. Calcular automaticamente o custo dos coachings
+/**
+ * @async
+ * @function getPrecoEstimado
+ * @description Calcula o custo estimado de uma aula de coaching em função de formato, dia, duração, etc.
+ * @param {import('express').Request} req - O pedido Express (query string).
+ * @param {import('express').Response} res - A resposta Express.
+ * @param {import('express').NextFunction} next - Função de propagação de erro.
+ * @returns {Promise<import('express').Response>} O preço estimado e detalhes de cálculo.
+ */
 async function getPrecoEstimado(req, res, next) {
   try {
     const {
@@ -227,9 +324,8 @@ async function getPrecoEstimado(req, res, next) {
       idProfessor ? parseInt(idProfessor, 10) : null,
     );
 
-    // Se a BD não tiver um preço genérico para esta configuração, forçamos para 0€ em vez de crashar!
     if (custoEstimado == null) {
-      const precoBaseHora = 35.0; // Valor base por hora (Solo)
+      const precoBaseHora = 35.0;
       custoEstimado = (dur / 60) * precoBaseHora;
 
       // Acréscimos realistas pelo formato
@@ -251,7 +347,15 @@ async function getPrecoEstimado(req, res, next) {
   }
 }
 
-// RF10 (Auxiliar) - Verificar Slot Livre
+/**
+ * @async
+ * @function getSlotLivre
+ * @description Verifica se um professor tem slot livre na sua agenda no instante solicitado.
+ * @param {import('express').Request} req - O pedido Express (query params).
+ * @param {import('express').Response} res - A resposta Express.
+ * @param {import('express').NextFunction} next - Função de propagação de erro.
+ * @returns {Promise<import('express').Response>} Objeto indicando se está livre.
+ */
 async function getSlotLivre(req, res, next) {
   try {
     const { dataAula, horaInicio, duracaoMinutos } = req.query;
@@ -293,7 +397,15 @@ async function getSlotLivre(req, res, next) {
   }
 }
 
-// RF04. Consultar vagas disponíveis por modalidade, professor, dia e duração.
+/**
+ * @async
+ * @function getVagasDisponiveis
+ * @description  Retorna as vagas disponíveis cruzando disponibilidades gerais de professores com ocupações.
+ * @param {import('express').Request} req - O pedido Express (query parameters).
+ * @param {import('express').Response} res - A resposta Express.
+ * @param {import('express').NextFunction} next - Função de propagação de erro.
+ * @returns {Promise<import('express').Response|void>} Lista de slots de horários vagos.
+ */
 async function getVagasDisponiveis(req, res, next) {
   try {
     const { idModalidade, data, idProfessor, duracaoMinutos, idAnoLetivo } =
@@ -349,6 +461,15 @@ async function getVagasDisponiveis(req, res, next) {
   }
 }
 
+/**
+ * @async
+ * @function getProfessoresDisponiveisAprovacao
+ * @description Filtra que professores com a modalidade requerida têm disponibilidade para a janela de tempo pedida (Coordenação).
+ * @param {import('express').Request} req - O pedido Express.
+ * @param {import('express').Response} res - A resposta Express.
+ * @param {import('express').NextFunction} next - Função de propagação de erro.
+ * @returns {Promise<import('express').Response|void>} Array de professores livres.
+ */
 async function getProfessoresDisponiveisAprovacao(req, res, next) {
   try {
     const { idModalidade, dataAula, horaInicio, duracaoMinutos, idAnoLetivo } =
@@ -391,7 +512,15 @@ async function getProfessoresDisponiveisAprovacao(req, res, next) {
   }
 }
 
-// RF12. Permitir ao professor consultar a sua agenda de coachings.
+/**
+ * @async
+ * @function getAgenda
+ * @description Obtém a agenda de coachings marcados para o professor logado num intervalo de tempo.
+ * @param {import('express').Request} req - O pedido Express.
+ * @param {import('express').Response} res - A resposta Express.
+ * @param {import('express').NextFunction} next - Função de propagação de erro.
+ * @returns {Promise<import('express').Response|void>} A lista de coachings (agenda).
+ */
 async function getAgenda(req, res, next) {
   try {
     const agenda = await coachingModel.getAgendaProfessor(
@@ -405,7 +534,15 @@ async function getAgenda(req, res, next) {
   }
 }
 
-// RF05 / RF06. Submeter pedidos de coaching e registar com custo estimado.
+/**
+ * @async
+ * @function criarPedidoCoaching
+ * @description (RF05/RF06) Permite a um EE submeter um pedido de coaching com registo de custo estimado.
+ * @param {import('express').Request} req - O pedido Express (body com alunosIds, idModalidade, etc.).
+ * @param {import('express').Response} res - A resposta Express.
+ * @param {import('express').NextFunction} next - Função de propagação de erro.
+ * @returns {Promise<import('express').Response|void>} Resultado da criação (ID do pedido submetido).
+ */
 async function criarPedidoCoaching(req, res, next) {
   try {
     const idEncarregado = req.utilizador.id;
@@ -453,9 +590,8 @@ async function criarPedidoCoaching(req, res, next) {
       idProfessor ? parseInt(idProfessor) : null,
     );
 
-    // Se a BD não tiver um preço genérico para esta configuração, forçamos para 0€ em vez de crashar!
     if (custoEstimado == null) {
-      const precoBaseHora = 35.0; // Valor base por hora (Solo)
+      const precoBaseHora = 35.0;
       custoEstimado = (Number(duracaoMinutos) / 60) * precoBaseHora;
 
       if (formatoAula === "Dueto") custoEstimado += 10;
@@ -503,6 +639,15 @@ async function criarPedidoCoaching(req, res, next) {
   }
 }
 
+/**
+ * @async
+ * @function getPedidoCoaching
+ * @description Consulta um pedido de coaching pelo seu ID.
+ * @param {import('express').Request} req - O pedido Express (id params).
+ * @param {import('express').Response} res - A resposta Express.
+ * @param {import('express').NextFunction} next - Função de propagação de erro.
+ * @returns {Promise<import('express').Response|void>} Os detalhes do pedido.
+ */
 async function getPedidoCoaching(req, res, next) {
   try {
     const pedido = await coachingModel.getPedidoCoachingPorId(
@@ -516,6 +661,15 @@ async function getPedidoCoaching(req, res, next) {
   }
 }
 
+/**
+ * @async
+ * @function listarMeusPedidosCoaching
+ * @description Lista os pedidos de coaching realizados pelo Encarregado de Educação autenticado.
+ * @param {import('express').Request} req - O pedido Express.
+ * @param {import('express').Response} res - A resposta Express.
+ * @param {import('express').NextFunction} next - Função de propagação de erro.
+ * @returns {Promise<import('express').Response|void>} Array com os pedidos do EE.
+ */
 async function listarMeusPedidosCoaching(req, res, next) {
   try {
     const pedidos = await coachingModel.getPedidosPorEncarregado(
@@ -527,6 +681,15 @@ async function listarMeusPedidosCoaching(req, res, next) {
   }
 }
 
+/**
+ * @async
+ * @function cancelarMeuPedidoPendente
+ * @description Cancela um pedido de coaching efetuado pelo EE, caso ainda se encontre "Pendente".
+ * @param {import('express').Request} req - O pedido Express (id params).
+ * @param {import('express').Response} res - A resposta Express.
+ * @param {import('express').NextFunction} next - Função de propagação de erro.
+ * @returns {Promise<import('express').Response|void>} Mensagem de sucesso ou erro (se já não estiver Pendente).
+ */
 async function cancelarMeuPedidoPendente(req, res, next) {
   try {
     const resultado = await coachingModel.cancelarPedidoPendenteEncarregado(
@@ -543,7 +706,15 @@ async function cancelarMeuPedidoPendente(req, res, next) {
   }
 }
 
-// RF07. Coordenação consulta pedidos pendentes.
+/**
+ * @async
+ * @function getPedidosPendentes
+ * @description (RF07) Coordenação acede à listagem de pedidos que aguardam aprovação.
+ * @param {import('express').Request} req - O pedido Express.
+ * @param {import('express').Response} res - A resposta Express.
+ * @param {import('express').NextFunction} next - Função de propagação de erro.
+ * @returns {Promise<import('express').Response|void>} Array de pedidos Pendentes.
+ */
 async function getPedidosPendentes(req, res, next) {
   try {
     const pedidos = await coachingModel.getPedidosPendentes();
@@ -553,6 +724,15 @@ async function getPedidosPendentes(req, res, next) {
   }
 }
 
+/**
+ * @async
+ * @function getPedidosAtribuidosProfessor
+ * @description Lista os pedidos ou aulas atribuídos ao professor logado.
+ * @param {import('express').Request} req - O pedido Express.
+ * @param {import('express').Response} res - A resposta Express.
+ * @param {import('express').NextFunction} next - Função de propagação de erro.
+ * @returns {Promise<import('express').Response|void>} Array de pedidos.
+ */
 async function getPedidosAtribuidosProfessor(req, res, next) {
   try {
     const pedidos =
@@ -567,7 +747,15 @@ async function getPedidosAtribuidosProfessor(req, res, next) {
   }
 }
 
-// RF09, RF10. Coordenação aprova, valida conflitos e cria aula.
+/**
+ * @async
+ * @function aprovarPedido
+ * @description (RF09/RF10) Coordenação aprova o pedido, valida disponibilidade e agenda o coaching na BD, lançando faturação se aplicável.
+ * @param {import('express').Request} req - O pedido Express (body com idSala, idProfessor, valorFinal).
+ * @param {import('express').Response} res - A resposta Express.
+ * @param {import('express').NextFunction} next - Função de propagação de erro.
+ * @returns {Promise<import('express').Response|void>} Mensagem de sucesso (e idCoaching) ou mensagem de conflito.
+ */
 async function aprovarPedido(req, res, next) {
   try {
     const idValidador = req.utilizador.id;
@@ -583,7 +771,6 @@ async function aprovarPedido(req, res, next) {
     let horaInicio = null;
     if (pedido.hora_inicio_pretendida) {
       if (pedido.hora_inicio_pretendida instanceof Date) {
-        // Lê a hora explicitamente em UTC para evitar que o fuso horário (WEST) some +1 hora
         const hh = String(pedido.hora_inicio_pretendida.getUTCHours()).padStart(
           2,
           "0",
@@ -635,15 +822,14 @@ async function aprovarPedido(req, res, next) {
         pedido.id_encarregado ||
         pedido.UTILIZADORid_utilizador ||
         pedido.id_utilizador;
-      const idAno = pedido.ANO_LETIVOid_ano_letivo || 1; // 👈 Pega no ano letivo do pedido
-
+      const idAno = pedido.ANO_LETIVOid_ano_letivo || 1;
       if (idEE) {
         await faturacaoModel.adicionarLinhaFaturaMensal(
           idEE,
           Number(String(valorFinal).replace(",", ".")),
           `Coaching ${pedido.modalidade}`,
           pedido.data_aula_pretendida,
-          idAno, // 👈 Passa para a função
+          idAno,
         );
       }
     } catch (errFatura) {
@@ -674,7 +860,15 @@ async function aprovarPedido(req, res, next) {
   }
 }
 
-// RF08. Rejeitar pedidos de coaching com justificação.
+/**
+ * @async
+ * @function rejeitarPedido
+ * @description (RF08) Coordenação ou Professor rejeita um pedido de coaching com justificação.
+ * @param {import('express').Request} req - O pedido Express (body com justificacao).
+ * @param {import('express').Response} res - A resposta Express.
+ * @param {import('express').NextFunction} next - Função de propagação de erro.
+ * @returns {Promise<import('express').Response|void>} Confirmação de rejeição.
+ */
 async function rejeitarPedido(req, res, next) {
   try {
     if (!req.body.justificacao)
@@ -698,7 +892,15 @@ async function rejeitarPedido(req, res, next) {
   }
 }
 
-// RF14. Cancelar marcações.
+/**
+ * @async
+ * @function cancelarCoaching
+ * @description (RF14) Cancela uma marcação de coaching, aplicando regras de bloqueio para EE após a hora.
+ * @param {import('express').Request} req - O pedido Express.
+ * @param {import('express').Response} res - A resposta Express.
+ * @param {import('express').NextFunction} next - Função de propagação de erro.
+ * @returns {Promise<import('express').Response|void>} Confirmação do cancelamento.
+ */
 async function cancelarCoaching(req, res, next) {
   try {
     const idCoaching = parseInt(req.params.id, 10);
@@ -734,7 +936,15 @@ async function cancelarCoaching(req, res, next) {
   }
 }
 
-// RF15. Confirmar a realização da aula.
+/**
+ * @async
+ * @function registarValidacao
+ * @description (RF15/RF20) Professor ou EE validam se a aula ocorreu ou não. Liquida fatura se indicado.
+ * @param {import('express').Request} req - O pedido Express.
+ * @param {import('express').Response} res - A resposta Express.
+ * @param {import('express').NextFunction} next - Função de propagação de erro.
+ * @returns {Promise<import('express').Response|void>} Resposta de sucesso.
+ */
 async function registarValidacao(req, res, next) {
   try {
     const idCoaching = parseInt(req.params.id, 10);
@@ -754,9 +964,6 @@ async function registarValidacao(req, res, next) {
       estadoValidacao,
       observacoes || null,
     );
-
-    // RF20 — Quando o professor confirma a execução e indica o método de pagamento,
-    // liquida automaticamente a fatura mensal do EE referente a esta aula.
     if (
       estadoValidacao === "Confirmado" &&
       tipoValidador === "Professor" &&
@@ -766,9 +973,6 @@ async function registarValidacao(req, res, next) {
       try {
         const pool = await require("../config/db").poolPromise;
         const sql = require("mssql");
-
-        // 1) Obter o EE dono do pedido, a data da aula e o ano letivo
-        //    Nome correto da FK em COACHING: PEDIDO_COACHINGid_pedido_coaching
         const cabResult = await pool
           .request()
           .input("IdCoaching", sql.Int, idCoaching).query(`
@@ -789,7 +993,6 @@ async function registarValidacao(req, res, next) {
           const idAnoLetivo = row.id_ano_letivo || 1;
 
           if (idEE && !Number.isNaN(dataAula.getTime())) {
-            // 2) Localizar a fatura mensal Pendente correspondente (EE + ano + mês + ano letivo)
             const faturaResult = await pool
               .request()
               .input("UserId", sql.Int, idEE)
@@ -814,25 +1017,23 @@ async function registarValidacao(req, res, next) {
                 String(metodoPagamento).trim(),
               );
               console.log(
-                `[RF20] Fatura #${idFatura} marcada como Paga (${metodoPagamento}) — coaching #${idCoaching}.`,
+                `Fatura #${idFatura} marcada como Paga (${metodoPagamento}) — coaching #${idCoaching}.`,
               );
             } else {
               console.warn(
-                `[RF20] Sem fatura pendente para EE=${idEE} em ${dataAula.getMonth() + 1}/${dataAula.getFullYear()} (coaching #${idCoaching}).`,
+                `Sem fatura pendente para EE=${idEE} em ${dataAula.getMonth() + 1}/${dataAula.getFullYear()} (coaching #${idCoaching}).`,
               );
             }
           }
         }
       } catch (errFatura) {
-        // Falha na liquidação automática NÃO deve impedir a validação da aula.
         console.error(
-          "Erro ao registar pagamento automático da aula (RF20):",
+          "Erro ao registar pagamento automático da aula",
           errFatura,
         );
       }
     }
 
-    // Auditoria: registar a validação da aula
     registarAuditoria(req, {
       tipo: "COACHING_VALIDAR",
       descricao: `Coaching #${idCoaching} validado por ${tipoValidador} — estado: ${estadoValidacao}${metodoPagamento ? `, método: ${metodoPagamento}` : ""}`,
@@ -852,6 +1053,15 @@ async function registarValidacao(req, res, next) {
   }
 }
 
+/**
+ * @async
+ * @function getPendentesConclusaoCoordenacao
+ * @description Obtém a lista de coachings cuja hora final já passou, que exigem conclusão da Coordenação.
+ * @param {import('express').Request} req - O pedido Express.
+ * @param {import('express').Response} res - A resposta Express.
+ * @param {import('express').NextFunction} next - Função de propagação de erro.
+ * @returns {Promise<import('express').Response|void>} Array de coachings aguardando fechamento.
+ */
 async function getPendentesConclusaoCoordenacao(req, res, next) {
   try {
     const lista = await coachingModel.listarCoachingsAbertosParaCoordenacao();
@@ -865,6 +1075,15 @@ async function getPendentesConclusaoCoordenacao(req, res, next) {
   }
 }
 
+/**
+ * @async
+ * @function listarHistorico
+ * @description Obtém o histórico geral de coachings finalizados para listagens administrativas.
+ * @param {import('express').Request} req - O pedido Express.
+ * @param {import('express').Response} res - A resposta Express.
+ * @param {import('express').NextFunction} next - Função de propagação de erro.
+ * @returns {Promise<import('express').Response|void>} Array do histórico.
+ */
 async function listarHistorico(req, res, next) {
   try {
     const lista = await coachingModel.getHistoricoGeralCoachings();
@@ -874,7 +1093,15 @@ async function listarHistorico(req, res, next) {
   }
 }
 
-// RF16. Coordenação valida a conclusão.
+/**
+ * @async
+ * @function concluirCoaching
+ * @description (RF16) Coordenação valida o estado final e tranca o coaching (Realizado/Não_Realizado).
+ * @param {import('express').Request} req - O pedido Express (com estadoFinal no body).
+ * @param {import('express').Response} res - A resposta Express.
+ * @param {import('express').NextFunction} next - Função de propagação de erro.
+ * @returns {Promise<import('express').Response|void>} Confirmação de conclusão.
+ */
 async function concluirCoaching(req, res, next) {
   try {
     await coachingModel.concluirCoachingPelaCoordenacao(
@@ -891,6 +1118,15 @@ async function concluirCoaching(req, res, next) {
   }
 }
 
+/**
+ * @async
+ * @function agendarDiretoAdmin
+ * @description Permite a um Administrador ou Coordenação forçar o agendamento de um coaching direto na agenda (mesmo sem pedido prévio EE).
+ * @param {import('express').Request} req - O pedido Express.
+ * @param {import('express').Response} res - A resposta Express.
+ * @param {import('express').NextFunction} next - Função de propagação de erro.
+ * @returns {Promise<import('express').Response|void>} Mensagem de sucesso ou conflito.
+ */
 async function agendarDiretoAdmin(req, res, next) {
   try {
     const idValidador = req.utilizador.id;
@@ -909,7 +1145,6 @@ async function agendarDiretoAdmin(req, res, next) {
 
     const pool = await require("../config/db").poolPromise;
 
-    // 1. Encontrar o Aluno correto através da tabela ENCARREGADO_ALUNO (Corrigido)
     let idAluno = null;
     try {
       const alunoRes = await pool
@@ -927,7 +1162,6 @@ async function agendarDiretoAdmin(req, res, next) {
       console.log("Aviso: Erro ao buscar aluno associado:", errAluno.message);
     }
 
-    // 2. Criar pedido já forçado
     const coachingModel = require("../models/coachingModel");
     const idPedido = await coachingModel.criarPedidoCoaching(
       {
@@ -937,7 +1171,7 @@ async function agendarDiretoAdmin(req, res, next) {
         horaInicio,
         custoEstimado: Number(valorFinal),
         idEncarregado: Number(idEncarregado),
-        idAnoLetivo: Number(idAnoLetivo), // Assume o ativo
+        idAnoLetivo: Number(idAnoLetivo),
         idModalidade: Number(idModalidade),
         idProfessor: Number(idProfessor),
       },
@@ -945,7 +1179,6 @@ async function agendarDiretoAdmin(req, res, next) {
       { skipAlunoValidation: true },
     );
 
-    // 3. Aprovar ignorando a disponibilidade do professor (força o agendamento na agenda)
     function diaSemanaCoachingFromDateValue(dataValor) {
       const dt = new Date(dataValor);
       const day = dt.getDay();
@@ -994,6 +1227,9 @@ async function agendarDiretoAdmin(req, res, next) {
   }
 }
 
+/**
+ * @module coachingController
+ */
 module.exports = {
   adicionarDisponibilidade,
   getPrecoEstimado,

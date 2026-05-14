@@ -1,0 +1,891 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: controllers/authController.js</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: controllers/authController.js</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>/**
+ * @fileoverview Controlador de Autenticação e Gestão de Utilizadores.
+ * @description Lida com o login, registo, recuperação de palavra-passe e gestão CRUD de utilizadores e alunos associados.
+ */
+
+const bcrypt = require("bcryptjs");
+const jwt = require("jsonwebtoken");
+const crypto = require("crypto");
+const utilizadorModel = require("../models/authModel");
+const { registarAuditoria } = require("../helpers/auditoriaHelper");
+
+/**
+ * @async
+ * @function login
+ * @description Efetua a autenticação de um utilizador no sistema.
+ * @param {import('express').Request} req - O objeto do pedido (request) do Express.
+ * @param {Object} req.body - O corpo do pedido.
+ * @param {string} req.body.email - O e-mail do utilizador.
+ * @param {string} req.body.password - A palavra-passe do utilizador.
+ * @param {string} [req.body.tipo] - O tipo de utilizador a tentar o login (ex: PROF, EE).
+ * @param {string} [req.body.perfil] - Alternativa ao campo 'tipo'.
+ * @param {string} [req.body.captchaToken] - O token de validação do Google reCAPTCHA.
+ * @param {import('express').Response} res - O objeto da resposta (response) do Express.
+ * @param {import('express').NextFunction} next - A função para invocar o próximo middleware.
+ * @returns {Promise&lt;import('express').Response|void>} Devolve um token JWT e os dados do utilizador, ou uma mensagem de erro.
+ */
+async function login(req, res, next) {
+  try {
+    const { email, password, tipo, perfil, captchaToken } = req.body;
+
+    if (!email || !password) {
+      return res
+        .status(400)
+        .json({ mensagem: "Email e palavra-passe são obrigatórios." });
+    }
+
+    if (captchaToken) {
+      const chaveSecreta = process.env.RECAPTCHA_SECRET_KEY;
+      const googleVerifyUrl = `https://www.google.com/recaptcha/api/siteverify?secret=${chaveSecreta}&amp;response=${captchaToken}`;
+      const recaptchaResponse = await fetch(googleVerifyUrl, {
+        method: "POST",
+      });
+      const recaptchaData = await recaptchaResponse.json();
+
+      if (!recaptchaData.success) {
+        return res.status(400).json({
+          mensagem: "A validação do reCAPTCHA falhou. Tenta novamente.",
+        });
+      }
+    }
+
+    const tipoFornecido = tipo || perfil || "PROF";
+    const tipoUp = String(tipoFornecido).trim().toUpperCase();
+
+    const utilizador = await utilizadorModel.getUtilizadorByEmail(email);
+
+    if (!utilizador)
+      return res.status(401).json({ mensagem: "Credenciais inválidas." });
+
+    if (!utilizador.ativo) {
+      return res.status(403).json({
+        mensagem: "Conta desativada. Aguarde a aprovação da administração.",
+      });
+    }
+
+    const passwordCorreta = await bcrypt.compare(password, utilizador.password);
+    if (!passwordCorreta)
+      return res.status(401).json({ mensagem: "Credenciais inválidas." });
+
+    const perfis = await utilizadorModel.getPerfisDoUtilizador(
+      utilizador.id_utilizador,
+    );
+    let temPerfil = false;
+
+    if (tipoUp === "ADMIN") {
+      temPerfil = perfis.some(
+        (p) =>
+          p.toLowerCase().includes("admin") ||
+          p.toLowerCase().includes("coord"),
+      );
+    } else if (tipoUp === "PROF" || tipoUp === "PROFESSOR") {
+      temPerfil = perfis.some((p) => p.toLowerCase().includes("prof"));
+    } else {
+      temPerfil = perfis.some(
+        (p) =>
+          p.toLowerCase().includes("encarregado") ||
+          p.toLowerCase().includes("educação") ||
+          p.toLowerCase().includes("educacao") ||
+          p.toLowerCase() === "ee",
+      );
+    }
+
+    if (perfis.length === 0)
+      return res
+        .status(403)
+        .json({ mensagem: "Acesso negado. Nenhum perfil associado à conta." });
+
+    if (!temPerfil) {
+      return res.status(403).json({ mensagem: `Acesso negado.` });
+    }
+
+    let perfilFinal = "Encarregado de Educação";
+    if (perfis.some((p) => p.toLowerCase().includes("prof")))
+      perfilFinal = "Professor";
+    if (
+      perfis.some(
+        (p) =>
+          p.toLowerCase().includes("admin") ||
+          p.toLowerCase().includes("coord"),
+      )
+    )
+      perfilFinal = "Admin";
+
+    const token = jwt.sign(
+      {
+        id: utilizador.id_utilizador,
+        nome: utilizador.nome,
+        email: utilizador.email,
+        perfis,
+        perfil: perfilFinal,
+        id_perfil: perfilFinal === "Admin" ? 1 : null,
+      },
+      process.env.JWT_SECRET || "segredo_super_seguro_123",
+      { expiresIn: "8h" },
+    );
+
+    registarAuditoria(req, {
+      tipo: "LOGIN",
+      descricao: `Login efetuado como ${perfilFinal}`,
+      idUtilizador: utilizador.id_utilizador,
+      entidadeTipo: "UTILIZADOR",
+      entidadeId: utilizador.id_utilizador,
+    });
+
+    return res.status(200).json({
+      mensagem: "Login efetuado",
+      token,
+      utilizador: {
+        id: utilizador.id_utilizador,
+        nome: utilizador.nome,
+        email: utilizador.email,
+        perfis,
+        perfil: perfilFinal,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * @async
+ * @function logout
+ * @description Termina a sessão do utilizador, registando a ação na auditoria.
+ * @param {import('express').Request} req - O objeto do pedido (request) do Express.
+ * @param {import('express').Response} res - O objeto da resposta (response) do Express.
+ * @returns {Promise&lt;import('express').Response>} Devolve uma mensagem de sucesso.
+ */
+async function logout(req, res) {
+  registarAuditoria(req, {
+    tipo: "LOGOUT",
+    descricao: "Sessão terminada",
+  });
+  return res.status(200).json({ mensagem: "Sessão terminada com sucesso." });
+}
+
+/**
+ * @async
+ * @function solicitarRecuperacaoPassword
+ * @description Inicia o processo de recuperação de palavra-passe através do e-mail.
+ * @param {import('express').Request} req - O objeto do pedido (request) do Express.
+ * @param {Object} req.body - O corpo do pedido.
+ * @param {string} req.body.email - O e-mail associado à conta.
+ * @param {string} req.body.captchaToken - O token de validação do Google reCAPTCHA.
+ * @param {import('express').Response} res - O objeto da resposta (response) do Express.
+ * @param {import('express').NextFunction} next - A função para invocar o próximo middleware.
+ * @returns {Promise&lt;import('express').Response|void>} Devolve o token de recuperação gerado ou mensagem de erro.
+ */
+async function solicitarRecuperacaoPassword(req, res, next) {
+  try {
+    const { email, captchaToken } = req.body;
+
+    if (!captchaToken) {
+      return res
+        .status(400)
+        .json({ mensagem: "Validação reCAPTCHA em falta." });
+    }
+
+    const chaveSecreta = process.env.RECAPTCHA_SECRET_KEY;
+    const googleVerifyUrl = `https://www.google.com/recaptcha/api/siteverify?secret=${chaveSecreta}&amp;response=${captchaToken}`;
+    const recaptchaResponse = await fetch(googleVerifyUrl, { method: "POST" });
+    const recaptchaData = await recaptchaResponse.json();
+
+    if (!recaptchaData.success) {
+      return res.status(400).json({
+        mensagem: "A validação do reCAPTCHA falhou. Tenta novamente.",
+      });
+    }
+
+    const utilizador = await utilizadorModel.getUtilizadorByEmail(email);
+
+    if (!utilizador || !utilizador.ativo) {
+      return res
+        .status(404)
+        .json({ mensagem: "Email não encontrado ou inativo." });
+    }
+
+    const token = crypto.randomBytes(4).toString("hex").toUpperCase();
+    await utilizadorModel.guardarTokenRecuperacao(
+      utilizador.id_utilizador,
+      token,
+    );
+
+    return res.status(200).json({ mensagem: "Token gerado.", token });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * @async
+ * @function redefinirPassword
+ * @description Redefine a palavra-passe de um utilizador utilizando um token de recuperação válido.
+ * @param {import('express').Request} req - O objeto do pedido (request) do Express.
+ * @param {Object} req.body - O corpo do pedido.
+ * @param {string} req.body.token - O token de recuperação recebido pelo utilizador.
+ * @param {string} req.body.novaPassword - A nova palavra-passe escolhida.
+ * @param {import('express').Response} res - O objeto da resposta (response) do Express.
+ * @param {import('express').NextFunction} next - A função para invocar o próximo middleware.
+ * @returns {Promise&lt;import('express').Response|void>} Devolve uma mensagem de sucesso ou erro.
+ */
+async function redefinirPassword(req, res, next) {
+  try {
+    const { token, novaPassword } = req.body;
+    if (!token || !novaPassword) {
+      return res
+        .status(400)
+        .json({ mensagem: "Token e password obrigatórios." });
+    }
+
+    const tokenValido = await utilizadorModel.validarTokenRecuperacao(token);
+    if (!tokenValido)
+      return res.status(400).json({ mensagem: "Token inválido." });
+
+    const hash = await bcrypt.hash(novaPassword, 10);
+    await utilizadorModel.atualizarPassword(
+      tokenValido.UTILIZADORid_utilizador,
+      hash,
+      tokenValido.id_token_recuperacao,
+    );
+
+    return res.status(200).json({ mensagem: "Palavra-passe atualizada." });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * @async
+ * @function register
+ * @description Regista um novo utilizador no sistema (auto-registo, aguardando aprovação).
+ * @param {import('express').Request} req - O objeto do pedido (request) do Express.
+ * @param {Object} req.body - O corpo do pedido.
+ * @param {string} req.body.nome - O nome do utilizador.
+ * @param {string} req.body.email - O e-mail do utilizador.
+ * @param {string} req.body.telefone - O número de telefone.
+ * @param {string} req.body.password - A palavra-passe.
+ * @param {string} req.body.tipo - O tipo de utilizador (ex: PROF, EE).
+ * @param {string} [req.body.nomeAluno] - O nome do educando (obrigatório se tipo for EE).
+ * @param {string} [req.body.dataNascimentoAluno] - A data de nascimento do educando (obrigatório se tipo for EE).
+ * @param {string} req.body.captchaToken - O token de validação do Google reCAPTCHA.
+ * @param {import('express').Response} res - O objeto da resposta (response) do Express.
+ * @param {import('express').NextFunction} next - A função para invocar o próximo middleware.
+ * @returns {Promise&lt;import('express').Response|void>} Devolve uma mensagem a informar que o registo aguarda aprovação.
+ */
+async function register(req, res, next) {
+  try {
+    const {
+      nome,
+      email,
+      telefone,
+      password,
+      tipo,
+      nomeAluno,
+      dataNascimentoAluno,
+      captchaToken,
+    } = req.body;
+
+    if (!nome || !email || !password || !tipo)
+      return res.status(400).json({ error: "Campos em falta." });
+
+    if (tipo === "EE" &amp;&amp; (!nomeAluno || !dataNascimentoAluno)) {
+      return res.status(400).json({
+        error: "Nome e data de nascimento do aluno são obrigatórios.",
+      });
+    }
+
+    if (!captchaToken) {
+      return res.status(400).json({ error: "Validação reCAPTCHA em falta." });
+    }
+
+    const chaveSecreta = process.env.RECAPTCHA_SECRET_KEY;
+    const googleVerifyUrl = `https://www.google.com/recaptcha/api/siteverify?secret=${chaveSecreta}&amp;response=${captchaToken}`;
+    const recaptchaResponse = await fetch(googleVerifyUrl, { method: "POST" });
+    const recaptchaData = await recaptchaResponse.json();
+
+    if (!recaptchaData.success) {
+      return res
+        .status(400)
+        .json({ error: "A validação do reCAPTCHA falhou. Tenta novamente." });
+    }
+
+    const passwordHash = await bcrypt.hash(password, 10);
+    const nomePerfil = tipo === "PROF" ? "Professor" : "Encarregado";
+
+    await utilizadorModel.criarUtilizador({
+      nome,
+      email,
+      passwordHash,
+      telefone,
+      nomePerfil,
+      ativo: 0,
+      nomeAluno,
+      dataNascimentoAluno,
+    });
+
+    registarAuditoria(req, {
+      tipo: "REGISTO",
+      descricao: `Auto-registo de ${nomePerfil}: ${nome} &lt;${email}>`,
+      idUtilizador: null,
+      entidadeTipo: "UTILIZADOR",
+      dadosExtra: { nome, email, perfil: nomePerfil },
+    });
+
+    return res
+      .status(201)
+      .json({ mensagem: "Registo concluído! Aguarde aprovação." });
+  } catch (error) {
+    if (error.message.includes("Já existe"))
+      return res.status(400).json({ error: error.message });
+    next(error);
+  }
+}
+
+/**
+ * @async
+ * @function listarUtilizadores
+ * @description Lista todos os utilizadores registados no sistema.
+ * @param {import('express').Request} req - O objeto do pedido (request) do Express.
+ * @param {import('express').Response} res - O objeto da resposta (response) do Express.
+ * @param {import('express').NextFunction} next - A função para invocar o próximo middleware.
+ * @returns {Promise&lt;import('express').Response|void>} Devolve um array de objetos de utilizadores.
+ */
+async function listarUtilizadores(req, res, next) {
+  try {
+    const lista = await utilizadorModel.listarTodosUtilizadores();
+    return res.status(200).json(lista);
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * @async
+ * @function adminCriarUtilizador
+ * @description Permite a um administrador criar diretamente um utilizador (já ativo).
+ * @param {import('express').Request} req - O objeto do pedido (request) do Express.
+ * @param {Object} req.body - O corpo do pedido.
+ * @param {string} req.body.nome - O nome do utilizador.
+ * @param {string} req.body.email - O e-mail do utilizador.
+ * @param {string} req.body.telefone - O telefone do utilizador.
+ * @param {string} req.body.password - A palavra-passe.
+ * @param {string} req.body.tipo - O tipo de utilizador (ADMIN, PROF, EE).
+ * @param {number[]} [req.body.idsModalidades] - Array de IDs de modalidades (se for professor).
+ * @param {string} [req.body.nomeAluno] - O nome do educando (se for EE).
+ * @param {string} [req.body.dataNascimentoAluno] - A data de nascimento do educando (se for EE).
+ * @param {import('express').Response} res - O objeto da resposta (response) do Express.
+ * @param {import('express').NextFunction} next - A função para invocar o próximo middleware.
+ * @returns {Promise&lt;import('express').Response|void>} Devolve o objeto do novo utilizador criado.
+ */
+async function adminCriarUtilizador(req, res, next) {
+  try {
+    const {
+      nome,
+      email,
+      telefone,
+      password,
+      tipo,
+      idsModalidades,
+      nomeAluno,
+      dataNascimentoAluno,
+    } = req.body;
+    if (!nome || !email || !password || !tipo) {
+      return res.status(400).json({
+        mensagem: "Nome, email, password e tipo (PROF ou EE) são obrigatórios.",
+      });
+    }
+
+    let nomePerfil = "Encarregado";
+    if (tipo === "PROF") nomePerfil = "Professor";
+    if (tipo === "ADMIN") nomePerfil = "Admin";
+
+    let idsModalidadesProf;
+    if (tipo === "PROF") {
+      idsModalidadesProf = Array.isArray(idsModalidades) ? idsModalidades : [];
+      if (idsModalidadesProf.length === 0) {
+        return res.status(400).json({
+          mensagem:
+            "Para professor, indica pelo menos uma modalidade (idsModalidades).",
+        });
+      }
+    }
+
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    const novo = await utilizadorModel.criarUtilizador({
+      nome,
+      email,
+      passwordHash,
+      telefone,
+      nomePerfil,
+      ativo: 1,
+      idsModalidades: idsModalidadesProf,
+      nomeAluno,
+      dataNascimentoAluno,
+    });
+
+    registarAuditoria(req, {
+      tipo: "UTILIZADOR_CRIAR",
+      descricao: `Utilizador criado por admin: ${nome} &lt;${email}> (${nomePerfil})`,
+      entidadeTipo: "UTILIZADOR",
+      entidadeId: novo?.id || novo?.id_utilizador || null,
+      dadosExtra: { nome, email, perfil: nomePerfil },
+    });
+
+    return res
+      .status(201)
+      .json({ mensagem: "Utilizador criado.", utilizador: novo });
+  } catch (error) {
+    if (error.message === "Já existe um utilizador com este email.") {
+      return res.status(400).json({ mensagem: error.message });
+    }
+    if (error.message &amp;&amp; error.message.startsWith("PERFIL_NAO_ENCONTRADO")) {
+      const perfisNaBd = error.message.split(":")[1];
+      return res.status(400).json({
+        mensagem: `Perfil não encontrado na BD. Perfis existentes: ${perfisNaBd}`,
+      });
+    }
+    next(error);
+  }
+}
+
+/**
+ * @async
+ * @function editarUtilizador
+ * @description Atualiza os dados principais de um utilizador.
+ * @param {import('express').Request} req - O objeto do pedido (request) do Express.
+ * @param {string} req.params.id - O ID do utilizador a editar.
+ * @param {Object} req.body - Os dados a atualizar (nome, email, telefone, etc.).
+ * @param {import('express').Response} res - O objeto da resposta (response) do Express.
+ * @param {import('express').NextFunction} next - A função para invocar o próximo middleware.
+ * @returns {Promise&lt;import('express').Response|void>} Devolve uma mensagem de sucesso ou erro.
+ */
+async function editarUtilizador(req, res, next) {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (Number.isNaN(id)) {
+      return res.status(400).json({ mensagem: "ID inválido." });
+    }
+
+    const {
+      nome,
+      email,
+      telefone,
+      password,
+      nomePerfil,
+      tipo,
+      idsModalidades,
+      nomeAluno,
+      dataNascimentoAluno,
+    } = req.body;
+
+    if (!nome) {
+      return res.status(400).json({ mensagem: "Nome é obrigatório." });
+    }
+
+    let perfilFinal = nomePerfil;
+    if (!perfilFinal &amp;&amp; tipo === "PROF") perfilFinal = "Professor";
+    if (!perfilFinal &amp;&amp; tipo === "ADMIN") perfilFinal = "Admin";
+    if (!perfilFinal &amp;&amp; tipo === "EE") perfilFinal = "Encarregado";
+
+    let passwordHash = null;
+    if (password &amp;&amp; password.trim() !== "") {
+      passwordHash = await bcrypt.hash(password, 10);
+    }
+
+    const ok = await utilizadorModel.atualizarUtilizadorCompleto(id, {
+      nome,
+      email,
+      telefone,
+      passwordHash,
+      nomePerfil: perfilFinal,
+      idsModalidades,
+      nomeAluno,
+      dataNascimentoAluno,
+    });
+
+    if (!ok) {
+      return res.status(404).json({ mensagem: "Utilizador não encontrado." });
+    }
+
+    registarAuditoria(req, {
+      tipo: "UTILIZADOR_EDIT",
+      descricao: `Utilizador #${id} editado (${nome})`,
+      entidadeTipo: "UTILIZADOR",
+      entidadeId: id,
+      dadosExtra: { nome, email, perfil: perfilFinal },
+    });
+
+    return res.status(200).json({ mensagem: "Utilizador atualizado." });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * @async
+ * @function alterarEstado
+ * @description Altera o estado de atividade (ativo/inativo) de um utilizador.
+ * @param {import('express').Request} req - O objeto do pedido (request) do Express.
+ * @param {string} req.params.id - O ID do utilizador.
+ * @param {Object} req.body - O corpo do pedido.
+ * @param {boolean} req.body.ativo - O novo estado de atividade pretendido.
+ * @param {number[]} [req.body.idsModalidades] - Array de modalidades caso seja necessário atualizar no ato de alteração de estado.
+ * @param {import('express').Response} res - O objeto da resposta (response) do Express.
+ * @param {import('express').NextFunction} next - A função para invocar o próximo middleware.
+ * @returns {Promise&lt;import('express').Response|void>} Devolve uma mensagem confirmando a ativação/desativação.
+ */
+async function alterarEstado(req, res, next) {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (Number.isNaN(id)) {
+      return res.status(400).json({ mensagem: "ID inválido." });
+    }
+
+    const { ativo } = req.body;
+    if (typeof ativo !== "boolean") {
+      return res
+        .status(400)
+        .json({ mensagem: 'Campo "ativo" (boolean) é obrigatório.' });
+    }
+
+    const ok = await utilizadorModel.alterarEstadoUtilizador(
+      id,
+      ativo,
+      req.body.idsModalidades,
+    );
+    if (!ok) {
+      return res.status(404).json({ mensagem: "Utilizador não encontrado." });
+    }
+    return res
+      .status(200)
+      .json({ mensagem: ativo ? "Conta ativada." : "Conta desativada." });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * @async
+ * @function ativarUtilizador
+ * @description Aprova/Ativa a conta de um utilizador no sistema.
+ * @param {import('express').Request} req - O objeto do pedido (request) do Express.
+ * @param {string} req.params.id - O ID do utilizador a ativar.
+ * @param {Object} req.body - O corpo do pedido.
+ * @param {number[]} [req.body.idsModalidades] - Modalidades a atribuir (se for professor).
+ * @param {import('express').Response} res - O objeto da resposta (response) do Express.
+ * @param {import('express').NextFunction} next - A função para invocar o próximo middleware.
+ * @returns {Promise&lt;import('express').Response|void>} Devolve uma mensagem de sucesso ou erro.
+ */
+async function ativarUtilizador(req, res, next) {
+  try {
+    const { id } = req.params;
+    const { idsModalidades } = req.body;
+
+    const sucesso = await utilizadorModel.alterarEstadoUtilizador(id, true);
+
+    if (sucesso &amp;&amp; Array.isArray(idsModalidades)) {
+      await utilizadorModel.atualizarModalidadesProfessor(id, idsModalidades);
+    }
+
+    if (sucesso) {
+      registarAuditoria(req, {
+        tipo: "UTILIZADOR_ATIVAR",
+        descricao: `Utilizador #${id} ativado/aprovado`,
+        entidadeTipo: "UTILIZADOR",
+        entidadeId: parseInt(id, 10),
+      });
+      return res.status(200).json({ mensagem: "Utilizador aceite!" });
+    }
+    return res.status(400).json({ mensagem: "Erro ao aceitar." });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * @async
+ * @function desativarUtilizador
+ * @description Desativa a conta de um utilizador revogando-lhe o acesso.
+ * @param {import('express').Request} req - O objeto do pedido (request) do Express.
+ * @param {string} req.params.id - O ID do utilizador a desativar.
+ * @param {import('express').Response} res - O objeto da resposta (response) do Express.
+ * @param {import('express').NextFunction} next - A função para invocar o próximo middleware.
+ * @returns {Promise&lt;import('express').Response|void>} Devolve uma mensagem de sucesso ou erro.
+ */
+async function desativarUtilizador(req, res, next) {
+  try {
+    const sucesso = await utilizadorModel.alterarEstadoUtilizador(
+      req.params.id,
+      false,
+    );
+    if (sucesso) {
+      registarAuditoria(req, {
+        tipo: "UTILIZADOR_DESATIVAR",
+        descricao: `Utilizador #${req.params.id} desativado`,
+        entidadeTipo: "UTILIZADOR",
+        entidadeId: parseInt(req.params.id, 10),
+      });
+      return res.status(200).json({ mensagem: "Acesso revogado!" });
+    }
+    return res.status(400).json({ mensagem: "Erro ao revogar." });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * @async
+ * @function eliminarUtilizador
+ * @description Apaga permanentemente um utilizador da base de dados.
+ * @param {import('express').Request} req - O objeto do pedido (request) do Express.
+ * @param {string} req.params.id - O ID do utilizador a eliminar.
+ * @param {import('express').Response} res - O objeto da resposta (response) do Express.
+ * @param {import('express').NextFunction} next - A função para invocar o próximo middleware.
+ * @returns {Promise&lt;import('express').Response|void>} Devolve uma mensagem de sucesso ou erro.
+ */
+async function eliminarUtilizador(req, res, next) {
+  try {
+    const sucesso = await utilizadorModel.apagarUtilizador(req.params.id);
+    if (sucesso) {
+      registarAuditoria(req, {
+        tipo: "UTILIZADOR_APAGAR",
+        descricao: `Utilizador #${req.params.id} eliminado`,
+        entidadeTipo: "UTILIZADOR",
+        entidadeId: parseInt(req.params.id, 10),
+      });
+      return res
+        .status(200)
+        .json({ mensagem: "Pedido eliminado com sucesso!" });
+    }
+    return res.status(400).json({ mensagem: "Erro ao eliminar utilizador." });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * @async
+ * @function atualizarModalidades
+ * @description Atualiza apenas a lista de modalidades associadas a um professor.
+ * @param {import('express').Request} req - O objeto do pedido (request) do Express.
+ * @param {string} req.params.id - O ID do professor.
+ * @param {Object} req.body - O corpo do pedido.
+ * @param {number[]} req.body.idsModalidades - Array com os IDs das novas modalidades.
+ * @param {import('express').Response} res - O objeto da resposta (response) do Express.
+ * @param {import('express').NextFunction} next - A função para invocar o próximo middleware.
+ * @returns {Promise&lt;import('express').Response|void>} Devolve uma mensagem confirmando a atualização.
+ */
+async function atualizarModalidades(req, res, next) {
+  try {
+    const { id } = req.params;
+    const { idsModalidades } = req.body;
+
+    if (!Array.isArray(idsModalidades)) {
+      return res
+        .status(400)
+        .json({ mensagem: "Lista de modalidades inválida." });
+    }
+
+    await utilizadorModel.atualizarModalidadesProfessor(id, idsModalidades);
+    return res
+      .status(200)
+      .json({ mensagem: "Modalidades atualizadas com sucesso." });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * @async
+ * @function editarUtilizadorCompleto
+ * @description Edita o perfil completo do utilizador, flexibilizando a validação de modalidades face à edição parcial.
+ * @param {import('express').Request} req - O objeto do pedido (request) do Express.
+ * @param {string} req.params.id - O ID do utilizador a editar.
+ * @param {Object} req.body - Os dados a atualizar no perfil.
+ * @param {import('express').Response} res - O objeto da resposta (response) do Express.
+ * @param {import('express').NextFunction} next - A função para invocar o próximo middleware.
+ * @returns {Promise&lt;import('express').Response|void>} Devolve uma mensagem de sucesso após a atualização.
+ */
+async function editarUtilizadorCompleto(req, res, next) {
+  try {
+    const { id } = req.params;
+    const {
+      nome,
+      email,
+      telefone,
+      password,
+      tipo,
+      idsModalidades,
+      nomeAluno,
+      dataNascimentoAluno,
+    } = req.body;
+
+    if (!nome || !email) {
+      return res
+        .status(400)
+        .json({ mensagem: "Nome e email são obrigatórios." });
+    }
+
+    let passwordHash = null;
+    if (password &amp;&amp; password.trim() !== "") {
+      passwordHash = await bcrypt.hash(password, 10);
+    }
+
+    let nomePerfil = "Encarregado";
+    if (tipo === "PROF") nomePerfil = "Professor";
+    if (tipo === "ADMIN") nomePerfil = "Admin";
+
+    await utilizadorModel.atualizarUtilizadorCompleto(id, {
+      nome,
+      email,
+      telefone,
+      passwordHash,
+      nomePerfil,
+      idsModalidades,
+      nomeAluno,
+      dataNascimentoAluno,
+    });
+
+    return res.status(200).json({ mensagem: "Dados atualizados com sucesso!" });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * @async
+ * @function getMeusAlunos
+ * @description Obtém a lista de educandos (alunos) associados ao Encarregado de Educação autenticado.
+ * @param {import('express').Request} req - O objeto do pedido (request) do Express.
+ * @param {Object} req.utilizador - A informação do utilizador injetada pelo middleware de autenticação.
+ * @param {import('express').Response} res - O objeto da resposta (response) do Express.
+ * @param {import('express').NextFunction} next - A função para invocar o próximo middleware.
+ * @returns {Promise&lt;import('express').Response|void>} Devolve o array com os dados dos alunos associados.
+ */
+async function getMeusAlunos(req, res, next) {
+  try {
+    const idEncarregado = req.utilizador?.id;
+    if (idEncarregado == null) {
+      return res.status(401).json({ mensagem: "Sessão inválida." });
+    }
+
+    const alunos = await utilizadorModel.getAlunosPorEncarregado(idEncarregado);
+    return res.status(200).json(alunos);
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * @async
+ * @function criarMeuAluno
+ * @description Cria um novo registo de aluno e associa-o diretamente ao Encarregado de Educação com sessão iniciada.
+ * @param {import('express').Request} req - O objeto do pedido (request) do Express.
+ * @param {Object} req.utilizador - A informação do utilizador logado.
+ * @param {Object} req.body - O corpo do pedido.
+ * @param {string} req.body.nome - O nome do novo aluno/educando.
+ * @param {string} [req.body.dataNascimento] - A data de nascimento do aluno.
+ * @param {import('express').Response} res - O objeto da resposta (response) do Express.
+ * @param {import('express').NextFunction} next - A função para invocar o próximo middleware.
+ * @returns {Promise&lt;import('express').Response|void>} Devolve os dados do aluno criado ou uma mensagem de erro.
+ */
+async function criarMeuAluno(req, res, next) {
+  try {
+    const idEncarregado = req.utilizador?.id;
+    const { nome, dataNascimento } = req.body;
+
+    if (idEncarregado == null) {
+      return res.status(401).json({ mensagem: "Sessão inválida." });
+    }
+    if (!nome || !String(nome).trim()) {
+      return res.status(400).json({ mensagem: "Nome do aluno é obrigatório." });
+    }
+
+    const aluno = await utilizadorModel.criarAlunoParaEncarregado(
+      idEncarregado,
+      {
+        nome: String(nome).trim(),
+        dataNascimento: dataNascimento || null,
+      },
+    );
+
+    return res.status(201).json(aluno);
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * @module authController
+ */
+module.exports = {
+  login,
+  logout,
+  solicitarRecuperacaoPassword,
+  redefinirPassword,
+  register,
+  listarUtilizadores,
+  editarUtilizador,
+  alterarEstado,
+  ativarUtilizador,
+  desativarUtilizador,
+  adminCriarUtilizador,
+  editarUtilizadorCompleto,
+  eliminarUtilizador,
+  atualizarModalidades,
+  getMeusAlunos,
+  criarMeuAluno,
+};
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Modules</h3><ul><li><a href="module-auditoriaController.html">auditoriaController</a></li><li><a href="module-auditoriaModel.html">auditoriaModel</a></li><li><a href="module-auditoriaRoutes.html">auditoriaRoutes</a></li><li><a href="module-authController.html">authController</a></li><li><a href="module-authModel.html">authModel</a></li><li><a href="module-authRoutes.html">authRoutes</a></li><li><a href="module-coachingController.html">coachingController</a></li><li><a href="module-coachingModel.html">coachingModel</a></li><li><a href="module-coachingRoutes.html">coachingRoutes</a></li><li><a href="module-escolaController.html">escolaController</a></li><li><a href="module-escolaModel.html">escolaModel</a></li><li><a href="module-escolaRoutes.html">escolaRoutes</a></li><li><a href="module-faturacaoController.html">faturacaoController</a></li><li><a href="module-faturacaoModel.html">faturacaoModel</a></li><li><a href="module-faturacaoRoutes.html">faturacaoRoutes</a></li><li><a href="module-inventarioController.html">inventarioController</a></li><li><a href="module-inventarioModel.html">inventarioModel</a></li><li><a href="module-inventarioRoutes.html">inventarioRoutes</a></li><li><a href="module-precoCoachingModel.html">precoCoachingModel</a></li></ul><h3>Global</h3><ul><li><a href="global.html#adicionarDisponibilidade">adicionarDisponibilidade</a></li><li><a href="global.html#adicionarDisponibilidadeProfessor">adicionarDisponibilidadeProfessor</a></li><li><a href="global.html#adicionarLinhaFaturaMensal">adicionarLinhaFaturaMensal</a></li><li><a href="global.html#adminCriarUtilizador">adminCriarUtilizador</a></li><li><a href="global.html#agendarDiretoAdmin">agendarDiretoAdmin</a></li><li><a href="global.html#alterarEstado">alterarEstado</a></li><li><a href="global.html#alterarEstadoUtilizador">alterarEstadoUtilizador</a></li><li><a href="global.html#apagarPeca">apagarPeca</a></li><li><a href="global.html#apagarUtilizador">apagarUtilizador</a></li><li><a href="global.html#aprovarEAgendarCoaching">aprovarEAgendarCoaching</a></li><li><a href="global.html#aprovarPedido">aprovarPedido</a></li><li><a href="global.html#associarProfessorModalidade">associarProfessorModalidade</a></li><li><a href="global.html#ativarUtilizador">ativarUtilizador</a></li><li><a href="global.html#atualizarDadosCompletosPeca">atualizarDadosCompletosPeca</a></li><li><a href="global.html#atualizarDadosVenda">atualizarDadosVenda</a></li><li><a href="global.html#atualizarEstadoPeca">atualizarEstadoPeca</a></li><li><a href="global.html#atualizarFotosPeca">atualizarFotosPeca</a></li><li><a href="global.html#atualizarModalidades">atualizarModalidades</a></li><li><a href="global.html#atualizarModalidadesProfessor">atualizarModalidadesProfessor</a></li><li><a href="global.html#atualizarPagamentoEmprestimo">atualizarPagamentoEmprestimo</a></li><li><a href="global.html#atualizarPassword">atualizarPassword</a></li><li><a href="global.html#atualizarPreco">atualizarPreco</a></li><li><a href="global.html#atualizarRegraPreco">atualizarRegraPreco</a></li><li><a href="global.html#atualizarUtilizadorCompleto">atualizarUtilizadorCompleto</a></li><li><a href="global.html#calcularCustoAutomatico">calcularCustoAutomatico</a></li><li><a href="global.html#cancelarCoaching">cancelarCoaching</a></li><li><a href="global.html#cancelarFatura">cancelarFatura</a></li><li><a href="global.html#cancelarMeuPedidoPendente">cancelarMeuPedidoPendente</a></li><li><a href="global.html#cancelarPedidoPendenteEncarregado">cancelarPedidoPendenteEncarregado</a></li><li><a href="global.html#coachingPertenceAEncarregado">coachingPertenceAEncarregado</a></li><li><a href="global.html#coachingPertenceAProfessorAtivo">coachingPertenceAProfessorAtivo</a></li><li><a href="global.html#colocarPecaAVenda">colocarPecaAVenda</a></li><li><a href="global.html#colunasTabelaPrecoCache">colunasTabelaPrecoCache</a></li><li><a href="global.html#concluirCoaching">concluirCoaching</a></li><li><a href="global.html#concluirCoachingPelaCoordenacao">concluirCoachingPelaCoordenacao</a></li><li><a href="global.html#consultarPrecoAula">consultarPrecoAula</a></li><li><a href="global.html#criarAlunoParaEncarregado">criarAlunoParaEncarregado</a></li><li><a href="global.html#criarMeuAluno">criarMeuAluno</a></li><li><a href="global.html#criarPedidoCoaching">criarPedidoCoaching</a></li><li><a href="global.html#criarRequest">criarRequest</a></li><li><a href="global.html#criarUtilizador">criarUtilizador</a></li><li><a href="global.html#desativarUtilizador">desativarUtilizador</a></li><li><a href="global.html#diaSemanaCoachingFromDateValue">diaSemanaCoachingFromDateValue</a></li><li><a href="global.html#diaSemanaPrecoFromDateValue">diaSemanaPrecoFromDateValue</a></li><li><a href="global.html#duracaoSlotMinutos">duracaoSlotMinutos</a></li><li><a href="global.html#editarPeca">editarPeca</a></li><li><a href="global.html#editarUtilizador">editarUtilizador</a></li><li><a href="global.html#editarUtilizadorCompleto">editarUtilizadorCompleto</a></li><li><a href="global.html#eliminarPecaCompleta">eliminarPecaCompleta</a></li><li><a href="global.html#eliminarUtilizador">eliminarUtilizador</a></li><li><a href="global.html#existeConflitoCoachingProfessor">existeConflitoCoachingProfessor</a></li><li><a href="global.html#existeConflitoCoachingSala">existeConflitoCoachingSala</a></li><li><a href="global.html#existeConflitoHorarioProfessor">existeConflitoHorarioProfessor</a></li><li><a href="global.html#existeConflitoHorarioSala">existeConflitoHorarioSala</a></li><li><a href="global.html#getAgenda">getAgenda</a></li><li><a href="global.html#getAgendaProfessor">getAgendaProfessor</a></li><li><a href="global.html#getAlunosPorEncarregado">getAlunosPorEncarregado</a></li><li><a href="global.html#getAnosLetivos">getAnosLetivos</a></li><li><a href="global.html#getCatalogo">getCatalogo</a></li><li><a href="global.html#getCatalogoPecas">getCatalogoPecas</a></li><li><a href="global.html#getCoachingCabecalhoCancelamento">getCoachingCabecalhoCancelamento</a></li><li><a href="global.html#getCompatibilidade">getCompatibilidade</a></li><li><a href="global.html#getCompatibilidadeSalasModalidades">getCompatibilidadeSalasModalidades</a></li><li><a href="global.html#getDisponibilidadeEfetiva">getDisponibilidadeEfetiva</a></li><li><a href="global.html#getDisponibilidades">getDisponibilidades</a></li><li><a href="global.html#getDisponibilidadesProfessor">getDisponibilidadesProfessor</a></li><li><a href="global.html#getFaturaPorId">getFaturaPorId</a></li><li><a href="global.html#getFaturas">getFaturas</a></li><li><a href="global.html#getHistoricoGeralCoachings">getHistoricoGeralCoachings</a></li><li><a href="global.html#getHorarios">getHorarios</a></li><li><a href="global.html#getHorariosPorAnoLetivo">getHorariosPorAnoLetivo</a></li><li><a href="global.html#getLinhasDaFatura">getLinhasDaFatura</a></li><li><a href="global.html#getLinhasFatura">getLinhasFatura</a></li><li><a href="global.html#getMeusAlunos">getMeusAlunos</a></li><li><a href="global.html#getModalidades">getModalidades</a></li><li><a href="global.html#getModalidadesAtivas">getModalidadesAtivas</a></li><li><a href="global.html#getModalidadesPorProfessor">getModalidadesPorProfessor</a></li><li><a href="global.html#getPecaDetalhes">getPecaDetalhes</a></li><li><a href="global.html#getPecasAVenda">getPecasAVenda</a></li><li><a href="global.html#getPedidoCoaching">getPedidoCoaching</a></li><li><a href="global.html#getPedidoCoachingPorId">getPedidoCoachingPorId</a></li><li><a href="global.html#getPedidosAtribuidosAoProfessorNoPeriodo">getPedidosAtribuidosAoProfessorNoPeriodo</a></li><li><a href="global.html#getPedidosAtribuidosProfessor">getPedidosAtribuidosProfessor</a></li><li><a href="global.html#getPedidosPendentes">getPedidosPendentes</a></li><li><a href="global.html#getPedidosPorEncarregado">getPedidosPorEncarregado</a></li><li><a href="global.html#getPendentesConclusaoCoordenacao">getPendentesConclusaoCoordenacao</a></li><li><a href="global.html#getPerfisDoUtilizador">getPerfisDoUtilizador</a></li><li><a href="global.html#getPrecoEstimado">getPrecoEstimado</a></li><li><a href="global.html#getProfessoresAtivos">getProfessoresAtivos</a></li><li><a href="global.html#getProfessoresDisponiveisAprovacao">getProfessoresDisponiveisAprovacao</a></li><li><a href="global.html#getProfessoresPorModalidade">getProfessoresPorModalidade</a></li><li><a href="global.html#getResumo">getResumo</a></li><li><a href="global.html#getResumoFaturacao">getResumoFaturacao</a></li><li><a href="global.html#getSalas">getSalas</a></li><li><a href="global.html#getSalasPorModalidade">getSalasPorModalidade</a></li><li><a href="global.html#getSlotLivre">getSlotLivre</a></li><li><a href="global.html#getTabelaPrecos">getTabelaPrecos</a></li><li><a href="global.html#getUtilizadorByEmail">getUtilizadorByEmail</a></li><li><a href="global.html#getVagasDisponiveis">getVagasDisponiveis</a></li><li><a href="global.html#guardarTokenRecuperacao">guardarTokenRecuperacao</a></li><li><a href="global.html#instanteFimCoaching">instanteFimCoaching</a></li><li><a href="global.html#instanteHoraReferencia">instanteHoraReferencia</a></li><li><a href="global.html#instanteInicioCoaching">instanteInicioCoaching</a></li><li><a href="global.html#listar">listar</a></li><li><a href="global.html#listarAuditoria">listarAuditoria</a></li><li><a href="global.html#listarCoachingsAbertosParaCoordenacao">listarCoachingsAbertosParaCoordenacao</a></li><li><a href="global.html#listarHistorico">listarHistorico</a></li><li><a href="global.html#listarMeusPedidosCoaching">listarMeusPedidosCoaching</a></li><li><a href="global.html#listarPrecos">listarPrecos</a></li><li><a href="global.html#listarTodosUtilizadores">listarTodosUtilizadores</a></li><li><a href="global.html#listarUtilizadores">listarUtilizadores</a></li><li><a href="global.html#login">login</a></li><li><a href="global.html#logout">logout</a></li><li><a href="global.html#minutosDaHora">minutosDaHora</a></li><li><a href="global.html#normalizarHoraSql">normalizarHoraSql</a></li><li><a href="global.html#normalizarHoraSqlTime">normalizarHoraSqlTime</a></li><li><a href="global.html#obterColunasTabelaPreco">obterColunasTabelaPreco</a></li><li><a href="global.html#parseDateParts">parseDateParts</a></li><li><a href="global.html#professorTemDisponibilidadeNoSlot">professorTemDisponibilidadeNoSlot</a></li><li><a href="global.html#redefinirPassword">redefinirPassword</a></li><li><a href="global.html#registar">registar</a></li><li><a href="global.html#registarConclusaoVenda">registarConclusaoVenda</a></li><li><a href="global.html#registarDevolucao">registarDevolucao</a></li><li><a href="global.html#registarDevolucaoEmprestimo">registarDevolucaoEmprestimo</a></li><li><a href="global.html#registarFotosPeca">registarFotosPeca</a></li><li><a href="global.html#registarNovaPeca">registarNovaPeca</a></li><li><a href="global.html#registarPagamento">registarPagamento</a></li><li><a href="global.html#registarPagamentoEmprestimo">registarPagamentoEmprestimo</a></li><li><a href="global.html#registarPeca">registarPeca</a></li><li><a href="global.html#registarPenalizacao">registarPenalizacao</a></li><li><a href="global.html#registarValidacao">registarValidacao</a></li><li><a href="global.html#registarValidacaoAula">registarValidacaoAula</a></li><li><a href="global.html#register">register</a></li><li><a href="global.html#rejeitarPedido">rejeitarPedido</a></li><li><a href="global.html#rejeitarPedidoCoaching">rejeitarPedidoCoaching</a></li><li><a href="global.html#removerDisponibilidade">removerDisponibilidade</a></li><li><a href="global.html#removerDisponibilidadeProfessor">removerDisponibilidadeProfessor</a></li><li><a href="global.html#removerProfessorModalidade">removerProfessorModalidade</a></li><li><a href="global.html#requisitarEmprestimo">requisitarEmprestimo</a></li><li><a href="global.html#solicitarRecuperacaoPassword">solicitarRecuperacaoPassword</a></li><li><a href="global.html#validarDuracaoAula">validarDuracaoAula</a></li><li><a href="global.html#validarFormatoAula">validarFormatoAula</a></li><li><a href="global.html#validarTokenRecuperacao">validarTokenRecuperacao</a></li><li><a href="global.html#verificarSlotLivreProfessor">verificarSlotLivreProfessor</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.5</a> on Thu May 14 2026 21:20:14 GMT+0100 (Hora de verão da Europa Ocidental)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

@@ -1,6 +1,6 @@
 /**
  * @fileoverview Modelo de Dados para o Log de Atividade (Auditoria).
- * Responsável por gravar e consultar a tabela LOG_ATIVIDADE, que regista
+ * @description Responsável por gravar e consultar a tabela LOG_ATIVIDADE, que regista
  * todas as ações relevantes do sistema (logins, alterações, compras, etc.)
  * para auditoria pela Coordenação no painel administrativo.
  */
@@ -9,20 +9,23 @@ const { poolPromise } = require("../config/db");
 const sql = require("mssql");
 
 /**
- * Regista um novo evento de auditoria.
+ * @async
+ * @function registar
+ * @description Regista um novo evento de auditoria.
  * Esta função é chamada por um helper (`registarAuditoria`) a partir dos
  * controllers da aplicação. Todas as falhas são apanhadas internamente
  * para que NUNCA quebrem o fluxo principal do utilizador.
  *
- * @param {Object} evento
- * @param {string} evento.tipo            - Código do evento (ex: 'LOGIN', 'PECA_CRIAR')
- * @param {string} [evento.descricao]     - Texto legível para o painel admin
- * @param {number|null} [evento.idUtilizador] - ID do utilizador que despoletou a ação
- * @param {string} [evento.ip]            - Endereço IP de origem
- * @param {string} [evento.userAgent]     - User-Agent do browser/cliente
- * @param {string} [evento.entidadeTipo]  - Tipo da entidade afetada (PECA, COACHING, ...)
- * @param {number|null} [evento.entidadeId] - ID da entidade afetada
- * @param {Object|null} [evento.dadosExtra] - Payload adicional (será stringificado em JSON)
+ * @param {Object} evento - O objeto contendo os detalhes do evento a registar.
+ * @param {string} evento.tipo - Código do evento (ex: 'LOGIN', 'PECA_CRIAR').
+ * @param {string} [evento.descricao=null] - Texto legível para o painel de administração.
+ * @param {number|null} [evento.idUtilizador=null] - ID do utilizador que despoletou a ação.
+ * @param {string} [evento.ip=null] - Endereço IP de origem.
+ * @param {string} [evento.userAgent=null] - User-Agent do browser ou cliente.
+ * @param {string} [evento.entidadeTipo=null] - Tipo da entidade afetada (ex: PECA, COACHING).
+ * @param {number|null} [evento.entidadeId=null] - ID numérico da entidade afetada.
+ * @param {Object|null} [evento.dadosExtra=null] - Payload adicional (será convertido para string JSON de forma segura).
+ * @returns {Promise<void>} Não devolve nada, lida com erros silenciosamente.
  */
 async function registar({
   tipo,
@@ -35,11 +38,11 @@ async function registar({
   dadosExtra = null,
 }) {
   try {
-    if (!tipo) return; // Sem tipo não regista
+    if (!tipo) return;
     const pool = await poolPromise;
     const dadosExtraStr =
       dadosExtra && typeof dadosExtra === "object"
-        ? JSON.stringify(dadosExtra).slice(0, 3500) // segurança contra payloads enormes
+        ? JSON.stringify(dadosExtra).slice(0, 3500)
         : dadosExtra
           ? String(dadosExtra).slice(0, 3500)
           : null;
@@ -74,21 +77,24 @@ async function registar({
            @EntidadeTipo, @EntidadeId, @DadosExtra, GETDATE());
       `);
   } catch (error) {
-    // Falhas de auditoria nunca devem propagar ao utilizador
     console.error("[Auditoria] Falha a registar evento:", error.message);
   }
 }
 
 /**
- * Consulta os eventos de auditoria com filtros opcionais.
- * Usado pela tab "Histórico" do painel admin.
+ * @async
+ * @function listar
+ * @description Consulta os eventos de auditoria com filtros opcionais.
+ * Usado pelo separador "Histórico" do painel de administração.
  *
- * @param {Object} filtros
- * @param {string} [filtros.tipo]        - Filtra por tipo exato (LOGIN, PECA_CRIAR, ...)
- * @param {string} [filtros.utilizador]  - Pesquisa texto em nome/email
- * @param {string} [filtros.desde]       - ISO date (YYYY-MM-DD)
- * @param {string} [filtros.ate]         - ISO date (YYYY-MM-DD)
- * @param {number} [filtros.limite]     - Máx de registos (default 500, hard cap 2000)
+ * @param {Object} [filtros={}] - Objeto de filtros para a query.
+ * @param {string} [filtros.tipo] - Filtra por tipo exato (ex: LOGIN, PECA_CRIAR).
+ * @param {string} [filtros.utilizador] - Pesquisa parcial de texto no nome ou email.
+ * @param {string} [filtros.desde] - Data inicial no formato ISO (YYYY-MM-DD).
+ * @param {string} [filtros.ate] - Data final no formato ISO (YYYY-MM-DD).
+ * @param {number} [filtros.limite=500] - Máximo de registos a devolver (por omissão 500, limite máximo rígido de 2000).
+ * @returns {Promise<Array<Object>>} Devolve o array com os eventos de auditoria encontrados.
+ * @throws {Error} Propaga o erro se ocorrer falha na base de dados.
  */
 async function listar({ tipo, utilizador, desde, ate, limite = 500 } = {}) {
   try {
@@ -117,7 +123,6 @@ async function listar({ tipo, utilizador, desde, ate, limite = 500 } = {}) {
     }
 
     if (ate && String(ate).trim() !== "") {
-      // Inclui o dia inteiro do "ate"
       const dataAte = new Date(ate);
       dataAte.setHours(23, 59, 59, 999);
       condicoes.push("l.data_hora <= @Ate");
@@ -160,6 +165,9 @@ async function listar({ tipo, utilizador, desde, ate, limite = 500 } = {}) {
   }
 }
 
+/**
+ * @module auditoriaModel
+ */
 module.exports = {
   registar,
   listar,

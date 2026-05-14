@@ -1,14 +1,21 @@
 /**
  * @fileoverview Modelo de Dados para Faturação Mensal.
- * Responsável por todas as interações com a tabela FATURACAO_MENSAL da base de dados.
+ * @description Responsável por todas as interações com a tabela FATURACAO_MENSAL da base de dados.
  */
 
 const { poolPromise } = require("../config/db");
 const sql = require("mssql");
 
 /**
- * Obtém a lista de faturas mensais com filtros opcionais.
- * @param {Object} filtros - { ano, mes, estado }
+ * @async
+ * @function getFaturas
+ * @description Obtém a lista de faturas mensais com base em filtros opcionais (ano, mês e estado).
+ * @param {Object} [filtros={}] - Objeto com os filtros de pesquisa.
+ * @param {string|number} [filtros.ano] - O ano a filtrar.
+ * @param {string|number} [filtros.mes] - O mês a filtrar.
+ * @param {string} [filtros.estado] - O estado do pagamento (ex: 'Pendente', 'Pago', 'Cancelado').
+ * @returns {Promise<Array<Object>>} Devolve um array de faturas.
+ * @throws {Error} Propaga qualquer erro de execução na base de dados.
  */
 async function getFaturas({ ano, mes, estado } = {}) {
   try {
@@ -62,8 +69,12 @@ async function getFaturas({ ano, mes, estado } = {}) {
 }
 
 /**
- * Obtém o detalhe de uma única fatura pelo seu ID.
- * @param {number} idFaturacao
+ * @async
+ * @function getFaturaPorId
+ * @description Obtém o detalhe de uma única fatura através do seu ID.
+ * @param {number} idFaturacao - O identificador da fatura.
+ * @returns {Promise<Object|null>} Os dados da fatura ou null se não encontrada.
+ * @throws {Error} Propaga erro em caso de falha na DB.
  */
 async function getFaturaPorId(idFaturacao) {
   try {
@@ -88,9 +99,13 @@ async function getFaturaPorId(idFaturacao) {
 }
 
 /**
- * Regista o pagamento de uma fatura (atualiza estado, método e data).
- * @param {number} idFaturacao
- * @param {string} metodoPagamento
+ * @async
+ * @function registarPagamento
+ * @description Regista o pagamento de uma fatura, atualizando o seu estado, método e a data de liquidação.
+ * @param {number} idFaturacao - O ID da fatura a pagar.
+ * @param {string} metodoPagamento - O método utilizado (ex: 'MBWay', 'Transferência').
+ * @returns {Promise<boolean>} Retorna true caso a fatura tenha sido atualizada com sucesso.
+ * @throws {Error} Propaga erro em caso de falha.
  */
 async function registarPagamento(idFaturacao, metodoPagamento) {
   try {
@@ -114,8 +129,12 @@ async function registarPagamento(idFaturacao, metodoPagamento) {
 }
 
 /**
- * Cancela uma fatura (altera estado para 'Cancelado').
- * @param {number} idFaturacao
+ * @async
+ * @function cancelarFatura
+ * @description Cancela uma fatura (altera o estado para 'Cancelado') desde que esta não esteja já paga.
+ * @param {number} idFaturacao - O ID da fatura a cancelar.
+ * @returns {Promise<boolean>} Devolve true se a fatura foi cancelada com sucesso.
+ * @throws {Error} Em caso de erro na query.
  */
 async function cancelarFatura(idFaturacao) {
   try {
@@ -136,7 +155,14 @@ async function cancelarFatura(idFaturacao) {
 }
 
 /**
- * Resumo/totais agrupados por estado (para os StatCards do dashboard).
+ * @async
+ * @function getResumoFaturacao
+ * @description Gera um resumo com os totais agregados por estado (útil para os StatCards do painel de administração).
+ * @param {Object} [filtros={}] - Filtros opcionais de ano e mês.
+ * @param {string|number} [filtros.ano] - O ano letivo a contabilizar.
+ * @param {string|number} [filtros.mes] - O mês a contabilizar.
+ * @returns {Promise<Object>} Devolve as estatísticas geradas ou um objeto vazio.
+ * @throws {Error} Caso ocorra uma falha de base de dados.
  */
 async function getResumoFaturacao({ ano, mes } = {}) {
   try {
@@ -172,15 +198,22 @@ async function getResumoFaturacao({ ano, mes } = {}) {
 }
 
 /**
- * Cria uma fatura individual para uma aula de coaching (RF18).
+ * @async
+ * @function adicionarLinhaFaturaMensal
+ * @description Cria uma fatura individual para uma aula de coaching (RF18).
  * A partir de agora cada aula gera a sua própria fatura (1 fatura = 1 aula),
  * em vez de agregar todas as aulas do mês na mesma fatura.
+ * * NOTA: o nome da função mantém-se "adicionarLinhaFaturaMensal" para evitar
+ * refatorização noutros locais (coachingController), mas o comportamento mudou:
+ * já NÃO procura/agrega — efetua sempre um INSERT.
  *
- * NOTA: o nome da função mantém-se "adicionarLinhaFaturaMensal" para evitar
- * refactor noutros locais (coachingController), mas o comportamento mudou:
- * já NÃO procura/agrega — sempre faz INSERT.
- *
- * Devolve o id da fatura criada.
+ * @param {number} idUtilizador - O ID do encarregado de educação ou responsável.
+ * @param {number} valor - O montante total a cobrar.
+ * @param {string} descricao - A descrição da linha/fatura.
+ * @param {Date|string} dataAula - A data de realização da aula para apurar o mês/ano fiscais.
+ * @param {number} [idAnoLetivo=1] - O ID do ano letivo de referência.
+ * @returns {Promise<number>} Devolve o ID da fatura acabada de criar.
+ * @throws {Error} Falha de processamento ou inserção.
  */
 async function adicionarLinhaFaturaMensal(
   idUtilizador,
@@ -195,7 +228,6 @@ async function adicionarLinhaFaturaMensal(
     const ano = data.getFullYear();
     const mes = data.getMonth() + 1; // 1 a 12
 
-    // Cria SEMPRE uma fatura nova para esta aula (sem agregação mensal).
     const insertResult = await pool
       .request()
       .input("UserId", sql.Int, idUtilizador)
@@ -220,7 +252,11 @@ async function adicionarLinhaFaturaMensal(
 }
 
 /**
- * Obtém todas as regras de preço da TABELA_PRECO
+ * @async
+ * @function getTabelaPrecos
+ * @description Obtém todas as regras de preço configuradas na TABELA_PRECO ordenadas pela prioridade e formato.
+ * @returns {Promise<Array<Object>>} As regras de preços atuais.
+ * @throws {Error} Falha na extração dos preços.
  */
 async function getTabelaPrecos() {
   try {
@@ -246,8 +282,14 @@ async function getTabelaPrecos() {
 }
 
 /**
- * Função utilitária para o RF18:
- * Obtém o preço exato para ser usado no momento do Agendamento (Custo Estimado)
+ * @async
+ * @function consultarPrecoAula
+ * @description Função utilitária para o RF18: Obtém o preço exato para ser usado no momento do Agendamento (Custo Estimado).
+ * @param {string} formato - O formato da aula (ex: 'Solo', 'Dueto').
+ * @param {number} duracao - A duração pretendida em minutos.
+ * @param {number} diaSemana - O indicador do tipo de dia da semana.
+ * @returns {Promise<number|null>} Retorna o preço formatado ou null se não configurado.
+ * @throws {Error} Erro de conectividade com a BD.
  */
 async function consultarPrecoAula(formato, duracao, diaSemana) {
   try {
@@ -275,6 +317,16 @@ async function consultarPrecoAula(formato, duracao, diaSemana) {
   }
 }
 
+/**
+ * @async
+ * @function atualizarPreco
+ * @description Atualiza as características (valor ou atividade) de uma dada regra de preço.
+ * @param {number} idPreco - O ID da regra.
+ * @param {number} preco - O novo montante tarifário.
+ * @param {boolean} ativo - Define se a regra se mantém ativa ou descontinuada.
+ * @returns {Promise<boolean>} True se atualizou algum registo.
+ * @throws {Error} Propaga falhas de consulta.
+ */
 async function atualizarPreco(idPreco, preco, ativo) {
   try {
     const pool = await poolPromise;
@@ -296,27 +348,27 @@ async function atualizarPreco(idPreco, preco, ativo) {
 }
 
 /**
- * Devolve a(s) aula(s) que compõem uma fatura específica.
+ * @async
+ * @function getLinhasDaFatura
+ * @description Devolve a(s) aula(s) que compõem uma fatura específica.
+ * Como NÃO há FK direta entre FATURACAO_MENSAL e COACHING, a ligação é inferida cronologicamente.
+ * * Algoritmo:
+ * 1) Carrega todas as faturas do mesmo EE/ano/mês ordenadas por id_faturacao ASC.
+ * 2) Carrega todas as aulas (não-canceladas) do mesmo EE/ano/mês ordenadas por id ASC.
+ * 3) Faz "matching" sequencial: para cada fatura, na ordem em que foram criadas,
+ * tenta encontrar uma aula ainda não atribuída cujo valor_final = total da fatura.
+ * - Se houver match exato → essa fatura tem 1 aula (caso novo, 1-para-1)
+ * - Se não houver match exato → a fatura "absorve" todas as aulas que ainda restarem (caso legacy).
+ * 4) Devolve a lista correspondente à fatura pedida.
  *
- * Como NÃO há FK direta entre FATURACAO_MENSAL e COACHING, a ligação é inferida.
- * Algoritmo:
- *   1) Carrega todas as faturas do mesmo EE/ano/mês ordenadas por id_faturacao ASC.
- *   2) Carrega todas as aulas (não-canceladas) do mesmo EE/ano/mês ordenadas por id ASC.
- *   3) Faz "matching" sequencial: para cada fatura, na ordem em que foram criadas,
- *      tenta encontrar uma aula ainda não atribuída cujo valor_final = total da fatura.
- *      - Se houver match exato → essa fatura tem 1 aula (caso novo, 1-para-1)
- *      - Se não houver match exato → a fatura "absorve" todas as aulas que ainda restarem
- *        (caso legacy: fatura agregada antiga com várias aulas).
- *   4) Devolve a lista correspondente à fatura pedida.
- *
- * @param {number} idFaturacao
- * @returns {Promise<{fatura: Object, linhas: Array, modoIndividual: boolean}|null>}
+ * @param {number} idFaturacao - O ID da fatura de pesquisa.
+ * @returns {Promise<{fatura: Object, linhas: Array, modoIndividual: boolean}|null>} Retorna a fatura, os itens (coachings) e se é unifaturada.
+ * @throws {Error} Falha algorítmica ou de base de dados.
  */
 async function getLinhasDaFatura(idFaturacao) {
   try {
     const pool = await poolPromise;
 
-    // 1) Cabeçalho da fatura pedida
     const cab = await pool.request().input("Id", sql.Int, idFaturacao).query(`
       SELECT f.id_faturacao, f.ano, f.mes, f.total, f.estado_pagamento,
              f.metodo_pagamento, f.data_pagamento, f.data_geracao,
@@ -331,7 +383,6 @@ async function getLinhasDaFatura(idFaturacao) {
     const fatura = cab.recordset[0];
     if (!fatura) return null;
 
-    // 2) Todas as faturas do EE para o mesmo mês/ano letivo (ordem cronológica)
     const todasFaturasRes = await pool
       .request()
       .input("IdEE", sql.Int, fatura.id_ee)
@@ -347,7 +398,6 @@ async function getLinhasDaFatura(idFaturacao) {
       `);
     const todasFaturas = todasFaturasRes.recordset;
 
-    // 3) Todas as aulas do EE no mesmo mês/ano letivo (ordem cronológica)
     const aulasRes = await pool
       .request()
       .input("IdEE", sql.Int, fatura.id_ee)
@@ -405,11 +455,9 @@ async function getLinhasDaFatura(idFaturacao) {
       `);
     const aulas = aulasRes.recordset;
 
-    // 4) Matching: percorre faturas em ordem; cada uma "fica" com aulas.
-    const atribuidas = new Set(); // ids de aulas já atribuídas
-    const mapaFaturaAulas = new Map(); // idFatura -> [aulas]
+    const atribuidas = new Set();
+    const mapaFaturaAulas = new Map();
 
-    // Função utilitária: aproxima floats em cêntimos para comparar com tolerância
     const cmpValor = (a, b) =>
       Math.round(Number(a) * 100) === Math.round(Number(b) * 100);
 
@@ -417,7 +465,6 @@ async function getLinhasDaFatura(idFaturacao) {
       const f = todasFaturas[i];
       const isUltima = i === todasFaturas.length - 1;
 
-      // Tenta encontrar uma aula com valor_final igual ao total da fatura
       const candidata = aulas.find(
         (a) =>
           !atribuidas.has(a.id_coaching) && cmpValor(a.valor_final, f.total),
@@ -427,12 +474,10 @@ async function getLinhasDaFatura(idFaturacao) {
         atribuidas.add(candidata.id_coaching);
         mapaFaturaAulas.set(f.id_faturacao, [candidata]);
       } else if (isUltima) {
-        // Última fatura sem match exato — absorve todas as aulas restantes (caso legacy agregado).
         const restantes = aulas.filter((a) => !atribuidas.has(a.id_coaching));
         restantes.forEach((a) => atribuidas.add(a.id_coaching));
         mapaFaturaAulas.set(f.id_faturacao, restantes);
       } else {
-        // Sem match e não é a última: deixa vazia (pode ser fatura cancelada ou ajuste manual)
         mapaFaturaAulas.set(f.id_faturacao, []);
       }
     }
@@ -450,6 +495,9 @@ async function getLinhasDaFatura(idFaturacao) {
   }
 }
 
+/**
+ * @module faturacaoModel
+ */
 module.exports = {
   getFaturas,
   getFaturaPorId,

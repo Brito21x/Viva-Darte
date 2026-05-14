@@ -1,6 +1,6 @@
 /**
  * @fileoverview Controlador de Autenticação e Gestão de Utilizadores.
- * Lida com o login, registo, recuperação de palavra-passe e gestão CRUD de utilizadores e alunos associados.
+ * @description Lida com o login, registo, recuperação de palavra-passe e gestão CRUD de utilizadores e alunos associados.
  */
 
 const bcrypt = require("bcryptjs");
@@ -9,6 +9,21 @@ const crypto = require("crypto");
 const utilizadorModel = require("../models/authModel");
 const { registarAuditoria } = require("../helpers/auditoriaHelper");
 
+/**
+ * @async
+ * @function login
+ * @description Efetua a autenticação de um utilizador no sistema.
+ * @param {import('express').Request} req - O objeto do pedido (request) do Express.
+ * @param {Object} req.body - O corpo do pedido.
+ * @param {string} req.body.email - O e-mail do utilizador.
+ * @param {string} req.body.password - A palavra-passe do utilizador.
+ * @param {string} [req.body.tipo] - O tipo de utilizador a tentar o login (ex: PROF, EE).
+ * @param {string} [req.body.perfil] - Alternativa ao campo 'tipo'.
+ * @param {string} [req.body.captchaToken] - O token de validação do Google reCAPTCHA.
+ * @param {import('express').Response} res - O objeto da resposta (response) do Express.
+ * @param {import('express').NextFunction} next - A função para invocar o próximo middleware.
+ * @returns {Promise<import('express').Response|void>} Devolve um token JWT e os dados do utilizador, ou uma mensagem de erro.
+ */
 async function login(req, res, next) {
   try {
     const { email, password, tipo, perfil, captchaToken } = req.body;
@@ -109,7 +124,6 @@ async function login(req, res, next) {
       { expiresIn: "8h" },
     );
 
-    // Auditoria: login bem-sucedido (não aguarda — fire-and-forget seguro)
     registarAuditoria(req, {
       tipo: "LOGIN",
       descricao: `Login efetuado como ${perfilFinal}`,
@@ -134,8 +148,15 @@ async function login(req, res, next) {
   }
 }
 
+/**
+ * @async
+ * @function logout
+ * @description Termina a sessão do utilizador, registando a ação na auditoria.
+ * @param {import('express').Request} req - O objeto do pedido (request) do Express.
+ * @param {import('express').Response} res - O objeto da resposta (response) do Express.
+ * @returns {Promise<import('express').Response>} Devolve uma mensagem de sucesso.
+ */
 async function logout(req, res) {
-  // Auditoria do logout (não bloqueia se falhar)
   registarAuditoria(req, {
     tipo: "LOGOUT",
     descricao: "Sessão terminada",
@@ -143,6 +164,18 @@ async function logout(req, res) {
   return res.status(200).json({ mensagem: "Sessão terminada com sucesso." });
 }
 
+/**
+ * @async
+ * @function solicitarRecuperacaoPassword
+ * @description Inicia o processo de recuperação de palavra-passe através do e-mail.
+ * @param {import('express').Request} req - O objeto do pedido (request) do Express.
+ * @param {Object} req.body - O corpo do pedido.
+ * @param {string} req.body.email - O e-mail associado à conta.
+ * @param {string} req.body.captchaToken - O token de validação do Google reCAPTCHA.
+ * @param {import('express').Response} res - O objeto da resposta (response) do Express.
+ * @param {import('express').NextFunction} next - A função para invocar o próximo middleware.
+ * @returns {Promise<import('express').Response|void>} Devolve o token de recuperação gerado ou mensagem de erro.
+ */
 async function solicitarRecuperacaoPassword(req, res, next) {
   try {
     const { email, captchaToken } = req.body;
@@ -184,6 +217,18 @@ async function solicitarRecuperacaoPassword(req, res, next) {
   }
 }
 
+/**
+ * @async
+ * @function redefinirPassword
+ * @description Redefine a palavra-passe de um utilizador utilizando um token de recuperação válido.
+ * @param {import('express').Request} req - O objeto do pedido (request) do Express.
+ * @param {Object} req.body - O corpo do pedido.
+ * @param {string} req.body.token - O token de recuperação recebido pelo utilizador.
+ * @param {string} req.body.novaPassword - A nova palavra-passe escolhida.
+ * @param {import('express').Response} res - O objeto da resposta (response) do Express.
+ * @param {import('express').NextFunction} next - A função para invocar o próximo middleware.
+ * @returns {Promise<import('express').Response|void>} Devolve uma mensagem de sucesso ou erro.
+ */
 async function redefinirPassword(req, res, next) {
   try {
     const { token, novaPassword } = req.body;
@@ -210,6 +255,24 @@ async function redefinirPassword(req, res, next) {
   }
 }
 
+/**
+ * @async
+ * @function register
+ * @description Regista um novo utilizador no sistema (auto-registo, aguardando aprovação).
+ * @param {import('express').Request} req - O objeto do pedido (request) do Express.
+ * @param {Object} req.body - O corpo do pedido.
+ * @param {string} req.body.nome - O nome do utilizador.
+ * @param {string} req.body.email - O e-mail do utilizador.
+ * @param {string} req.body.telefone - O número de telefone.
+ * @param {string} req.body.password - A palavra-passe.
+ * @param {string} req.body.tipo - O tipo de utilizador (ex: PROF, EE).
+ * @param {string} [req.body.nomeAluno] - O nome do educando (obrigatório se tipo for EE).
+ * @param {string} [req.body.dataNascimentoAluno] - A data de nascimento do educando (obrigatório se tipo for EE).
+ * @param {string} req.body.captchaToken - O token de validação do Google reCAPTCHA.
+ * @param {import('express').Response} res - O objeto da resposta (response) do Express.
+ * @param {import('express').NextFunction} next - A função para invocar o próximo middleware.
+ * @returns {Promise<import('express').Response|void>} Devolve uma mensagem a informar que o registo aguarda aprovação.
+ */
 async function register(req, res, next) {
   try {
     const {
@@ -261,11 +324,10 @@ async function register(req, res, next) {
       dataNascimentoAluno,
     });
 
-    // Auditoria: auto-registo (utilizador novo a aguardar aprovação)
     registarAuditoria(req, {
       tipo: "REGISTO",
       descricao: `Auto-registo de ${nomePerfil}: ${nome} <${email}>`,
-      idUtilizador: null, // ainda não tem ID válido a usar (e o utilizador não está autenticado)
+      idUtilizador: null,
       entidadeTipo: "UTILIZADOR",
       dadosExtra: { nome, email, perfil: nomePerfil },
     });
@@ -280,6 +342,15 @@ async function register(req, res, next) {
   }
 }
 
+/**
+ * @async
+ * @function listarUtilizadores
+ * @description Lista todos os utilizadores registados no sistema.
+ * @param {import('express').Request} req - O objeto do pedido (request) do Express.
+ * @param {import('express').Response} res - O objeto da resposta (response) do Express.
+ * @param {import('express').NextFunction} next - A função para invocar o próximo middleware.
+ * @returns {Promise<import('express').Response|void>} Devolve um array de objetos de utilizadores.
+ */
 async function listarUtilizadores(req, res, next) {
   try {
     const lista = await utilizadorModel.listarTodosUtilizadores();
@@ -289,9 +360,26 @@ async function listarUtilizadores(req, res, next) {
   }
 }
 
+/**
+ * @async
+ * @function adminCriarUtilizador
+ * @description Permite a um administrador criar diretamente um utilizador (já ativo).
+ * @param {import('express').Request} req - O objeto do pedido (request) do Express.
+ * @param {Object} req.body - O corpo do pedido.
+ * @param {string} req.body.nome - O nome do utilizador.
+ * @param {string} req.body.email - O e-mail do utilizador.
+ * @param {string} req.body.telefone - O telefone do utilizador.
+ * @param {string} req.body.password - A palavra-passe.
+ * @param {string} req.body.tipo - O tipo de utilizador (ADMIN, PROF, EE).
+ * @param {number[]} [req.body.idsModalidades] - Array de IDs de modalidades (se for professor).
+ * @param {string} [req.body.nomeAluno] - O nome do educando (se for EE).
+ * @param {string} [req.body.dataNascimentoAluno] - A data de nascimento do educando (se for EE).
+ * @param {import('express').Response} res - O objeto da resposta (response) do Express.
+ * @param {import('express').NextFunction} next - A função para invocar o próximo middleware.
+ * @returns {Promise<import('express').Response|void>} Devolve o objeto do novo utilizador criado.
+ */
 async function adminCriarUtilizador(req, res, next) {
   try {
-    // Adicionados dados do Aluno para salvar quando o admin cria um EE
     const {
       nome,
       email,
@@ -337,7 +425,6 @@ async function adminCriarUtilizador(req, res, next) {
       dataNascimentoAluno,
     });
 
-    // Auditoria: admin criou novo utilizador
     registarAuditoria(req, {
       tipo: "UTILIZADOR_CRIAR",
       descricao: `Utilizador criado por admin: ${nome} <${email}> (${nomePerfil})`,
@@ -363,6 +450,17 @@ async function adminCriarUtilizador(req, res, next) {
   }
 }
 
+/**
+ * @async
+ * @function editarUtilizador
+ * @description Atualiza os dados principais de um utilizador.
+ * @param {import('express').Request} req - O objeto do pedido (request) do Express.
+ * @param {string} req.params.id - O ID do utilizador a editar.
+ * @param {Object} req.body - Os dados a atualizar (nome, email, telefone, etc.).
+ * @param {import('express').Response} res - O objeto da resposta (response) do Express.
+ * @param {import('express').NextFunction} next - A função para invocar o próximo middleware.
+ * @returns {Promise<import('express').Response|void>} Devolve uma mensagem de sucesso ou erro.
+ */
 async function editarUtilizador(req, res, next) {
   try {
     const id = parseInt(req.params.id, 10);
@@ -370,7 +468,6 @@ async function editarUtilizador(req, res, next) {
       return res.status(400).json({ mensagem: "ID inválido." });
     }
 
-    // O Frontend estava a enviar estes 2 campos, mas não estavam a ser lidos aqui. Corrigido!
     const {
       nome,
       email,
@@ -404,15 +501,14 @@ async function editarUtilizador(req, res, next) {
       passwordHash,
       nomePerfil: perfilFinal,
       idsModalidades,
-      nomeAluno, // Agora é passado para o Model
-      dataNascimentoAluno, // Agora é passado para o Model
+      nomeAluno,
+      dataNascimentoAluno,
     });
 
     if (!ok) {
       return res.status(404).json({ mensagem: "Utilizador não encontrado." });
     }
 
-    // Auditoria: edição de utilizador
     registarAuditoria(req, {
       tipo: "UTILIZADOR_EDIT",
       descricao: `Utilizador #${id} editado (${nome})`,
@@ -427,6 +523,19 @@ async function editarUtilizador(req, res, next) {
   }
 }
 
+/**
+ * @async
+ * @function alterarEstado
+ * @description Altera o estado de atividade (ativo/inativo) de um utilizador.
+ * @param {import('express').Request} req - O objeto do pedido (request) do Express.
+ * @param {string} req.params.id - O ID do utilizador.
+ * @param {Object} req.body - O corpo do pedido.
+ * @param {boolean} req.body.ativo - O novo estado de atividade pretendido.
+ * @param {number[]} [req.body.idsModalidades] - Array de modalidades caso seja necessário atualizar no ato de alteração de estado.
+ * @param {import('express').Response} res - O objeto da resposta (response) do Express.
+ * @param {import('express').NextFunction} next - A função para invocar o próximo middleware.
+ * @returns {Promise<import('express').Response|void>} Devolve uma mensagem confirmando a ativação/desativação.
+ */
 async function alterarEstado(req, res, next) {
   try {
     const id = parseInt(req.params.id, 10);
@@ -457,6 +566,18 @@ async function alterarEstado(req, res, next) {
   }
 }
 
+/**
+ * @async
+ * @function ativarUtilizador
+ * @description Aprova/Ativa a conta de um utilizador no sistema.
+ * @param {import('express').Request} req - O objeto do pedido (request) do Express.
+ * @param {string} req.params.id - O ID do utilizador a ativar.
+ * @param {Object} req.body - O corpo do pedido.
+ * @param {number[]} [req.body.idsModalidades] - Modalidades a atribuir (se for professor).
+ * @param {import('express').Response} res - O objeto da resposta (response) do Express.
+ * @param {import('express').NextFunction} next - A função para invocar o próximo middleware.
+ * @returns {Promise<import('express').Response|void>} Devolve uma mensagem de sucesso ou erro.
+ */
 async function ativarUtilizador(req, res, next) {
   try {
     const { id } = req.params;
@@ -483,6 +604,16 @@ async function ativarUtilizador(req, res, next) {
   }
 }
 
+/**
+ * @async
+ * @function desativarUtilizador
+ * @description Desativa a conta de um utilizador revogando-lhe o acesso.
+ * @param {import('express').Request} req - O objeto do pedido (request) do Express.
+ * @param {string} req.params.id - O ID do utilizador a desativar.
+ * @param {import('express').Response} res - O objeto da resposta (response) do Express.
+ * @param {import('express').NextFunction} next - A função para invocar o próximo middleware.
+ * @returns {Promise<import('express').Response|void>} Devolve uma mensagem de sucesso ou erro.
+ */
 async function desativarUtilizador(req, res, next) {
   try {
     const sucesso = await utilizadorModel.alterarEstadoUtilizador(
@@ -504,6 +635,16 @@ async function desativarUtilizador(req, res, next) {
   }
 }
 
+/**
+ * @async
+ * @function eliminarUtilizador
+ * @description Apaga permanentemente um utilizador da base de dados.
+ * @param {import('express').Request} req - O objeto do pedido (request) do Express.
+ * @param {string} req.params.id - O ID do utilizador a eliminar.
+ * @param {import('express').Response} res - O objeto da resposta (response) do Express.
+ * @param {import('express').NextFunction} next - A função para invocar o próximo middleware.
+ * @returns {Promise<import('express').Response|void>} Devolve uma mensagem de sucesso ou erro.
+ */
 async function eliminarUtilizador(req, res, next) {
   try {
     const sucesso = await utilizadorModel.apagarUtilizador(req.params.id);
@@ -524,6 +665,18 @@ async function eliminarUtilizador(req, res, next) {
   }
 }
 
+/**
+ * @async
+ * @function atualizarModalidades
+ * @description Atualiza apenas a lista de modalidades associadas a um professor.
+ * @param {import('express').Request} req - O objeto do pedido (request) do Express.
+ * @param {string} req.params.id - O ID do professor.
+ * @param {Object} req.body - O corpo do pedido.
+ * @param {number[]} req.body.idsModalidades - Array com os IDs das novas modalidades.
+ * @param {import('express').Response} res - O objeto da resposta (response) do Express.
+ * @param {import('express').NextFunction} next - A função para invocar o próximo middleware.
+ * @returns {Promise<import('express').Response|void>} Devolve uma mensagem confirmando a atualização.
+ */
 async function atualizarModalidades(req, res, next) {
   try {
     const { id } = req.params;
@@ -544,6 +697,17 @@ async function atualizarModalidades(req, res, next) {
   }
 }
 
+/**
+ * @async
+ * @function editarUtilizadorCompleto
+ * @description Edita o perfil completo do utilizador, flexibilizando a validação de modalidades face à edição parcial.
+ * @param {import('express').Request} req - O objeto do pedido (request) do Express.
+ * @param {string} req.params.id - O ID do utilizador a editar.
+ * @param {Object} req.body - Os dados a atualizar no perfil.
+ * @param {import('express').Response} res - O objeto da resposta (response) do Express.
+ * @param {import('express').NextFunction} next - A função para invocar o próximo middleware.
+ * @returns {Promise<import('express').Response|void>} Devolve uma mensagem de sucesso após a atualização.
+ */
 async function editarUtilizadorCompleto(req, res, next) {
   try {
     const { id } = req.params;
@@ -573,11 +737,6 @@ async function editarUtilizadorCompleto(req, res, next) {
     if (tipo === "PROF") nomePerfil = "Professor";
     if (tipo === "ADMIN") nomePerfil = "Admin";
 
-    /* A VALIDAÇÃO RÍGIDA DAS MODALIDADES FOI REMOVIDA DAQUI! 
-      Como o Frontend tem um modal à parte só para as Modalidades (botão dourado), 
-      esta função já não vai bloquear a edição se quiseres apenas alterar um nome ou telefone.
-    */
-
     await utilizadorModel.atualizarUtilizadorCompleto(id, {
       nome,
       email,
@@ -595,6 +754,16 @@ async function editarUtilizadorCompleto(req, res, next) {
   }
 }
 
+/**
+ * @async
+ * @function getMeusAlunos
+ * @description Obtém a lista de educandos (alunos) associados ao Encarregado de Educação autenticado.
+ * @param {import('express').Request} req - O objeto do pedido (request) do Express.
+ * @param {Object} req.utilizador - A informação do utilizador injetada pelo middleware de autenticação.
+ * @param {import('express').Response} res - O objeto da resposta (response) do Express.
+ * @param {import('express').NextFunction} next - A função para invocar o próximo middleware.
+ * @returns {Promise<import('express').Response|void>} Devolve o array com os dados dos alunos associados.
+ */
 async function getMeusAlunos(req, res, next) {
   try {
     const idEncarregado = req.utilizador?.id;
@@ -609,6 +778,19 @@ async function getMeusAlunos(req, res, next) {
   }
 }
 
+/**
+ * @async
+ * @function criarMeuAluno
+ * @description Cria um novo registo de aluno e associa-o diretamente ao Encarregado de Educação com sessão iniciada.
+ * @param {import('express').Request} req - O objeto do pedido (request) do Express.
+ * @param {Object} req.utilizador - A informação do utilizador logado.
+ * @param {Object} req.body - O corpo do pedido.
+ * @param {string} req.body.nome - O nome do novo aluno/educando.
+ * @param {string} [req.body.dataNascimento] - A data de nascimento do aluno.
+ * @param {import('express').Response} res - O objeto da resposta (response) do Express.
+ * @param {import('express').NextFunction} next - A função para invocar o próximo middleware.
+ * @returns {Promise<import('express').Response|void>} Devolve os dados do aluno criado ou uma mensagem de erro.
+ */
 async function criarMeuAluno(req, res, next) {
   try {
     const idEncarregado = req.utilizador?.id;
@@ -635,6 +817,9 @@ async function criarMeuAluno(req, res, next) {
   }
 }
 
+/**
+ * @module authController
+ */
 module.exports = {
   login,
   logout,

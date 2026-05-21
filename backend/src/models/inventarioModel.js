@@ -32,7 +32,6 @@ async function getCatalogoPecas() {
                    active_emp.data_inicio AS emprestimo_inicio,
                    active_emp.data_fim AS emprestimo_fim,
                    base_emp.valor AS valor_dia,
-                   -- Extração blindada dos métodos de pagamento usando manipulação de strings no SQL
                    CASE 
                        WHEN base_emp.observacoes LIKE '%Métodos: %' THEN
                            SUBSTRING(
@@ -140,7 +139,7 @@ async function getPecaDetalhes(idPeca) {
  */
 async function registarNovaPeca(dadosPeca) {
   const pool = await poolPromise;
-  const transaction = pool.transaction(); // Início do bloco transacional
+  const transaction = pool.transaction();
   await transaction.begin();
 
   try {
@@ -181,6 +180,20 @@ async function registarNovaPeca(dadosPeca) {
         .query(
           `INSERT INTO EMPRESTIMO_ITEM (PECAid_peca, [EMPRESIMO id_emprestimo]) VALUES (@IdPeca, @IdEmp)`,
         );
+    }
+
+    if (dadosPeca.isVenda && dadosPeca.preco > 0) {
+      await transaction
+        .request()
+        .input("Preco", sql.Decimal(10, 2), dadosPeca.preco)
+        .input("IdPecaV", sql.Int, idPeca)
+        .input("IdVendedor", sql.Int, dadosPeca.idUtilizador)
+        .input("NomeV", sql.VarChar(255), dadosPeca.nome)
+        .input("CondV", sql.VarChar(50), dadosPeca.estado || "Novo")
+        .input("MetodosV", sql.VarChar(255), dadosPeca.metodosStr || "").query(`
+            INSERT INTO VENDA_PECA (preco, data_colocacao, estado, PECAid_peca, UTILIZADORid_utilizador, nome_peca, condicao, metodos_aceites)
+            VALUES (@Preco, GETDATE(), 'Disponível', @IdPecaV, @IdVendedor, @NomeV, @CondV, @MetodosV);
+        `);
     }
 
     await transaction.commit();
@@ -307,16 +320,125 @@ async function eliminarPecaCompleta(idPeca) {
  */
 async function atualizarDadosCompletosPeca(idPeca, dados) {
   const pool = await poolPromise;
-  await pool
-    .request()
-    .input("IdPeca", sql.Int, idPeca)
-    .input("Nome", sql.VarChar(255), dados.nome)
-    .input("Desc", sql.VarChar(255), dados.descricao)
-    .input("Tam", sql.VarChar(50), dados.tamanho)
-    .input("Est", sql.VarChar(50), dados.estado)
-    .query(
-      `UPDATE PECA SET nome = @Nome, descricao = @Desc, tamanho = @Tam, estado = @Est WHERE id_peca = @IdPeca`,
-    );
+  const transaction = pool.transaction();
+  await transaction.begin();
+
+  try {
+    await transaction
+      .request()
+      .input("IdPeca", sql.Int, idPeca)
+      .input("Nome", sql.VarChar(255), dados.nome)
+      .input("Desc", sql.VarChar(255), dados.descricao || "")
+      .input("Tam", sql.VarChar(50), dados.tamanho || "")
+      .input("Est", sql.VarChar(50), dados.estado || "Novo")
+      .input("DispVenda", sql.Bit, dados.disponivelVenda ? 1 : 0)
+      .input("DispEmp", sql.Bit, dados.disponivelEmprestimo ? 1 : 0).query(`
+        UPDATE PECA 
+        SET nome = @Nome, 
+            descricao = @Desc, 
+            tamanho = @Tam, 
+            estado = @Est, 
+            disponivel_para_venda = @DispVenda, 
+            disponivel_para_emprestimo = @DispEmp 
+        WHERE id_peca = @IdPeca
+      `);
+
+    if (dados.disponivelVenda && dados.preco > 0) {
+      const vendaExiste = await transaction
+        .request()
+        .input("IdPeca", sql.Int, idPeca)
+        .query(
+          `SELECT id_venda FROM VENDA_PECA WHERE PECAid_peca = @IdPeca AND estado IN ('Disponível', 'Disponivel');`,
+        );
+
+      if (vendaExiste.recordset.length > 0) {
+        await transaction
+          .request()
+          .input("IdPeca", sql.Int, idPeca)
+          .input("Preco", sql.Decimal(10, 2), dados.preco)
+          .input("NomePeca", sql.VarChar(255), dados.nome)
+          .input("Condicao", sql.VarChar(50), dados.estado)
+          .input("Metodos", sql.VarChar(255), dados.metodosStr).query(`
+            UPDATE VENDA_PECA 
+            SET preco = @Preco, nome_peca = @NomePeca, condicao = @Condicao, metodos_aceites = @Metodos
+            WHERE PECAid_peca = @IdPeca AND estado IN ('Disponível', 'Disponivel')
+          `);
+      } else {
+        await transaction
+          .request()
+          .input("Preco", sql.Decimal(10, 2), dados.preco)
+          .input("IdPecaV", sql.Int, idPeca)
+          .input("IdVendedor", sql.Int, dados.idUtilizador)
+          .input("NomeV", sql.VarChar(255), dados.nome)
+          .input("CondV", sql.VarChar(50), dados.estado || "Novo")
+          .input("MetodosV", sql.VarChar(255), dados.metodosStr || "").query(`
+            INSERT INTO VENDA_PECA (preco, data_colocacao, estado, PECAid_peca, UTILIZADORid_utilizador, nome_peca, condicao, metodos_aceites)
+            VALUES (@Preco, GETDATE(), 'Disponível', @IdPecaV, @IdVendedor, @NomeV, @CondV, @MetodosV);
+          `);
+      }
+    } else {
+      await transaction.request().input("IdPeca", sql.Int, idPeca).query(`
+          UPDATE VENDA_PECA 
+          SET estado = 'Cancelado' 
+          WHERE PECAid_peca = @IdPeca AND estado IN ('Disponível', 'Disponivel')
+        `);
+    }
+
+    if (dados.disponivelEmprestimo) {
+      const empExiste = await transaction
+        .request()
+        .input("IdPeca", sql.Int, idPeca)
+        .query(
+          `SELECT TOP 1 [EMPRESIMO id_emprestimo] as id FROM EMPRESTIMO_ITEM WHERE PECAid_peca = @IdPeca;`,
+        );
+
+      if (empExiste.recordset.length > 0) {
+        const idEmprestimo = empExiste.recordset[0].id;
+        await transaction
+          .request()
+          .input("IdEmp", sql.Int, idEmprestimo)
+          .input("Valor", sql.Decimal(10, 2), dados.valor_dia || 0)
+          .input(
+            "MetodosEmp",
+            sql.VarChar(255),
+            `Métodos: ${dados.metodosStrEmprestimo || "MBWay"}`,
+          )
+          .query(
+            `UPDATE EMPRESTIMO SET valor = @Valor, observacoes = @MetodosEmp WHERE id_emprestimo = @IdEmp`,
+          );
+      } else {
+        const resultEmp = await transaction
+          .request()
+          .input("Valor", sql.Decimal(10, 2), dados.valor_dia || 0)
+          .input(
+            "MetodosEmp",
+            sql.VarChar(255),
+            `Métodos: ${dados.metodosStrEmprestimo || "MBWay"}`,
+          )
+          .input("IdUtilizador", sql.Int, dados.idUtilizador).query(`
+            INSERT INTO EMPRESTIMO (valor, observacoes, estado, data_pedido, UTILIZADORid_utilizador)
+            OUTPUT INSERTED.id_emprestimo
+            VALUES (@Valor, @MetodosEmp, 'Disponível', GETDATE(), @IdUtilizador);
+          `);
+
+        const idEmprestimo = resultEmp.recordset[0].id_emprestimo;
+
+        await transaction
+          .request()
+          .input("IdPeca", sql.Int, idPeca)
+          .input("IdEmp", sql.Int, idEmprestimo)
+          .query(
+            `INSERT INTO EMPRESTIMO_ITEM (PECAid_peca, [EMPRESIMO id_emprestimo]) VALUES (@IdPeca, @IdEmp)`,
+          );
+      }
+    }
+
+    await transaction.commit();
+    return true;
+  } catch (error) {
+    await transaction.rollback();
+    throw error;
+  }
 }
 
 // ============================================================================

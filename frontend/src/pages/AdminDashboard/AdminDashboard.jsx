@@ -1585,16 +1585,17 @@ export default function AdminDashboard({ irParaLanding }) {
         tamanho: "",
         estado: "Bom",
         preco: "",
-        disponivelVenda: true,
+        disponivelVenda: false,
         disponivelEmprestimo: false,
         valor_dia: "",
         fotos: [],
+        metodosPagamento: ["MBWay"],
+        metodosPagamentoEmprestimo: ["MBWay"],
       },
     });
   }
 
   async function abrirModalEditarPeca(p) {
-    // Abre logo o modal com os dados base
     setModalPeca({
       isOpen: true,
       mode: "edit",
@@ -1611,9 +1612,17 @@ export default function AdminDashboard({ irParaLanding }) {
         ),
         valor_dia: p.valor_dia ?? "",
         fotos: [],
+        metodosPagamento: p.metodos_aceites_venda
+          ? p.metodos_aceites_venda.split(",").map((m) => m.trim())
+          : ["MBWay"],
+
+        // 👇 A CORREÇÃO ESTÁ AQUI: Usar metodos_pagamento em vez de observacoes_emprestimo
+        metodosPagamentoEmprestimo: p.metodos_pagamento
+          ? p.metodos_pagamento.split(",").map((m) => m.trim())
+          : ["MBWay"],
       },
     });
-    // Em paralelo, vai buscar as fotos atuais da peça
+
     try {
       const detalhes = await apiFetch(`/api/inventario/${p.id_peca}`, token);
       const fotosAtuais = Array.isArray(detalhes?.fotos)
@@ -1629,7 +1638,6 @@ export default function AdminDashboard({ irParaLanding }) {
     }
   }
 
-  // Helper: converte um File em base64 (data URL)
   function ficheiroParaBase64(file) {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -1671,6 +1679,24 @@ export default function AdminDashboard({ irParaLanding }) {
   async function submeterModalPeca(e) {
     e.preventDefault();
     const d = modalPeca.data;
+
+    if (d.disponivelVenda) {
+      if (!d.preco || d.preco === "" || parseFloat(d.preco) <= 0) {
+        return mostrarMsg(
+          "O preço de venda é obrigatório e deve ser maior que 0€.",
+          "erro",
+        );
+      }
+    }
+
+    if (d.disponivelEmprestimo) {
+      if (!d.valor_dia || d.valor_dia === "" || parseFloat(d.valor_dia) <= 0) {
+        return mostrarMsg(
+          "O valor diário de empréstimo é obrigatório e deve ser maior que 0€.",
+          "erro",
+        );
+      }
+    }
     try {
       if (modalPeca.mode === "create") {
         // Criar: POST /api/inventario
@@ -1682,7 +1708,10 @@ export default function AdminDashboard({ irParaLanding }) {
             tamanho: d.tamanho,
             estado: d.estado,
             disponivelVenda: d.disponivelVenda,
+            disponivelEmprestimo: d.disponivelEmprestimo,
             valor_dia: d.valor_dia,
+            preco: d.preco,
+            metodosPagamento: d.metodosPagamento,
             fotos: d.fotos && d.fotos.length > 0 ? d.fotos : undefined,
           },
         });
@@ -1697,6 +1726,11 @@ export default function AdminDashboard({ irParaLanding }) {
             tamanho: d.tamanho,
             estado: d.estado,
             preco: d.preco,
+            valor_dia: d.valor_dia,
+            disponivelVenda: d.disponivelVenda,
+            disponivelEmprestimo: d.disponivelEmprestimo,
+            metodosPagamentoEmprestimo: d.metodosPagamentoEmprestimo,
+            metodosPagamento: d.metodosPagamento,
             fotos: d.fotos && d.fotos.length > 0 ? d.fotos : undefined,
           },
         });
@@ -3096,7 +3130,7 @@ export default function AdminDashboard({ irParaLanding }) {
                   >
                     <div>
                       <h1 className="page-title" style={{ margin: 0 }}>
-                        Gestão de Inventário
+                        📦 Gestão de Inventário
                       </h1>
                       <p
                         style={{
@@ -3836,6 +3870,85 @@ export default function AdminDashboard({ irParaLanding }) {
                   Disponível para Empréstimo
                 </label>
               </div>
+              {modalPeca.data.disponivelVenda && (
+                <div className="field" style={{ marginTop: "12px" }}>
+                  <label>Métodos de Pagamento Aceites (Venda)</label>
+                  <div
+                    style={{ display: "flex", gap: "10px", marginTop: "6px" }}
+                  >
+                    {["MBWay", "Transferência", "Numerário"].map((metodo) => {
+                      const selecionados =
+                        modalPeca.data.metodosPagamento || [];
+                      const estaChecked = selecionados.includes(metodo);
+                      return (
+                        <label
+                          key={metodo}
+                          className="check-label-styled"
+                          style={{ padding: "8px 14px", margin: 0 }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={estaChecked}
+                            onChange={(e) => {
+                              const novosMetodos = e.target.checked
+                                ? [...selecionados, metodo]
+                                : selecionados.filter((m) => m !== metodo);
+                              setModalPeca({
+                                ...modalPeca,
+                                data: {
+                                  ...modalPeca.data,
+                                  metodosPagamento: novosMetodos,
+                                },
+                              });
+                            }}
+                          />
+                          <span>{metodo}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+              {/* Escolha dos Métodos de Pagamento no Empréstimo */}
+              {modalPeca.data.disponivelEmprestimo && (
+                <div className="field" style={{ marginTop: "12px" }}>
+                  <label>Métodos de Pagamento Aceites (Empréstimo)</label>
+                  <div
+                    style={{ display: "flex", gap: "10px", marginTop: "6px" }}
+                  >
+                    {["MBWay", "Transferência", "Numerário"].map((metodo) => {
+                      const selecionados =
+                        modalPeca.data.metodosPagamentoEmprestimo || [];
+                      const estaChecked = selecionados.includes(metodo);
+                      return (
+                        <label
+                          key={`emp-${metodo}`}
+                          className="check-label-styled"
+                          style={{ padding: "8px 14px", margin: 0 }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={estaChecked}
+                            onChange={(e) => {
+                              const novosMetodos = e.target.checked
+                                ? [...selecionados, metodo]
+                                : selecionados.filter((m) => m !== metodo);
+                              setModalPeca({
+                                ...modalPeca,
+                                data: {
+                                  ...modalPeca.data,
+                                  metodosPagamentoEmprestimo: novosMetodos,
+                                },
+                              });
+                            }}
+                          />
+                          <span>{metodo}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               <div className="field" style={{ marginTop: "12px" }}>
                 <label>Fotografias</label>
@@ -4896,10 +5009,8 @@ export default function AdminDashboard({ irParaLanding }) {
         </div>
       )}
 
-      {/* --- MODAL MELHORADO: AGENDAMENTO DIRETO --- */}
       {modalAgendarDireto.isOpen && (
         <div className="admin-modal-overlay">
-          {/* Adicionada a classe modal-agendamento-direto para aumentar a largura */}
           <div className="admin-modal-content admin-modal-content--lg">
             <h2 className="admin-modal-title">Agendamento Direto</h2>
             <p className="admin-modal-subtitle">
@@ -4908,7 +5019,6 @@ export default function AdminDashboard({ irParaLanding }) {
             <form className="admin-form" onSubmit={handleAgendarDireto}>
               <div className="form-group-row">
                 <div className="field form-col-1">
-                  {/* O texto Aluno agora aparece automaticamente no rótulo da lista */}
                   <label>Pesquisar Encarregado / Aluno *</label>
                   <SearchableSelect
                     placeholder="Escreve o nome do EE ou Aluno..."

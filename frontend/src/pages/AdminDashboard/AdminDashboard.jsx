@@ -4,6 +4,9 @@ import logoImg from "../../assets/logo.png";
 
 const API_URL = "http://localhost:3000";
 
+/**
+ * Traduz mensagens de erro de coaching para português legível.
+ */
 function traduzErroCoaching(err, fallback) {
   const msg = String(err?.message || "").trim();
   if (!msg) return fallback;
@@ -21,6 +24,9 @@ function traduzErroCoaching(err, fallback) {
   return msg;
 }
 
+/**
+ * Helper base para requisições à API.
+ */
 function apiFetch(path, token, opts = {}) {
   return fetch(`${API_URL}${path}`, {
     ...opts,
@@ -33,6 +39,9 @@ function apiFetch(path, token, opts = {}) {
   }).then((r) => r.json());
 }
 
+/**
+ * Helper para requisições com verificação estrita de resposta (lança exceções).
+ */
 async function apiFetchChecked(path, token, opts = {}) {
   const res = await fetch(`${API_URL}${path}`, {
     ...opts,
@@ -49,7 +58,9 @@ async function apiFetchChecked(path, token, opts = {}) {
   return data;
 }
 
-// --- COMPONENTE: Dropdown com Pesquisa (Autocomplete) ---
+// --- COMPONENTES AUXILIARES ---
+
+/** Dropdown pesquisável / Autocomplete */
 function SearchableSelect({ options, value, onChange, placeholder }) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -66,7 +77,7 @@ function SearchableSelect({ options, value, onChange, placeholder }) {
     function handleClickOutside(event) {
       if (wrapperRef.current && !wrapperRef.current.contains(event.target)) {
         setIsOpen(false);
-        setSearch(""); // Limpa a pesquisa ao fechar para mostrar a lista toda na próxima vez
+        setSearch("");
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
@@ -87,7 +98,7 @@ function SearchableSelect({ options, value, onChange, placeholder }) {
         onChange={(e) => {
           setSearch(e.target.value);
           setIsOpen(true);
-          if (value) onChange(""); // Limpa a seleção se começar a apagar/escrever
+          if (value) onChange("");
         }}
         onFocus={() => {
           setIsOpen(true);
@@ -119,11 +130,9 @@ function SearchableSelect({ options, value, onChange, placeholder }) {
   );
 }
 
-// Normaliza um valor 'time' vindo do SQL Server ("19:00:00", ISO "1970-01-01T19:00:00.000Z"
-// ou Date) para a string "HH:MM". Devolve "—" se não conseguir interpretar.
+/** Formata dados de tempo vindo da API para exibir HH:MM */
 function formatarHoraSqlTime(valor) {
   if (valor == null) return "—";
-  // Se for um Date object (alguns drivers fazem isto)
   if (valor instanceof Date && !Number.isNaN(valor.getTime())) {
     const hh = String(valor.getUTCHours()).padStart(2, "0");
     const mm = String(valor.getUTCMinutes()).padStart(2, "0");
@@ -131,19 +140,14 @@ function formatarHoraSqlTime(valor) {
   }
   const s = String(valor).trim();
   if (!s) return "—";
-  // Caso ISO completo "1970-01-01T19:00:00.000Z"
   const isoMatch = s.match(/T(\d{2}):(\d{2})/);
   if (isoMatch) return `${isoMatch[1]}:${isoMatch[2]}`;
-  // Caso "HH:MM" ou "HH:MM:SS"
   const hmMatch = s.match(/^(\d{1,2}):(\d{2})/);
-  if (hmMatch) {
-    return `${String(hmMatch[1]).padStart(2, "0")}:${hmMatch[2]}`;
-  }
+  if (hmMatch) return `${String(hmMatch[1]).padStart(2, "0")}:${hmMatch[2]}`;
   return "—";
 }
 
-// Calcula a hora de fim somando 'duracaoMinutos' a uma hora de início (formato igual ao SQL).
-// Devolve string "HH:MM" ou "" se inválido.
+/** Calcula a hora de fim de um bloco somando minutos */
 function calcularHoraFim(horaInicio, duracaoMinutos) {
   const hi = formatarHoraSqlTime(horaInicio);
   if (hi === "—") return "";
@@ -156,14 +160,14 @@ function calcularHoraFim(horaInicio, duracaoMinutos) {
   return `${String(hFim).padStart(2, "0")}:${String(mFim).padStart(2, "0")}`;
 }
 
+/** Cartão de Estatísticas para o Dashboard */
 function StatCard({ icon, label, value, accent, onClick }) {
   return (
     <div
-      className={`stat-card stat-card--${accent}`}
+      className={`stat-card stat-card--${accent} ${onClick ? "stat-card--clickable" : ""}`}
       onClick={onClick}
-      style={{ cursor: onClick ? "pointer" : "default" }}
     >
-      <span className="stat-icon">{icon}</span>
+      {icon && <span className="stat-icon">{icon}</span>}
       <div>
         <p className="stat-label">{label}</p>
         <p className="stat-value">{value ?? "—"}</p>
@@ -172,6 +176,7 @@ function StatCard({ icon, label, value, accent, onClick }) {
   );
 }
 
+/** Secção colapsável (Accordion) */
 function Section({
   title,
   icon,
@@ -221,7 +226,6 @@ function formatDataApi(valor) {
   return `${yyyy}-${mm}-${dd}`;
 }
 
-// Tabela de tradução dos códigos de eventos de auditoria para texto legível
 const AUDITORIA_LABELS = {
   LOGIN: "Login",
   LOGOUT: "Logout",
@@ -252,7 +256,7 @@ function legivelTipoEvento(tipo) {
   return AUDITORIA_LABELS[tipo] || tipo || "—";
 }
 
-// Mapeia o tipo de evento para uma cor de badge consistente
+/** Retorna cor baseada no tipo de evento para aplicar inline. */
 function corDoEventoAuditoria(tipo) {
   if (!tipo) return "#888";
   if (tipo.startsWith("LOGIN") || tipo === "REGISTO") return "#5a8dee";
@@ -266,7 +270,10 @@ function corDoEventoAuditoria(tipo) {
   return "#666";
 }
 
+// --- COMPONENTE PRINCIPAL ---
+
 export default function AdminDashboard({ irParaLanding }) {
+  // Autenticação
   const [isAuthorized, setIsAuthorized] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -277,12 +284,14 @@ export default function AdminDashboard({ irParaLanding }) {
   const [token, setToken] = useState("");
   const [activeTab, setActiveTab] = useState("overview");
 
+  // Dados Gerais
   const [utilizadores, setUtilizadores] = useState([]);
   const [allModalidades, setAllModalidades] = useState([]);
   const [pedidosPendentes, setPedidosPendentes] = useState([]);
   const [inventario, setInventario] = useState([]);
   const [tabelaPrecos, setTabelaPrecos] = useState([]);
-  // Estado para o Modal de Edição de Preços
+
+  // Modais de Preços
   const [modalPreco, setModalPreco] = useState({
     isOpen: false,
     data: {
@@ -295,7 +304,6 @@ export default function AdminDashboard({ irParaLanding }) {
     },
   });
 
-  // Função para abrir o modal com os dados da regra selecionada
   function abrirModalEditarPreco(regra) {
     setModalPreco({
       isOpen: true,
@@ -310,7 +318,6 @@ export default function AdminDashboard({ irParaLanding }) {
     });
   }
 
-  // Função para submeter a alteração (RF17)
   async function submeterModalPreco(e) {
     e.preventDefault();
     try {
@@ -325,11 +332,10 @@ export default function AdminDashboard({ irParaLanding }) {
           body: JSON.stringify(modalPreco.data),
         },
       );
-
       if (res.ok) {
         mostrarMsg("Regra de preço atualizada com sucesso!", "ok");
         setModalPreco({ isOpen: false, data: {} });
-        carregarPrecos(); // Recarrega a tabela
+        carregarPrecos();
       } else {
         mostrarMsg("Erro ao atualizar o preço.", "erro");
       }
@@ -337,9 +343,8 @@ export default function AdminDashboard({ irParaLanding }) {
       mostrarMsg("Erro de comunicação com o servidor.", "erro");
     }
   }
-  const [precosLoading, setPrecosLoading] = useState(false);
 
-  // Função para ir buscar a TABELA_PRECO
+  const [precosLoading, setPrecosLoading] = useState(false);
   async function carregarPrecos() {
     setPrecosLoading(true);
     try {
@@ -349,7 +354,6 @@ export default function AdminDashboard({ irParaLanding }) {
           "Content-Type": "application/json",
         },
       });
-
       if (res.ok) {
         const data = await res.json();
         setTabelaPrecos(Array.isArray(data) ? data : []);
@@ -357,14 +361,13 @@ export default function AdminDashboard({ irParaLanding }) {
         mostrarMsg("Erro ao carregar a tabela de preços.", "erro");
       }
     } catch (err) {
-      console.error(err);
       mostrarMsg("Erro de ligação ao servidor.", "erro");
     } finally {
       setPrecosLoading(false);
     }
   }
 
-  // Estado para o Modal de Criar/Editar Peças
+  // Inventário e Modais
   const [modalPeca, setModalPeca] = useState({
     isOpen: false,
     mode: "create",
@@ -406,16 +409,15 @@ export default function AdminDashboard({ irParaLanding }) {
 
   const [msg, setMsg] = useState("");
 
-  // --- FATURAÇÃO ---
+  // Faturação
   const [faturas, setFaturas] = useState([]);
   const [faturacaoFiltro, setFaturacaoFiltro] = useState({
     ano: "",
     mes: "",
     estado: "",
+    subTab: "faturas",
   });
   const [faturacaoLoading, setFaturacaoLoading] = useState(false);
-
-  // Detalhe (drill-down) de uma fatura específica: cabeçalho + linhas/aulas
   const [modalDetalheFatura, setModalDetalheFatura] = useState({
     isOpen: false,
     loading: false,
@@ -425,9 +427,8 @@ export default function AdminDashboard({ irParaLanding }) {
     modoIndividual: false,
   });
 
-  // --- INVENTÁRIO ---
+  // Inventário (Tabs Internas)
   const [inventarioPecas, setInventarioPecas] = useState([]);
-  const [inventarioEmprestimos, setInventarioEmprestimos] = useState([]);
   const [inventarioVendas, setInventarioVendas] = useState([]);
   const [inventarioTab, setInventarioTab] = useState("catalogo");
   const [inventarioLoading, setInventarioLoading] = useState(false);
@@ -439,7 +440,7 @@ export default function AdminDashboard({ irParaLanding }) {
     dispVenda: false,
   });
 
-  // --- HISTÓRICO / AUDITORIA ---
+  // Histórico
   const [historicoGeral, setHistoricoGeral] = useState([]);
   const [historicoLoading, setHistoricoLoading] = useState(false);
   const [historicoIndisponivel, setHistoricoIndisponivel] = useState(false);
@@ -461,6 +462,7 @@ export default function AdminDashboard({ irParaLanding }) {
     selectedIds: [],
   });
 
+  // Boot: Verificar sessão local
   useEffect(() => {
     document.title = "Painel Admin | Viva D'arte";
     const userGuardado = localStorage.getItem("viva_user");
@@ -590,6 +592,8 @@ export default function AdminDashboard({ irParaLanding }) {
     setTimeout(() => setMsg(""), 3500);
   }
 
+  // --- CRUD UTILIZADORES ---
+
   async function handleAceitarUtilizador(id) {
     if (!window.confirm("Aprovar entrada deste utilizador?")) return;
     try {
@@ -714,7 +718,6 @@ export default function AdminDashboard({ irParaLanding }) {
   async function submeterModal(e) {
     e.preventDefault();
     const { email, telefone, password } = modalUser.data;
-
     if (!email.includes("@"))
       return mostrarMsg("O email tem de conter um '@'.", "erro");
 
@@ -817,6 +820,8 @@ export default function AdminDashboard({ irParaLanding }) {
     }
   }
 
+  // --- COACHING ---
+
   function abrirModalAprovarPedido(p) {
     setModalAprovar({
       isOpen: true,
@@ -839,7 +844,6 @@ export default function AdminDashboard({ irParaLanding }) {
         "erro",
       );
     }
-
     try {
       const res = await fetch(
         `${API_URL}/api/coaching/pedidos/${modalAprovar.pedido.id_pedido_coaching}/aprovar`,
@@ -857,7 +861,6 @@ export default function AdminDashboard({ irParaLanding }) {
         },
       );
       const data = await res.json();
-
       if (res.ok) {
         mostrarMsg("Coaching Agendado! A sala foi atribuída.", "ok");
         setModalAprovar({
@@ -926,7 +929,6 @@ export default function AdminDashboard({ irParaLanding }) {
     );
     if (!justificacao)
       return mostrarMsg("A justificação é obrigatória para rejeitar.", "erro");
-
     try {
       const res = await fetch(
         `${API_URL}/api/coaching/pedidos/${idPedido}/rejeitar`,
@@ -940,7 +942,6 @@ export default function AdminDashboard({ irParaLanding }) {
         },
       );
       const data = await res.json();
-
       if (res.ok) {
         mostrarMsg("Pedido rejeitado com sucesso.", "ok");
         carregarDados();
@@ -959,14 +960,12 @@ export default function AdminDashboard({ irParaLanding }) {
       )
     )
       return;
-
     try {
       const res = await fetch(`${API_URL}/api/coaching/${idCoaching}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
-
       if (res.ok) {
         mostrarMsg("Coaching cancelado com sucesso.", "ok");
         carregarDados();
@@ -978,7 +977,8 @@ export default function AdminDashboard({ irParaLanding }) {
     }
   }
 
-  // Preparação de listas e lógicas de filtragem cruzada (Agendamento Direto)
+  // --- FILTROS DE DADOS E DEPENDÊNCIAS ---
+
   const pendentes = utilizadores.filter(
     (u) => u.ativo === false || u.ativo === 0,
   );
@@ -1012,27 +1012,23 @@ export default function AdminDashboard({ irParaLanding }) {
     (c) => c.estado === "Cancelado",
   );
 
-  // OPÇÕES FORMATADAS PARA OS DROPDOWNS INTELIGENTES
   const eeOptions = encarregados.map((ee) => ({
     id: ee.id_utilizador,
     label: `${ee.nome} (Aluno: ${ee.nomeAluno || "Sem aluno registado"})`,
   }));
 
-  // FILTROS CRUZADOS: PROFESSOR <-> MODALIDADE
   const profSelecionado = profs.find(
     (p) => String(p.id_utilizador) === String(modalAgendarDireto.idProfessor),
   );
   const modSelecionada = allModalidades.find(
     (m) => String(m.id_modalidade) === String(modalAgendarDireto.idModalidade),
   );
-
   const modalidadesDisponiveis =
     modalAgendarDireto.idProfessor && profSelecionado
       ? allModalidades.filter((m) =>
           (profSelecionado.modalidades || "").includes(m.nome),
         )
       : allModalidades;
-
   const profsDisponiveis =
     modalAgendarDireto.idModalidade && modSelecionada
       ? profs.filter((p) => (p.modalidades || "").includes(modSelecionada.nome))
@@ -1047,9 +1043,8 @@ export default function AdminDashboard({ irParaLanding }) {
       const prof = profs.find(
         (p) => String(p.id_utilizador) === String(nextProf),
       );
-      if (mod && prof && !(prof.modalidades || "").includes(mod.nome)) {
-        nextProf = ""; // Limpa o professor se ele não leciona esta nova modalidade
-      }
+      if (mod && prof && !(prof.modalidades || "").includes(mod.nome))
+        nextProf = "";
     }
     setModalAgendarDireto({
       ...modalAgendarDireto,
@@ -1067,9 +1062,8 @@ export default function AdminDashboard({ irParaLanding }) {
       const mod = allModalidades.find(
         (m) => String(m.id_modalidade) === String(nextMod),
       );
-      if (prof && mod && !(prof.modalidades || "").includes(mod.nome)) {
-        nextMod = ""; // Limpa a modalidade se o novo professor não a leciona
-      }
+      if (prof && mod && !(prof.modalidades || "").includes(mod.nome))
+        nextMod = "";
     }
     setModalAgendarDireto({
       ...modalAgendarDireto,
@@ -1078,145 +1072,146 @@ export default function AdminDashboard({ irParaLanding }) {
     });
   };
 
+  /** Renders Genéricos para Tabelas */
   const renderTabelaUtilizadores = (listaUtilizadores, tipoTabela) => (
-    <table className="admin-table">
-      <thead>
-        <tr>
-          <th>ID</th>
-          <th>Nome</th>
-          <th>Email</th>
-          <th>Telefone</th>
-          {tipoTabela === "PENDENTES" && <th>Educando / Modalidades</th>}
-          {tipoTabela === "PROF" && <th>Modalidades</th>}
-          {tipoTabela === "EE" && <th>Educando</th>}
-          <th>Estado</th>
-          <th>Criação</th>
-          <th className="text-center">Ações</th>
-        </tr>
-      </thead>
-      <tbody>
-        {listaUtilizadores.map((u) => {
-          const isAtivo = u.ativo === true || u.ativo === 1;
-          const isProf = u.perfis && u.perfis.toLowerCase().includes("prof");
-
-          return (
-            <tr
-              key={u.id_utilizador}
-              className={!isAtivo ? "table-row--pending" : ""}
-            >
-              <td>{u.id_utilizador}</td>
-              <td>
-                <strong>{u.nome}</strong>
-              </td>
-              <td>{u.email}</td>
-              <td>{u.telefone || "—"}</td>
-
-              {tipoTabela === "PENDENTES" && (
+    <div className="table-wrapper">
+      <table className="admin-table">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Nome</th>
+            <th>Email</th>
+            <th>Telefone</th>
+            {tipoTabela === "PENDENTES" && <th>Educando / Modalidades</th>}
+            {tipoTabela === "PROF" && <th>Modalidades</th>}
+            {tipoTabela === "EE" && <th>Educando</th>}
+            <th>Estado</th>
+            <th>Criação</th>
+            <th className="text-center">Ações</th>
+          </tr>
+        </thead>
+        <tbody>
+          {listaUtilizadores.map((u) => {
+            const isAtivo = u.ativo === true || u.ativo === 1;
+            const isProf = u.perfis && u.perfis.toLowerCase().includes("prof");
+            return (
+              <tr
+                key={u.id_utilizador}
+                className={!isAtivo ? "table-row--pending" : ""}
+              >
+                <td>{u.id_utilizador}</td>
                 <td>
-                  {isProf
-                    ? u.modalidades || (
-                        <span style={{ opacity: 0.5 }}>Nenhuma</span>
-                      )
-                    : u.nomeAluno || "—"}
+                  <strong className="font-bold">{u.nome}</strong>
                 </td>
-              )}
-              {tipoTabela === "PROF" && (
+                <td>{u.email}</td>
+                <td>{u.telefone || "—"}</td>
+                {tipoTabela === "PENDENTES" && (
+                  <td>
+                    {isProf
+                      ? u.modalidades || (
+                          <span className="opacity-50 text-muted">Nenhuma</span>
+                        )
+                      : u.nomeAluno || "—"}
+                  </td>
+                )}
+                {tipoTabela === "PROF" && (
+                  <td>
+                    {u.modalidades || (
+                      <span className="opacity-50 text-muted">Nenhuma</span>
+                    )}
+                  </td>
+                )}
+                {tipoTabela === "EE" && <td>{u.nomeAluno || "—"}</td>}
                 <td>
-                  {u.modalidades || (
-                    <span style={{ opacity: 0.5 }}>Nenhuma</span>
-                  )}
+                  <span
+                    className={`badge badge--${isAtivo ? "green" : "orange"}`}
+                  >
+                    {isAtivo ? "Ativo" : "Pendente"}
+                  </span>
                 </td>
-              )}
-              {tipoTabela === "EE" && <td>{u.nomeAluno || "—"}</td>}
-
-              <td>
-                <span
-                  className={`badge badge--${isAtivo ? "green" : "orange"}`}
-                >
-                  {isAtivo ? "Ativo" : "Pendente"}
-                </span>
-              </td>
-              <td>{new Date(u.data_criacao).toLocaleDateString("pt-PT")}</td>
-              <td className="text-center whitespace-nowrap">
-                {!isAtivo ? (
-                  <>
-                    <button
-                      className="btn-sm btn-sm--green mr-8"
-                      onClick={() => handleAceitarUtilizador(u.id_utilizador)}
-                    >
-                      Aceitar
-                    </button>
+                <td>{new Date(u.data_criacao).toLocaleDateString("pt-PT")}</td>
+                <td className="text-center whitespace-nowrap">
+                  {!isAtivo ? (
+                    <>
+                      <button
+                        className="btn-sm btn-sm--green mr-8"
+                        onClick={() => handleAceitarUtilizador(u.id_utilizador)}
+                      >
+                        Aceitar
+                      </button>
+                      <button
+                        className="btn-sm btn-sm--danger mr-8"
+                        onClick={() =>
+                          handleEliminarUtilizador(u.id_utilizador)
+                        }
+                      >
+                        Eliminar
+                      </button>
+                    </>
+                  ) : (
                     <button
                       className="btn-sm btn-sm--danger mr-8"
-                      onClick={() => handleEliminarUtilizador(u.id_utilizador)}
+                      onClick={() => handleRevogarUtilizador(u.id_utilizador)}
                     >
-                      Eliminar
+                      Suspender
                     </button>
-                  </>
-                ) : (
+                  )}
+                  {isProf && isAtivo && (
+                    <button
+                      className="btn-sm btn-sm--gold mr-8"
+                      onClick={() => abrirModalModalidades(u)}
+                    >
+                      Modalidades
+                    </button>
+                  )}
                   <button
-                    className="btn-sm btn-sm--danger mr-8"
-                    onClick={() => handleRevogarUtilizador(u.id_utilizador)}
+                    className="btn-sm btn-sm--primary"
+                    onClick={() => abrirModalEditar(u)}
                   >
-                    Suspender
+                    Editar
                   </button>
-                )}
-                {isProf && isAtivo && (
-                  <button
-                    className="btn-sm btn-sm--gold mr-8"
-                    onClick={() => abrirModalModalidades(u)}
-                  >
-                    Modalidades
-                  </button>
-                )}
-                <button
-                  className="btn-sm btn-sm--primary"
-                  onClick={() => abrirModalEditar(u)}
-                >
-                  Editar
-                </button>
+                </td>
+              </tr>
+            );
+          })}
+          {listaUtilizadores.length === 0 && (
+            <tr>
+              <td
+                colSpan={tipoTabela === "ADMIN" ? 7 : 8}
+                className="empty-row"
+              >
+                Vazio.
               </td>
             </tr>
-          );
-        })}
-        {listaUtilizadores.length === 0 && (
-          <tr>
-            <td colSpan={tipoTabela === "ADMIN" ? 7 : 8} className="empty-row">
-              Vazio.
-            </td>
-          </tr>
-        )}
-      </tbody>
-    </table>
+          )}
+        </tbody>
+      </table>
+    </div>
   );
 
   const renderLinhaCoaching = (c, permiteCancelar = false) => (
     <tr key={c.id_coaching}>
       <td>
-        <strong>{formatDataApi(c.data_aula)}</strong>
-        <div style={{ fontSize: "0.8rem", color: "#666" }}>
+        <strong className="font-bold">{formatDataApi(c.data_aula)}</strong>
+        <div className="text-small text-muted">
           {formatHoraCurta(c.hora_inicio)} ({c.duracao_minutos} min)
         </div>
       </td>
       <td>
-        <div style={{ fontWeight: "600" }}>{c.alunos || "—"}</div>
-        <small style={{ display: "block", color: "#555" }}>
+        <div className="font-semibold">{c.alunos || "—"}</div>
+        <small className="text-muted" style={{ display: "block" }}>
           EE: {c.encarregado}
         </small>
       </td>
       <td>
-        <strong>{c.nome_professor}</strong>
-        <div style={{ fontSize: "0.8rem", color: "var(--primary-color)" }}>
-          {c.sala || "Sem sala"}
-        </div>
+        <strong className="font-bold">{c.nome_professor}</strong>
+        <div className="text-small text-primary">{c.sala || "Sem sala"}</div>
       </td>
       <td>
         {c.modalidade}
-        <div style={{ fontSize: "0.75rem", color: "#777" }}>
-          {c.formato_aula}
-        </div>
+        <div className="text-xs text-muted">{c.formato_aula}</div>
       </td>
-      <td style={{ fontWeight: "bold" }}>
+      <td className="font-bold">
         {c.valor_final != null ? `${Number(c.valor_final).toFixed(2)}€` : "—"}
       </td>
       <td>
@@ -1237,27 +1232,24 @@ export default function AdminDashboard({ irParaLanding }) {
         </td>
       ) : (
         <td className="text-center">
-          <span style={{ color: "#888", fontSize: "0.85rem" }}>🔒 Fechado</span>
+          <span className="text-muted text-small">🔒 Fechado</span>
         </td>
       )}
     </tr>
   );
 
+  // Efeitos dependentes das tabs ativas
   useEffect(() => {
     if (!token || !isAuthorized) return;
     if (activeTab === "inventario") carregarInventario();
     if (activeTab === "historico_geral") carregarHistoricoGeral();
-
-    // Quando entra na Tab "Faturação"
     if (activeTab === "faturacao") {
-      if (faturacaoFiltro.subTab === "precos") {
-        carregarPrecos();
-      } else {
-        carregarFaturas();
-      }
+      if (faturacaoFiltro.subTab === "precos") carregarPrecos();
+      else carregarFaturas();
     }
   }, [activeTab, faturacaoFiltro.subTab, token, isAuthorized]);
 
+  // LOGIN SCREEN
   if (!isAuthorized) {
     return (
       <div className="admin-login-wrapper">
@@ -1267,7 +1259,6 @@ export default function AdminDashboard({ irParaLanding }) {
           <p className="admin-login-subtitle">
             Acesso exclusivo à Administração
           </p>
-
           <form className="admin-form" onSubmit={handleAdminLogin}>
             {loginError && (
               <div className="info-note info-note--error">{loginError}</div>
@@ -1314,6 +1305,7 @@ export default function AdminDashboard({ irParaLanding }) {
   ];
 
   // --- FUNÇÕES DE FATURAÇÃO ---
+
   async function carregarFaturas() {
     setFaturacaoLoading(true);
     try {
@@ -1394,7 +1386,6 @@ export default function AdminDashboard({ irParaLanding }) {
     }
   }
 
-  // Abre o modal de drill-down com as aulas que compõem a fatura.
   async function abrirDetalheFatura(idFatura) {
     setModalDetalheFatura({
       isOpen: true,
@@ -1460,49 +1451,6 @@ export default function AdminDashboard({ irParaLanding }) {
   }
 
   // --- FUNÇÕES DE INVENTÁRIO ---
-  // Vai buscar o catálogo + lista de vendas e funde a info, para que cada peça
-  // à venda traga o preço correto da tabela VENDA_PECA.
-  // --- FUNÇÕES DE HISTÓRICO / AUDITORIA ---
-  // Tenta o endpoint /api/auditoria. Se não existir (404) deteta isso e
-  // mostra a mensagem apropriada na UI em vez de "explodir".
-  async function carregarHistoricoGeral() {
-    setHistoricoLoading(true);
-    setHistoricoIndisponivel(false);
-    try {
-      const params = new URLSearchParams();
-      if (historicoFiltro.tipo) params.append("tipo", historicoFiltro.tipo);
-      if (historicoFiltro.utilizador)
-        params.append("utilizador", historicoFiltro.utilizador);
-      if (historicoFiltro.desde) params.append("desde", historicoFiltro.desde);
-      if (historicoFiltro.ate) params.append("ate", historicoFiltro.ate);
-
-      const res = await fetch(`${API_URL}/api/auditoria?${params.toString()}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-      });
-
-      if (res.status === 404) {
-        // Endpoint ainda não implementado no backend
-        setHistoricoIndisponivel(true);
-        setHistoricoGeral([]);
-        return;
-      }
-      if (!res.ok) {
-        setHistoricoGeral([]);
-        return;
-      }
-      const data = await res.json();
-      setHistoricoGeral(Array.isArray(data) ? data : []);
-    } catch (e) {
-      console.error("Erro ao carregar histórico", e);
-      setHistoricoIndisponivel(true);
-      setHistoricoGeral([]);
-    } finally {
-      setHistoricoLoading(false);
-    }
-  }
 
   async function carregarInventario() {
     try {
@@ -1510,16 +1458,10 @@ export default function AdminDashboard({ irParaLanding }) {
         apiFetch("/api/inventario", token).catch(() => []),
         apiFetch("/api/inventario/vendas", token).catch(() => []),
       ]);
-
       const listaCatalogo = Array.isArray(catalogo) ? catalogo : [];
       const listaVendas = Array.isArray(vendas) ? vendas : [];
-
-      // Indexa as vendas pelo id_peca. Para cada peça, prioriza:
-      // 1) Venda "Disponível" (preço atual)
-      // 2) Caso contrário, a mais recente que tenha preço (concluída no passado)
-      // Isto garante que peças à venda mostram preço mesmo que o estado da VENDA_PECA
-      // não esteja exatamente como "Disponível".
       const vendaPorPeca = new Map();
+
       for (const v of listaVendas) {
         if (v.id_peca == null) continue;
         const existente = vendaPorPeca.get(v.id_peca);
@@ -1532,7 +1474,6 @@ export default function AdminDashboard({ irParaLanding }) {
         const existenteIsDisp =
           existente.estado_venda === "Disponível" ||
           existente.estado_venda === "Disponivel";
-        // Disponível vence sempre; caso contrário fica o de id_venda maior (mais recente)
         if (isDisponivel && !existenteIsDisp) {
           vendaPorPeca.set(v.id_peca, v);
         } else if (
@@ -1546,7 +1487,6 @@ export default function AdminDashboard({ irParaLanding }) {
 
       const enriquecida = listaCatalogo.map((p) => {
         const venda = vendaPorPeca.get(p.id_peca);
-        // Aceita preço da venda OU um eventual campo já vindo do catálogo
         const preco =
           venda?.preco != null
             ? venda.preco
@@ -1561,16 +1501,13 @@ export default function AdminDashboard({ irParaLanding }) {
           id_venda: venda?.id_venda ?? p.id_venda ?? null,
           metodos_aceites_venda:
             venda?.metodos_aceites ?? p.metodos_aceites_venda ?? null,
-          // Quem está envolvido na venda (se aplicável)
           vendedor: venda?.vendedor ?? null,
           comprador: venda?.comprador ?? null,
           estado_venda: venda?.estado_venda ?? null,
         };
       });
-
       setInventario(enriquecida);
     } catch (e) {
-      console.error("Erro ao carregar inventário", e);
       setInventario([]);
     }
   }
@@ -1615,8 +1552,6 @@ export default function AdminDashboard({ irParaLanding }) {
         metodosPagamento: p.metodos_aceites_venda
           ? p.metodos_aceites_venda.split(",").map((m) => m.trim())
           : ["MBWay"],
-
-        // 👇 A CORREÇÃO ESTÁ AQUI: Usar metodos_pagamento em vez de observacoes_emprestimo
         metodosPagamentoEmprestimo: p.metodos_pagamento
           ? p.metodos_pagamento.split(",").map((m) => m.trim())
           : ["MBWay"],
@@ -1633,9 +1568,7 @@ export default function AdminDashboard({ irParaLanding }) {
           ? { ...prev, data: { ...prev.data, fotos: fotosAtuais } }
           : prev,
       );
-    } catch (e) {
-      console.warn("Não foi possível carregar fotos da peça", e);
-    }
+    } catch (e) {}
   }
 
   function ficheiroParaBase64(file) {
@@ -1654,15 +1587,11 @@ export default function AdminDashboard({ irParaLanding }) {
       const base64s = await Promise.all(files.map(ficheiroParaBase64));
       setModalPeca((prev) => ({
         ...prev,
-        data: {
-          ...prev.data,
-          fotos: [...(prev.data.fotos || []), ...base64s],
-        },
+        data: { ...prev.data, fotos: [...(prev.data.fotos || []), ...base64s] },
       }));
     } catch (err) {
       mostrarMsg("Erro ao processar imagem.", "erro");
     }
-    // Reset do input para permitir voltar a selecionar a mesma imagem
     e.target.value = "";
   }
 
@@ -1679,27 +1608,25 @@ export default function AdminDashboard({ irParaLanding }) {
   async function submeterModalPeca(e) {
     e.preventDefault();
     const d = modalPeca.data;
+    if (
+      d.disponivelVenda &&
+      (!d.preco || d.preco === "" || parseFloat(d.preco) <= 0)
+    )
+      return mostrarMsg(
+        "O preço de venda é obrigatório e deve ser maior que 0€.",
+        "erro",
+      );
+    if (
+      d.disponivelEmprestimo &&
+      (!d.valor_dia || d.valor_dia === "" || parseFloat(d.valor_dia) <= 0)
+    )
+      return mostrarMsg(
+        "O valor diário de empréstimo é obrigatório e deve ser maior que 0€.",
+        "erro",
+      );
 
-    if (d.disponivelVenda) {
-      if (!d.preco || d.preco === "" || parseFloat(d.preco) <= 0) {
-        return mostrarMsg(
-          "O preço de venda é obrigatório e deve ser maior que 0€.",
-          "erro",
-        );
-      }
-    }
-
-    if (d.disponivelEmprestimo) {
-      if (!d.valor_dia || d.valor_dia === "" || parseFloat(d.valor_dia) <= 0) {
-        return mostrarMsg(
-          "O valor diário de empréstimo é obrigatório e deve ser maior que 0€.",
-          "erro",
-        );
-      }
-    }
     try {
       if (modalPeca.mode === "create") {
-        // Criar: POST /api/inventario
         await apiFetchChecked("/api/inventario", token, {
           method: "POST",
           body: {
@@ -1717,7 +1644,6 @@ export default function AdminDashboard({ irParaLanding }) {
         });
         mostrarMsg("Peça criada com sucesso!", "ok");
       } else {
-        // Editar: PUT /api/inventario/:id/editar
         await apiFetchChecked(`/api/inventario/${d.id}/editar`, token, {
           method: "PUT",
           body: {
@@ -1748,12 +1674,10 @@ export default function AdminDashboard({ irParaLanding }) {
       `Definir preço de venda para "${peca.nome_peca || peca.nome}" (€):`,
       "",
     );
-    if (precoStr == null) return; // cancelou
+    if (precoStr == null) return;
     const preco = parseFloat(String(precoStr).replace(",", "."));
-    if (Number.isNaN(preco) || preco <= 0) {
-      mostrarMsg("Preço inválido.", "erro");
-      return;
-    }
+    if (Number.isNaN(preco) || preco <= 0)
+      return mostrarMsg("Preço inválido.", "erro");
     try {
       await apiFetchChecked("/api/inventario/vendas", token, {
         method: "POST",
@@ -1815,15 +1739,53 @@ export default function AdminDashboard({ irParaLanding }) {
     }
   }
 
+  // --- FUNÇÕES DE HISTÓRICO ---
+
+  async function carregarHistoricoGeral() {
+    setHistoricoLoading(true);
+    setHistoricoIndisponivel(false);
+    try {
+      const params = new URLSearchParams();
+      if (historicoFiltro.tipo) params.append("tipo", historicoFiltro.tipo);
+      if (historicoFiltro.utilizador)
+        params.append("utilizador", historicoFiltro.utilizador);
+      if (historicoFiltro.desde) params.append("desde", historicoFiltro.desde);
+      if (historicoFiltro.ate) params.append("ate", historicoFiltro.ate);
+
+      const res = await fetch(`${API_URL}/api/auditoria?${params.toString()}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (res.status === 404) {
+        setHistoricoIndisponivel(true);
+        setHistoricoGeral([]);
+        return;
+      }
+      if (!res.ok) {
+        setHistoricoGeral([]);
+        return;
+      }
+      const data = await res.json();
+      setHistoricoGeral(Array.isArray(data) ? data : []);
+    } catch (e) {
+      setHistoricoIndisponivel(true);
+      setHistoricoGeral([]);
+    } finally {
+      setHistoricoLoading(false);
+    }
+  }
+
   return (
     <div className="admin-root">
+      {/* ────────────────────────────────────────────────────────
+          SIDEBAR
+      ───────────────────────────────────────────────────────── */}
       <aside className="admin-sidebar">
         <div className="sidebar-brand">
-          <img
-            src={logoImg}
-            alt="Logo"
-            style={{ width: "65px", height: "auto", objectFit: "contain" }}
-          />
+          <img src={logoImg} alt="Logo" className="sidebar-logo-img" />
           <div>
             <p className="brand-name">Viva D'arte</p>
             <p className="brand-role">Coordenação</p>
@@ -1864,14 +1826,17 @@ export default function AdminDashboard({ irParaLanding }) {
         </div>
       </aside>
 
+      {/* ────────────────────────────────────────────────────────
+          MAIN CONTENT AREA
+      ───────────────────────────────────────────────────────── */}
       <main className="admin-main">
+        {/* === TAB: OVERVIEW === */}
         {activeTab === "overview" && (
           <div className="tab-content">
             <h1 className="page-title">
-              Olá, {utilizador?.nome?.split(" ")[0]}{" "}
+              Olá, {utilizador?.nome?.split(" ")[0]}
             </h1>
             <p className="page-subtitle">Resumo do sistema</p>
-
             <div className="stats-grid">
               <StatCard
                 icon="👥"
@@ -1888,7 +1853,7 @@ export default function AdminDashboard({ irParaLanding }) {
                 onClick={() => setActiveTab("utilizadores")}
               />
             </div>
-            <div className="stats-grid" style={{ marginTop: "20px" }}>
+            <div className="stats-grid mt-20">
               <StatCard
                 icon="🗓️"
                 label="Pedidos Coaching"
@@ -1897,7 +1862,7 @@ export default function AdminDashboard({ irParaLanding }) {
                 onClick={() => setActiveTab("coaching")}
               />
             </div>
-            <div className="stats-grid" style={{ marginTop: "20px" }}>
+            <div className="stats-grid mt-20">
               <StatCard
                 icon="📦"
                 label="Peças em Stock"
@@ -1909,6 +1874,7 @@ export default function AdminDashboard({ irParaLanding }) {
           </div>
         )}
 
+        {/* === TAB: UTILIZADORES === */}
         {activeTab === "utilizadores" && (
           <div className="tab-content">
             <h1 className="page-title">👥 Gestão de Utilizadores</h1>
@@ -1972,13 +1938,13 @@ export default function AdminDashboard({ irParaLanding }) {
           </div>
         )}
 
+        {/* === TAB: PEDIDOS COACHING === */}
         {activeTab === "coaching" && (
           <div className="tab-content">
             <h1 className="page-title">🗓️ Pedidos de Coaching</h1>
             <p className="page-subtitle">
               Gestão de pedidos a aguardar aprovação da coordenação
             </p>
-
             <Section
               title={`Pedidos Pendentes (${pedidosPendentes.length})`}
               defaultOpen={true}
@@ -1997,71 +1963,76 @@ export default function AdminDashboard({ irParaLanding }) {
                 </button>
               }
             >
-              <table className="admin-table">
-                <thead>
-                  <tr>
-                    <th>ID</th>
-                    <th>Encarregado</th>
-                    <th>Aluno(s)</th>
-                    <th>Prof. Req.</th>
-                    <th>Modalidade</th>
-                    <th>Formato / Duração</th>
-                    <th>Data Pretendida</th>
-                    <th>Estado</th>
-                    <th className="text-center">Ações</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {pedidosPendentes.map((p) => (
-                    <tr key={p.id_pedido_coaching}>
-                      <td>#{p.id_pedido_coaching}</td>
-                      <td>
-                        <strong>{p.encarregado || "—"}</strong>
-                      </td>
-                      <td>{p.nome_aluno || p.alunos || "—"}</td>
-                      <td>{p.professor || "Qualquer"}</td>
-                      <td>{p.modalidade}</td>
-                      <td>
-                        {p.formato_aula} ({p.duracao_minutos} min)
-                      </td>
-                      <td>
-                        {formatDataApi(p.data_aula_pretendida)} às{" "}
-                        {formatHoraCurta(p.hora_inicio_pretendida)}
-                      </td>
-                      <td>
-                        <span className="badge badge--orange">Pendente</span>
-                      </td>
-                      <td className="text-center whitespace-nowrap">
-                        <button
-                          className="btn-sm btn-sm--green mr-8"
-                          onClick={() => abrirModalAprovarPedido(p)}
-                        >
-                          Aprovar
-                        </button>
-                        <button
-                          className="btn-sm btn-sm--danger"
-                          onClick={() =>
-                            handleRejeitarPedido(p.id_pedido_coaching)
-                          }
-                        >
-                          Rejeitar
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                  {pedidosPendentes.length === 0 && (
+              <div className="table-wrapper">
+                <table className="admin-table">
+                  <thead>
                     <tr>
-                      <td colSpan="9" className="empty-row">
-                        Nenhum pedido encontrado.
-                      </td>
+                      <th>ID</th>
+                      <th>Encarregado</th>
+                      <th>Aluno(s)</th>
+                      <th>Prof. Req.</th>
+                      <th>Modalidade</th>
+                      <th>Formato / Duração</th>
+                      <th>Data Pretendida</th>
+                      <th>Estado</th>
+                      <th className="text-center">Ações</th>
                     </tr>
-                  )}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {pedidosPendentes.map((p) => (
+                      <tr key={p.id_pedido_coaching}>
+                        <td>#{p.id_pedido_coaching}</td>
+                        <td>
+                          <strong className="font-bold">
+                            {p.encarregado || "—"}
+                          </strong>
+                        </td>
+                        <td>{p.nome_aluno || p.alunos || "—"}</td>
+                        <td>{p.professor || "Qualquer"}</td>
+                        <td>{p.modalidade}</td>
+                        <td>
+                          {p.formato_aula} ({p.duracao_minutos} min)
+                        </td>
+                        <td>
+                          {formatDataApi(p.data_aula_pretendida)} às{" "}
+                          {formatHoraCurta(p.hora_inicio_pretendida)}
+                        </td>
+                        <td>
+                          <span className="badge badge--orange">Pendente</span>
+                        </td>
+                        <td className="text-center whitespace-nowrap">
+                          <button
+                            className="btn-sm btn-sm--green mr-8"
+                            onClick={() => abrirModalAprovarPedido(p)}
+                          >
+                            Aprovar
+                          </button>
+                          <button
+                            className="btn-sm btn-sm--danger"
+                            onClick={() =>
+                              handleRejeitarPedido(p.id_pedido_coaching)
+                            }
+                          >
+                            Rejeitar
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                    {pedidosPendentes.length === 0 && (
+                      <tr>
+                        <td colSpan="9" className="empty-row">
+                          Nenhum pedido encontrado.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </Section>
           </div>
         )}
 
+        {/* === TAB: HISTÓRICO COACHINGS === */}
         {activeTab === "historico_coaching" && (
           <div className="tab-content">
             <h1 className="page-title">📚 Histórico de Coachings</h1>
@@ -2070,193 +2041,137 @@ export default function AdminDashboard({ irParaLanding }) {
               canceladas.
             </p>
             <Section
-              title={` À Espera de Conclusão (${coachingsEspera.length})`}
+              title={`À Espera de Conclusão (${coachingsEspera.length})`}
               defaultOpen={true}
             >
-              <table className="admin-table">
-                <thead>
-                  <tr>
-                    <th>Data/Hora</th>
-                    <th>Aluno(s) / EE</th>
-                    <th>Professor / Sala</th>
-                    <th>Modalidade</th>
-                    <th>Valor</th>
-                    <th>Estado</th>
-                    <th className="text-center">Ações</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {coachingsEspera.map((c) => renderLinhaCoaching(c, true))}
-                  {coachingsEspera.length === 0 && (
+              <div className="table-wrapper">
+                <table className="admin-table">
+                  <thead>
                     <tr>
-                      <td colSpan="7" className="text-center empty-row">
-                        Nenhuma aula pendente.
-                      </td>
+                      <th>Data/Hora</th>
+                      <th>Aluno(s) / EE</th>
+                      <th>Professor / Sala</th>
+                      <th>Modalidade</th>
+                      <th>Valor</th>
+                      <th>Estado</th>
+                      <th className="text-center">Ações</th>
                     </tr>
-                  )}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {coachingsEspera.map((c) => renderLinhaCoaching(c, true))}
+                    {coachingsEspera.length === 0 && (
+                      <tr>
+                        <td colSpan="7" className="empty-row">
+                          Nenhuma aula pendente.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </Section>
             <Section
-              title={` Concluídas (${coachingsConcluidos.length})`}
+              title={`Concluídas (${coachingsConcluidos.length})`}
               defaultOpen={true}
             >
-              <table className="admin-table">
-                <thead>
-                  <tr>
-                    <th>Data/Hora</th>
-                    <th>Aluno(s) / EE</th>
-                    <th>Professor / Sala</th>
-                    <th>Modalidade</th>
-                    <th>Valor</th>
-                    <th>Estado</th>
-                    <th className="text-center">Ações</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {coachingsConcluidos.map((c) =>
-                    renderLinhaCoaching(c, false),
-                  )}
-                  {coachingsConcluidos.length === 0 && (
+              <div className="table-wrapper">
+                <table className="admin-table">
+                  <thead>
                     <tr>
-                      <td colSpan="7" className="text-center empty-row">
-                        Nenhuma aula concluída.
-                      </td>
+                      <th>Data/Hora</th>
+                      <th>Aluno(s) / EE</th>
+                      <th>Professor / Sala</th>
+                      <th>Modalidade</th>
+                      <th>Valor</th>
+                      <th>Estado</th>
+                      <th className="text-center">Ações</th>
                     </tr>
-                  )}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {coachingsConcluidos.map((c) =>
+                      renderLinhaCoaching(c, false),
+                    )}
+                    {coachingsConcluidos.length === 0 && (
+                      <tr>
+                        <td colSpan="7" className="empty-row">
+                          Nenhuma aula concluída.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </Section>
             <Section
-              title={` Canceladas (${coachingsCancelados.length})`}
+              title={`Canceladas (${coachingsCancelados.length})`}
               defaultOpen={false}
             >
-              <table className="admin-table">
-                <thead>
-                  <tr>
-                    <th>Data/Hora</th>
-                    <th>Aluno(s) / EE</th>
-                    <th>Professor / Sala</th>
-                    <th>Modalidade</th>
-                    <th>Valor</th>
-                    <th>Estado</th>
-                    <th className="text-center">Ações</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {coachingsCancelados.map((c) =>
-                    renderLinhaCoaching(c, false),
-                  )}
-                  {coachingsCancelados.length === 0 && (
+              <div className="table-wrapper">
+                <table className="admin-table">
+                  <thead>
                     <tr>
-                      <td colSpan="7" className="text-center empty-row">
-                        Nenhuma aula cancelada.
-                      </td>
+                      <th>Data/Hora</th>
+                      <th>Aluno(s) / EE</th>
+                      <th>Professor / Sala</th>
+                      <th>Modalidade</th>
+                      <th>Valor</th>
+                      <th>Estado</th>
+                      <th className="text-center">Ações</th>
                     </tr>
-                  )}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {coachingsCancelados.map((c) =>
+                      renderLinhaCoaching(c, false),
+                    )}
+                    {coachingsCancelados.length === 0 && (
+                      <tr>
+                        <td colSpan="7" className="empty-row">
+                          Nenhuma aula cancelada.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </Section>
           </div>
         )}
 
-        {/* ================================================================
-            TAB: FATURAÇÃO
-        ================================================================ */}
+        {/* === TAB: FATURAÇÃO === */}
         {activeTab === "faturacao" && (
           <div className="tab-content">
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: "20px",
-              }}
-            >
+            <div className="page-header">
               <div>
-                <h1 className="page-title" style={{ margin: 0 }}>
-                  Faturação
-                </h1>
-                <p className="page-subtitle">
+                <h1 className="page-title m-0">Faturação</h1>
+                <p className="page-subtitle m-0">
                   Gestão de faturas e tabela de preços
                 </p>
               </div>
             </div>
 
-            {/* SUB-ABAS DA FATURAÇÃO */}
-            <div
-              style={{
-                display: "flex",
-                gap: "4px",
-                borderBottom: "2px solid #e5e5e5",
-                marginBottom: "20px",
-              }}
-            >
+            <div className="sub-tabs-container">
               <button
+                className={`sub-tab-btn ${faturacaoFiltro.subTab !== "precos" ? "sub-tab-btn--active" : ""}`}
                 onClick={() =>
                   setFaturacaoFiltro((prev) => ({ ...prev, subTab: "faturas" }))
                 }
-                style={{
-                  padding: "10px 18px",
-                  border: "none",
-                  background: "transparent",
-                  cursor: "pointer",
-                  fontSize: "0.92rem",
-                  fontWeight: faturacaoFiltro.subTab !== "precos" ? 700 : 500,
-                  color:
-                    faturacaoFiltro.subTab !== "precos" ? "#c9a961" : "#666",
-                  borderBottom:
-                    faturacaoFiltro.subTab !== "precos"
-                      ? "3px solid #c9a961"
-                      : "3px solid transparent",
-                }}
               >
                 Lista de Faturas
               </button>
               <button
+                className={`sub-tab-btn ${faturacaoFiltro.subTab === "precos" ? "sub-tab-btn--active" : ""}`}
                 onClick={() =>
                   setFaturacaoFiltro((prev) => ({ ...prev, subTab: "precos" }))
                 }
-                style={{
-                  padding: "10px 18px",
-                  border: "none",
-                  background: "transparent",
-                  cursor: "pointer",
-                  fontSize: "0.92rem",
-                  fontWeight: faturacaoFiltro.subTab === "precos" ? 700 : 500,
-                  color:
-                    faturacaoFiltro.subTab === "precos" ? "#c9a961" : "#666",
-                  borderBottom:
-                    faturacaoFiltro.subTab === "precos"
-                      ? "3px solid #c9a961"
-                      : "3px solid transparent",
-                }}
               >
                 Tabela de Preços
               </button>
             </div>
 
             {faturacaoFiltro.subTab !== "precos" ? (
-              /* --- ÁREA DE FATURAS (RF18, RF19, RF20) --- */
-              <div style={{ animation: "fadeUp 0.3s ease" }}>
-                {/* 2. FILTROS E BOTÃO DE EXPORTAR (RF19) */}
-                <div
-                  style={{
-                    background: "#fff",
-                    borderRadius: "12px",
-                    padding: "16px 20px",
-                    marginBottom: "24px",
-                    boxShadow: "0 2px 6px rgba(0,0,0,0.04)",
-                    display: "flex",
-                    gap: "16px",
-                    flexWrap: "wrap",
-                    alignItems: "flex-end",
-                  }}
-                >
-                  <div
-                    className="field"
-                    style={{ margin: 0, flex: "1 1 120px" }}
-                  >
+              <div className="tab-content">
+                <div className="filter-bar">
+                  <div className="field filter-field">
                     <label>Ano</label>
                     <input
                       type="number"
@@ -2272,10 +2187,7 @@ export default function AdminDashboard({ irParaLanding }) {
                       }
                     />
                   </div>
-                  <div
-                    className="field"
-                    style={{ margin: 0, flex: "1 1 150px" }}
-                  >
+                  <div className="field filter-field">
                     <label>Mês</label>
                     <select
                       value={faturacaoFiltro.mes}
@@ -2307,10 +2219,7 @@ export default function AdminDashboard({ irParaLanding }) {
                       ))}
                     </select>
                   </div>
-                  <div
-                    className="field"
-                    style={{ margin: 0, flex: "1 1 150px" }}
-                  >
+                  <div className="field filter-field">
                     <label>Estado Pagamento</label>
                     <select
                       value={faturacaoFiltro.estado}
@@ -2322,41 +2231,23 @@ export default function AdminDashboard({ irParaLanding }) {
                       }
                     >
                       <option value="">Todos</option>
-                      <option value="Pendente"> Pendente</option>
+                      <option value="Pendente">Pendente</option>
                       <option value="Pago">Pago</option>
-                      <option value="Cancelado"> Cancelado</option>
+                      <option value="Cancelado">Cancelado</option>
                     </select>
                   </div>
-
-                  <div
-                    style={{
-                      display: "flex",
-                      gap: "10px",
-                      flex: "2 1 auto",
-                      justifyContent: "flex-end",
-                    }}
-                  >
-                    <button
-                      className="btn-submit"
-                      style={{ padding: "10px 20px" }}
-                      onClick={carregarFaturas}
-                    >
+                  <div className="filter-actions">
+                    <button className="btn-submit" onClick={carregarFaturas}>
                       Pesquisar
                     </button>
                     <button
-                      className="btn-submit"
-                      style={{
-                        padding: "10px 20px",
-                        backgroundColor: "var(--accent-gold)",
-                      }}
+                      className="btn-submit btn-export"
                       onClick={() => {
                         if (faturas.length === 0)
                           return mostrarMsg(
                             "Não há dados para exportar. Pesquise primeiro.",
                             "erro",
                           );
-
-                        // Preparação do CSV
                         const cabecalho =
                           "ID,Utilizador,Ano,Mes,Data Geracao,Total (€),Estado,Metodo Pagamento,Data Pagamento\n";
                         const linhas = faturas
@@ -2365,12 +2256,13 @@ export default function AdminDashboard({ irParaLanding }) {
                               `${f.id_faturacao},${f.nome_utilizador || "Sem Nome"},${f.ano},${f.mes},${f.data_geracao ? f.data_geracao.split("T")[0] : ""},${f.total},${f.estado_pagamento},${f.metodo_pagamento || ""},${f.data_pagamento ? f.data_pagamento.split("T")[0] : ""}`,
                           )
                           .join("\n");
-
-                        const csvContent =
-                          "data:text/csv;charset=utf-8," + cabecalho + linhas;
-                        const encodedUri = encodeURI(csvContent);
                         const link = document.createElement("a");
-                        link.setAttribute("href", encodedUri);
+                        link.setAttribute(
+                          "href",
+                          encodeURI(
+                            "data:text/csv;charset=utf-8," + cabecalho + linhas,
+                          ),
+                        );
                         link.setAttribute(
                           "download",
                           `Faturacao_VivaDArte_${new Date().toISOString().split("T")[0]}.csv`,
@@ -2386,9 +2278,8 @@ export default function AdminDashboard({ irParaLanding }) {
                   </div>
                 </div>
 
-                {/* ESTATÍSTICAS RÁPIDAS */}
                 {faturas.length > 0 && (
-                  <div className="stats-grid" style={{ marginBottom: "24px" }}>
+                  <div className="stats-grid mb-24">
                     <StatCard
                       label="Total Faturado (Grelha)"
                       value={`${faturas.reduce((s, f) => s + Number(f.total || 0), 0).toFixed(2)}€`}
@@ -2413,44 +2304,24 @@ export default function AdminDashboard({ irParaLanding }) {
                   </div>
                 )}
 
-                {/* 3. TABELA DE FATURAS (RF19 e RF20) */}
                 <Section
                   title={`Registo de Faturas e Pagamentos (${faturas.length})`}
                   defaultOpen={true}
                 >
                   {faturacaoLoading ? (
-                    <div
-                      style={{
-                        padding: "40px",
-                        textAlign: "center",
-                        color: "#888",
-                      }}
-                    >
+                    <div className="empty-row">
                       A sincronizar dados financeiros...
                     </div>
                   ) : faturas.length === 0 ? (
-                    <div
-                      style={{
-                        padding: "40px",
-                        textAlign: "center",
-                        opacity: 0.5,
-                      }}
-                    >
+                    <div className="empty-row opacity-50">
                       <p>
                         Utilize os filtros acima para carregar a lista de
                         faturação.
                       </p>
                     </div>
                   ) : (
-                    <div
-                      style={{
-                        background: "#fff",
-                        borderRadius: "10px",
-                        overflow: "hidden",
-                        border: "1px solid #eee",
-                      }}
-                    >
-                      <table className="admin-table" style={{ margin: 0 }}>
+                    <div className="table-wrapper">
+                      <table className="admin-table m-0">
                         <thead>
                           <tr>
                             <th style={{ width: "60px" }}>Nº</th>
@@ -2486,24 +2357,16 @@ export default function AdminDashboard({ irParaLanding }) {
                                 : f.estado_pagamento === "Cancelado"
                                   ? "danger"
                                   : "orange";
-
                             return (
                               <tr key={f.id_faturacao}>
-                                <td
-                                  style={{ opacity: 0.6, fontSize: "0.8rem" }}
-                                >
+                                <td className="opacity-60 text-small">
                                   #{f.id_faturacao}
                                 </td>
                                 <td>
-                                  <strong>
+                                  <strong className="font-bold">
                                     {f.nome_utilizador || "Desconhecido"}
                                   </strong>
-                                  <div
-                                    style={{
-                                      fontSize: "0.75rem",
-                                      color: "#888",
-                                    }}
-                                  >
+                                  <div className="text-xs text-muted">
                                     {f.email_utilizador || ""}
                                   </div>
                                 </td>
@@ -2512,25 +2375,15 @@ export default function AdminDashboard({ irParaLanding }) {
                                 </td>
                                 <td>
                                   <strong
-                                    style={{
-                                      fontSize: "1.1rem",
-                                      color: "var(--primary-dark)",
-                                    }}
+                                    className="text-primary font-bold"
+                                    style={{ fontSize: "1.1rem" }}
                                   >
                                     {Number(f.total || 0).toFixed(2)}€
                                   </strong>
                                 </td>
-
-                                {/* RF20: Consulta do Método e Data */}
                                 <td>
                                   {f.metodo_pagamento ? (
-                                    <span
-                                      className="badge"
-                                      style={{
-                                        background: "#f0f0f0",
-                                        color: "#555",
-                                      }}
-                                    >
+                                    <span className="badge badge--gray">
                                       {f.metodo_pagamento}
                                     </span>
                                   ) : (
@@ -2544,7 +2397,6 @@ export default function AdminDashboard({ irParaLanding }) {
                                       ).toLocaleDateString("pt-PT")
                                     : "—"}
                                 </td>
-
                                 <td>
                                   <span
                                     className={`badge badge--${estadoColor}`}
@@ -2552,17 +2404,9 @@ export default function AdminDashboard({ irParaLanding }) {
                                     {f.estado_pagamento || "—"}
                                   </span>
                                 </td>
-
-                                {/* RF20: Registo do Pagamento */}
                                 <td className="text-center whitespace-nowrap">
                                   <button
-                                    className="btn-sm"
-                                    style={{
-                                      background: "#fff",
-                                      border: "1px solid #c9a961",
-                                      color: "#7a6a3a",
-                                      marginRight: "8px",
-                                    }}
+                                    className="btn-sm btn-sm--outline-gold mr-8"
                                     onClick={() =>
                                       abrirDetalheFatura(f.id_faturacao)
                                     }
@@ -2598,12 +2442,7 @@ export default function AdminDashboard({ irParaLanding }) {
                                       </button>
                                     </>
                                   ) : (
-                                    <span
-                                      style={{
-                                        color: "#aaa",
-                                        fontSize: "0.85rem",
-                                      }}
-                                    >
+                                    <span className="text-light-muted text-small">
                                       Fechado
                                     </span>
                                   )}
@@ -2619,34 +2458,10 @@ export default function AdminDashboard({ irParaLanding }) {
               </div>
             ) : (
               <Section title="Tabela de Preços (Coaching)" defaultOpen={true}>
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "1fr 1fr",
-                    gap: "24px",
-                  }}
-                >
-                  {/* TABELA 1: DIAS ÚTEIS */}
-                  <div
-                    style={{
-                      background: "#fff",
-                      borderRadius: "12px",
-                      border: "1px solid #e0e0e0",
-                      overflow: "hidden",
-                    }}
-                  >
-                    <div
-                      style={{
-                        background: "var(--primary-dark)",
-                        color: "#fff",
-                        padding: "12px 16px",
-                        fontWeight: "600",
-                        borderBottom: "2px solid var(--accent-gold)",
-                      }}
-                    >
-                      Dias Úteis
-                    </div>
-                    <table className="admin-table" style={{ margin: 0 }}>
+                <div className="pricing-tables-grid">
+                  <div className="pricing-table-card">
+                    <div className="pricing-table-header">Dias Úteis</div>
+                    <table className="admin-table m-0">
                       <thead>
                         <tr>
                           <th>Formato</th>
@@ -2662,33 +2477,19 @@ export default function AdminDashboard({ irParaLanding }) {
                           .map((regra) => (
                             <tr key={regra.id_preco}>
                               <td>
-                                <span
-                                  style={{
-                                    fontWeight: "600",
-                                    color: "var(--primary-dark)",
-                                  }}
-                                >
+                                <span className="font-semibold text-primary">
                                   {regra.formato_aula}
                                 </span>
                               </td>
                               <td>
-                                <span
-                                  className="badge"
-                                  style={{
-                                    background: "#f0f0f0",
-                                    color: "#555",
-                                  }}
-                                >
+                                <span className="badge badge--gray">
                                   {regra.duracao_minutos} min
                                 </span>
                               </td>
                               <td>
                                 <span
-                                  style={{
-                                    fontSize: "1.1rem",
-                                    fontWeight: "700",
-                                    color: "var(--primary-dark)",
-                                  }}
+                                  className="font-bold text-primary"
+                                  style={{ fontSize: "1.1rem" }}
                                 >
                                   {Number(regra.preco).toFixed(2)}€
                                 </span>
@@ -2715,7 +2516,7 @@ export default function AdminDashboard({ irParaLanding }) {
                         {tabelaPrecos.filter((p) => p.dia_semana === 1)
                           .length === 0 && (
                           <tr>
-                            <td colSpan="5" className="text-center empty-row">
+                            <td colSpan="5" className="empty-row">
                               Sem regras para dias úteis.
                             </td>
                           </tr>
@@ -2724,27 +2525,9 @@ export default function AdminDashboard({ irParaLanding }) {
                     </table>
                   </div>
 
-                  {/* TABELA 2: FINS-DE-SEMANA */}
-                  <div
-                    style={{
-                      background: "#fff",
-                      borderRadius: "12px",
-                      border: "1px solid #e0e0e0",
-                      overflow: "hidden",
-                    }}
-                  >
-                    <div
-                      style={{
-                        background: "var(--primary-dark)",
-                        color: "#fff",
-                        padding: "12px 16px",
-                        fontWeight: "600",
-                        borderBottom: "2px solid var(--accent-gold)",
-                      }}
-                    >
-                      Fins-de-Semana
-                    </div>
-                    <table className="admin-table" style={{ margin: 0 }}>
+                  <div className="pricing-table-card">
+                    <div className="pricing-table-header">Fins-de-Semana</div>
+                    <table className="admin-table m-0">
                       <thead>
                         <tr>
                           <th>Formato</th>
@@ -2760,33 +2543,19 @@ export default function AdminDashboard({ irParaLanding }) {
                           .map((regra) => (
                             <tr key={regra.id_preco}>
                               <td>
-                                <span
-                                  style={{
-                                    fontWeight: "600",
-                                    color: "var(--primary-dark)",
-                                  }}
-                                >
+                                <span className="font-semibold text-primary">
                                   {regra.formato_aula}
                                 </span>
                               </td>
                               <td>
-                                <span
-                                  className="badge"
-                                  style={{
-                                    background: "#f0f0f0",
-                                    color: "#555",
-                                  }}
-                                >
+                                <span className="badge badge--gray">
                                   {regra.duracao_minutos} min
                                 </span>
                               </td>
                               <td>
                                 <span
-                                  style={{
-                                    fontSize: "1.1rem",
-                                    fontWeight: "700",
-                                    color: "var(--primary-dark)",
-                                  }}
+                                  className="font-bold text-primary"
+                                  style={{ fontSize: "1.1rem" }}
                                 >
                                   {Number(regra.preco).toFixed(2)}€
                                 </span>
@@ -2813,7 +2582,7 @@ export default function AdminDashboard({ irParaLanding }) {
                         {tabelaPrecos.filter((p) => p.dia_semana === 2)
                           .length === 0 && (
                           <tr>
-                            <td colSpan="5" className="text-center empty-row">
+                            <td colSpan="5" className="empty-row">
                               Sem regras para fins-de-semana.
                             </td>
                           </tr>
@@ -2827,42 +2596,19 @@ export default function AdminDashboard({ irParaLanding }) {
           </div>
         )}
 
-        {/* ================================================================
-            TAB: HISTÓRICO / AUDITORIA
-        ================================================================ */}
+        {/* === TAB: HISTÓRICO GERAL === */}
         {activeTab === "historico_geral" && (
           <div className="tab-content">
-            <div style={{ marginBottom: "20px" }}>
-              <h1 className="page-title" style={{ margin: 0 }}>
-                Histórico de Atividade
-              </h1>
-              <p
-                style={{
-                  margin: "4px 0 0",
-                  color: "#888",
-                  fontSize: "0.9rem",
-                }}
-              >
+            <div className="mb-20">
+              <h1 className="page-title m-0">Histórico de Atividade</h1>
+              <p className="page-header-desc">
                 Auditoria de eventos do sistema — logins, alterações, compras,
                 empréstimos
               </p>
             </div>
 
-            {/* FILTROS */}
-            <div
-              style={{
-                background: "#fff",
-                borderRadius: "10px",
-                padding: "16px 18px",
-                marginBottom: "16px",
-                boxShadow: "0 2px 6px rgba(0,0,0,0.04)",
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
-                gap: "12px",
-                alignItems: "end",
-              }}
-            >
-              <div className="field" style={{ margin: 0 }}>
+            <div className="filter-bar">
+              <div className="field m-0">
                 <label>Tipo de evento</label>
                 <select
                   value={historicoFiltro.tipo}
@@ -2904,7 +2650,7 @@ export default function AdminDashboard({ irParaLanding }) {
                   </option>
                 </select>
               </div>
-              <div className="field" style={{ margin: 0 }}>
+              <div className="field m-0">
                 <label>Utilizador (nome ou email)</label>
                 <input
                   type="text"
@@ -2918,7 +2664,7 @@ export default function AdminDashboard({ irParaLanding }) {
                   }
                 />
               </div>
-              <div className="field" style={{ margin: 0 }}>
+              <div className="field m-0">
                 <label>Desde</label>
                 <input
                   type="date"
@@ -2931,7 +2677,7 @@ export default function AdminDashboard({ irParaLanding }) {
                   }
                 />
               </div>
-              <div className="field" style={{ margin: 0 }}>
+              <div className="field m-0">
                 <label>Até</label>
                 <input
                   type="date"
@@ -2944,16 +2690,15 @@ export default function AdminDashboard({ irParaLanding }) {
                   }
                 />
               </div>
-              <div style={{ display: "flex", gap: "8px" }}>
+              <div style={{ display: "flex", gap: "8px", width: "100%" }}>
                 <button
-                  className="btn-submit"
+                  className="btn-submit w-full"
                   onClick={carregarHistoricoGeral}
-                  style={{ flex: 1 }}
                 >
                   Aplicar
                 </button>
                 <button
-                  className="btn-cancel"
+                  className="btn-cancel w-full"
                   onClick={() => {
                     setHistoricoFiltro({
                       tipo: "",
@@ -2963,31 +2708,23 @@ export default function AdminDashboard({ irParaLanding }) {
                     });
                     setTimeout(() => carregarHistoricoGeral(), 0);
                   }}
-                  style={{ flex: 1 }}
                 >
                   Limpar
                 </button>
               </div>
             </div>
 
-            {/* CONTEÚDO */}
             {historicoIndisponivel ? (
-              <div
-                style={{
-                  background: "#fff8e6",
-                  borderLeft: "4px solid #c9a961",
-                  borderRadius: "10px",
-                  padding: "18px 22px",
-                  color: "#5a4a1a",
-                }}
-              >
-                <strong>Histórico ainda não disponível no servidor.</strong>
-                <p style={{ margin: "8px 0 0", fontSize: "0.92rem" }}>
+              <div className="audit-unavailable-notice">
+                <strong className="font-bold">
+                  Histórico ainda não disponível no servidor.
+                </strong>
+                <p>
                   O endpoint <code>GET /api/auditoria</code> ainda não está
                   implementado no backend. Para ativar esta funcionalidade é
                   preciso criar:
                 </p>
-                <ul style={{ margin: "8px 0 0", paddingLeft: "20px" }}>
+                <ul className="audit-notice-list">
                   <li>
                     Tabela <code>AUDIT_LOG</code> (id, tipo, descricao,
                     id_utilizador, ip, data_hora, dados_extra JSON)
@@ -3003,25 +2740,10 @@ export default function AdminDashboard({ irParaLanding }) {
                 </ul>
               </div>
             ) : historicoLoading ? (
-              <div
-                style={{
-                  textAlign: "center",
-                  padding: "30px",
-                  color: "#888",
-                }}
-              >
-                A carregar histórico…
-              </div>
+              <div className="empty-row">A carregar histórico…</div>
             ) : (
-              <div
-                style={{
-                  background: "#fff",
-                  borderRadius: "10px",
-                  overflow: "hidden",
-                  boxShadow: "0 2px 6px rgba(0,0,0,0.04)",
-                }}
-              >
-                <table className="admin-table" style={{ margin: 0 }}>
+              <div className="table-wrapper">
+                <table className="admin-table m-0">
                   <thead>
                     <tr>
                       <th>Data/Hora</th>
@@ -3034,7 +2756,7 @@ export default function AdminDashboard({ irParaLanding }) {
                   <tbody>
                     {historicoGeral.map((h) => (
                       <tr key={h.id_audit || h.id}>
-                        <td style={{ whiteSpace: "nowrap" }}>
+                        <td className="whitespace-nowrap">
                           {h.data_hora
                             ? new Date(h.data_hora).toLocaleString("pt-PT")
                             : "—"}
@@ -3042,22 +2764,17 @@ export default function AdminDashboard({ irParaLanding }) {
                         <td>
                           <span
                             className="badge badge--teal"
-                            style={{
-                              background: corDoEventoAuditoria(h.tipo),
-                            }}
+                            style={{ background: corDoEventoAuditoria(h.tipo) }}
                           >
                             {legivelTipoEvento(h.tipo)}
                           </span>
                         </td>
                         <td>
-                          <strong>{h.nome_utilizador || "—"}</strong>
+                          <strong className="font-bold">
+                            {h.nome_utilizador || "—"}
+                          </strong>
                           {h.email_utilizador && (
-                            <div
-                              style={{
-                                fontSize: "0.78rem",
-                                color: "#888",
-                              }}
-                            >
+                            <div className="text-small text-muted">
                               {h.email_utilizador}
                             </div>
                           )}
@@ -3070,14 +2787,7 @@ export default function AdminDashboard({ irParaLanding }) {
                     ))}
                     {historicoGeral.length === 0 && (
                       <tr>
-                        <td
-                          colSpan="5"
-                          style={{
-                            textAlign: "center",
-                            padding: "30px",
-                            color: "#888",
-                          }}
-                        >
+                        <td colSpan="5" className="empty-row">
                           Nenhum evento encontrado com estes filtros.
                         </td>
                       </tr>
@@ -3089,13 +2799,10 @@ export default function AdminDashboard({ irParaLanding }) {
           </div>
         )}
 
-        {/* ================================================================
-            TAB: INVENTÁRIO
-        ================================================================ */}
+        {/* === TAB: INVENTÁRIO === */}
         {activeTab === "inventario" && (
           <div className="tab-content">
             {(() => {
-              // -- Cálculos para os cards de resumo (calculados a cada render) --
               const totalPecas = inventario.length;
               const pecasEmprestimo = inventario.filter(
                 (p) => p.disponivel_para_emprestimo || p.disponivel_emprestimo,
@@ -3110,35 +2817,18 @@ export default function AdminDashboard({ irParaLanding }) {
                 (p) => p.preco_venda == null,
               ).length;
 
-              // -- Decide a lista a apresentar segundo a sub-aba ativa --
               let listaAtual = inventario;
               if (inventarioTab === "emprestimo") listaAtual = pecasEmprestimo;
               else if (inventarioTab === "venda") listaAtual = pecasVenda;
 
               return (
                 <>
-                  {/* CABEÇALHO */}
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      marginBottom: "20px",
-                      flexWrap: "wrap",
-                      gap: "12px",
-                    }}
-                  >
+                  <div className="page-header">
                     <div>
-                      <h1 className="page-title" style={{ margin: 0 }}>
+                      <h1 className="page-title m-0">
                         📦 Gestão de Inventário
                       </h1>
-                      <p
-                        style={{
-                          margin: "4px 0 0",
-                          color: "#888",
-                          fontSize: "0.9rem",
-                        }}
-                      >
+                      <p className="page-header-desc">
                         Coordenação e Administração — figurinos, equipamento e
                         peças à venda
                       </p>
@@ -3151,153 +2841,37 @@ export default function AdminDashboard({ irParaLanding }) {
                     </button>
                   </div>
 
-                  {/* CARDS DE RESUMO */}
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns:
-                        "repeat(auto-fit, minmax(180px, 1fr))",
-                      gap: "14px",
-                      marginBottom: "24px",
-                    }}
-                  >
-                    <div
-                      style={{
-                        background: "#fff",
-                        borderRadius: "10px",
-                        padding: "16px 18px",
-                        borderLeft: "4px solid #5a8dee",
-                        boxShadow: "0 2px 6px rgba(0,0,0,0.04)",
-                      }}
-                    >
-                      <div
-                        style={{
-                          fontSize: "0.78rem",
-                          color: "#888",
-                          textTransform: "uppercase",
-                          letterSpacing: "0.5px",
-                        }}
-                      >
-                        Total Peças
-                      </div>
-                      <div
-                        style={{
-                          fontSize: "1.8rem",
-                          fontWeight: 700,
-                          marginTop: "4px",
-                        }}
-                      >
-                        {totalPecas}
-                      </div>
+                  <div className="inventory-summary-grid">
+                    <div className="inventory-card inventory-card--blue">
+                      <div className="inventory-card-title">Total Peças</div>
+                      <div className="inventory-card-value">{totalPecas}</div>
                     </div>
-
-                    <div
-                      style={{
-                        background: "#fff",
-                        borderRadius: "10px",
-                        padding: "16px 18px",
-                        borderLeft: "4px solid #38a169",
-                        boxShadow: "0 2px 6px rgba(0,0,0,0.04)",
-                      }}
-                    >
-                      <div
-                        style={{
-                          fontSize: "0.78rem",
-                          color: "#888",
-                          textTransform: "uppercase",
-                          letterSpacing: "0.5px",
-                        }}
-                      >
+                    <div className="inventory-card inventory-card--green">
+                      <div className="inventory-card-title">
                         Para Empréstimo
                       </div>
-                      <div
-                        style={{
-                          fontSize: "1.8rem",
-                          fontWeight: 700,
-                          marginTop: "4px",
-                        }}
-                      >
+                      <div className="inventory-card-value">
                         {pecasEmprestimo.length}
                       </div>
-                      <div
-                        style={{
-                          fontSize: "0.75rem",
-                          color: "#888",
-                          marginTop: "2px",
-                        }}
-                      >
+                      <div className="inventory-card-sub text-muted">
                         {emprestadasAgora} emprestada
                         {emprestadasAgora === 1 ? "" : "s"} agora
                       </div>
                     </div>
-
-                    <div
-                      style={{
-                        background: "#fff",
-                        borderRadius: "10px",
-                        padding: "16px 18px",
-                        borderLeft: "4px solid #c9a961",
-                        boxShadow: "0 2px 6px rgba(0,0,0,0.04)",
-                      }}
-                    >
-                      <div
-                        style={{
-                          fontSize: "0.78rem",
-                          color: "#888",
-                          textTransform: "uppercase",
-                          letterSpacing: "0.5px",
-                        }}
-                      >
-                        À Venda
-                      </div>
-                      <div
-                        style={{
-                          fontSize: "1.8rem",
-                          fontWeight: 700,
-                          marginTop: "4px",
-                        }}
-                      >
+                    <div className="inventory-card inventory-card--gold">
+                      <div className="inventory-card-title">À Venda</div>
+                      <div className="inventory-card-value">
                         {pecasVenda.length}
                       </div>
                       {semPrecoVenda > 0 && (
-                        <div
-                          style={{
-                            fontSize: "0.75rem",
-                            color: "#c0392b",
-                            marginTop: "2px",
-                          }}
-                        >
+                        <div className="inventory-card-sub inventory-card-sub--danger">
                           {semPrecoVenda} sem preço definido
                         </div>
                       )}
                     </div>
-
-                    <div
-                      style={{
-                        background: "#fff",
-                        borderRadius: "10px",
-                        padding: "16px 18px",
-                        borderLeft: "4px solid #888",
-                        boxShadow: "0 2px 6px rgba(0,0,0,0.04)",
-                      }}
-                    >
-                      <div
-                        style={{
-                          fontSize: "0.78rem",
-                          color: "#888",
-                          textTransform: "uppercase",
-                          letterSpacing: "0.5px",
-                        }}
-                      >
-                        Inativas
-                      </div>
-                      <div
-                        style={{
-                          fontSize: "1.8rem",
-                          fontWeight: 700,
-                          marginTop: "4px",
-                        }}
-                      >
+                    <div className="inventory-card inventory-card--gray">
+                      <div className="inventory-card-title">Inativas</div>
+                      <div className="inventory-card-value">
                         {
                           inventario.filter(
                             (p) =>
@@ -3312,45 +2886,21 @@ export default function AdminDashboard({ irParaLanding }) {
                     </div>
                   </div>
 
-                  {/* SUB-ABAS */}
-                  <div
-                    style={{
-                      display: "flex",
-                      gap: "4px",
-                      borderBottom: "2px solid #e5e5e5",
-                      marginBottom: "16px",
-                    }}
-                  >
+                  <div className="sub-tabs-container">
                     {[
                       { id: "catalogo", label: `Todas (${totalPecas})` },
                       {
                         id: "emprestimo",
                         label: `Empréstimo (${pecasEmprestimo.length})`,
                       },
-                      {
-                        id: "venda",
-                        label: `Venda (${pecasVenda.length})`,
-                      },
+                      { id: "venda", label: `Venda (${pecasVenda.length})` },
                     ].map((t) => {
                       const isActive = inventarioTab === t.id;
                       return (
                         <button
                           key={t.id}
                           onClick={() => setInventarioTab(t.id)}
-                          style={{
-                            padding: "10px 18px",
-                            border: "none",
-                            background: "transparent",
-                            cursor: "pointer",
-                            fontSize: "0.92rem",
-                            fontWeight: isActive ? 700 : 500,
-                            color: isActive ? "#c9a961" : "#666",
-                            borderBottom: isActive
-                              ? "3px solid #c9a961"
-                              : "3px solid transparent",
-                            marginBottom: "-2px",
-                            transition: "all 0.15s",
-                          }}
+                          className={`sub-tab-btn ${isActive ? "sub-tab-btn--active" : ""}`}
                         >
                           {t.label}
                         </button>
@@ -3358,16 +2908,8 @@ export default function AdminDashboard({ irParaLanding }) {
                     })}
                   </div>
 
-                  {/* TABELA */}
-                  <div
-                    style={{
-                      background: "#fff",
-                      borderRadius: "10px",
-                      overflow: "hidden",
-                      boxShadow: "0 2px 6px rgba(0,0,0,0.04)",
-                    }}
-                  >
-                    <table className="admin-table" style={{ margin: 0 }}>
+                  <div className="table-wrapper">
+                    <table className="admin-table m-0">
                       <thead>
                         <tr>
                           <th>Foto</th>
@@ -3416,25 +2958,13 @@ export default function AdminDashboard({ irParaLanding }) {
                                 <img
                                   src={foto}
                                   alt="peca"
-                                  style={{
-                                    width: "45px",
-                                    height: "45px",
-                                    objectFit: "cover",
-                                    borderRadius: "6px",
-                                    border: "1px solid #ddd",
-                                  }}
+                                  className="inventory-img"
                                 />
                               </td>
                               <td>
-                                <strong>{nome}</strong>
+                                <strong className="font-bold">{nome}</strong>
                                 {p.descricao && (
-                                  <div
-                                    style={{
-                                      fontSize: "0.78rem",
-                                      color: "#888",
-                                      marginTop: "2px",
-                                    }}
-                                  >
+                                  <div className="inventory-subtext">
                                     {p.descricao}
                                   </div>
                                 )}
@@ -3447,7 +2977,6 @@ export default function AdminDashboard({ irParaLanding }) {
                               </td>
                               <td>{condicao}</td>
 
-                              {/* Coluna Tipo (só na aba Todas) */}
                               {inventarioTab === "catalogo" && (
                                 <td>
                                   {dispVenda && (
@@ -3470,52 +2999,43 @@ export default function AdminDashboard({ irParaLanding }) {
                                     </span>
                                   )}
                                   {!dispVenda && !dispEmp && (
-                                    <span style={{ color: "#888" }}>—</span>
+                                    <span className="text-muted">—</span>
                                   )}
                                 </td>
                               )}
 
-                              {/* Aba VENDA: preço de venda + aviso se não definido */}
                               {inventarioTab === "venda" && (
                                 <td>
                                   {p.preco_venda != null ? (
-                                    <strong>{p.preco_venda}€</strong>
+                                    <strong className="font-bold">
+                                      {p.preco_venda}€
+                                    </strong>
                                   ) : (
-                                    <span
-                                      style={{
-                                        color: "#c0392b",
-                                        fontSize: "0.82rem",
-                                      }}
-                                    >
+                                    <span className="text-danger text-small">
                                       Sem preço
                                     </span>
                                   )}
                                 </td>
                               )}
 
-                              {/* Aba EMPRÉSTIMO: valor/dia + situação atual */}
                               {inventarioTab === "emprestimo" && (
                                 <>
                                   <td>
                                     {p.valor_dia != null ? (
-                                      <strong>{p.valor_dia}€</strong>
+                                      <strong className="font-bold">
+                                        {p.valor_dia}€
+                                      </strong>
                                     ) : (
-                                      <span style={{ color: "#888" }}>—</span>
+                                      <span className="text-muted">—</span>
                                     )}
                                   </td>
                                   <td>
                                     {emprestadaAgora ? (
-                                      <span
-                                        className="badge badge--teal"
-                                        style={{ background: "#c0392b" }}
-                                      >
+                                      <span className="badge badge--danger">
                                         Emprestada
                                       </span>
                                     ) : (
-                                      <span
-                                        className="badge badge--teal"
-                                        style={{ background: "#38a169" }}
-                                      >
+                                      <span className="badge badge--green">
                                         Disponível
                                       </span>
                                     )}
@@ -3523,7 +3043,6 @@ export default function AdminDashboard({ irParaLanding }) {
                                 </>
                               )}
 
-                              {/* Aba TODAS: ambas as colunas de preço */}
                               {inventarioTab === "catalogo" && (
                                 <>
                                   <td>
@@ -3539,99 +3058,81 @@ export default function AdminDashboard({ irParaLanding }) {
                                 </>
                               )}
 
-                              {/* Pessoas envolvidas */}
-                              <td
-                                style={{ fontSize: "0.82rem", lineHeight: 1.5 }}
-                              >
+                              <td className="inventory-details-text">
                                 <div>
-                                  <span style={{ color: "#888" }}>
-                                    Registou:
-                                  </span>{" "}
-                                  <strong>{p.registado_por || "—"}</strong>
+                                  <span className="text-muted">Registou:</span>{" "}
+                                  <strong className="font-bold">
+                                    {p.registado_por || "—"}
+                                  </strong>
                                 </div>
                                 {p.data_registo && (
-                                  <div
-                                    style={{
-                                      color: "#999",
-                                      fontSize: "0.75rem",
-                                    }}
-                                  >
+                                  <div className="text-light-muted text-xs">
                                     em{" "}
                                     {new Date(
                                       p.data_registo,
                                     ).toLocaleDateString("pt-PT")}
                                   </div>
                                 )}
-                                {/* Aba Empréstimo OU peça emprestada agora na aba Todas */}
                                 {(inventarioTab === "emprestimo" ||
                                   (inventarioTab === "catalogo" &&
                                     p.active_id_emprestimo)) && (
-                                  <div style={{ marginTop: "4px" }}>
-                                    <span style={{ color: "#888" }}>
+                                  <div className="mt-4">
+                                    <span className="text-muted">
                                       Requisitou:
                                     </span>{" "}
                                     {p.active_id_emprestimo ? (
-                                      <strong>
+                                      <strong className="font-bold">
                                         {p.requisitou_por ||
                                           p.requerente ||
                                           "(não disponível)"}
                                       </strong>
                                     ) : (
-                                      <span style={{ color: "#aaa" }}>
+                                      <span className="text-light-muted">
                                         ninguém
                                       </span>
                                     )}
                                     {p.active_id_emprestimo &&
                                       p.emprestimo_inicio && (
-                                        <div
-                                          style={{
-                                            color: "#999",
-                                            fontSize: "0.75rem",
-                                          }}
-                                        >
+                                        <div className="text-light-muted text-xs">
                                           desde{" "}
                                           {new Date(
                                             p.emprestimo_inicio,
                                           ).toLocaleDateString("pt-PT")}
-                                          {p.emprestimo_fim && (
-                                            <>
-                                              {" "}
-                                              até{" "}
-                                              {new Date(
-                                                p.emprestimo_fim,
-                                              ).toLocaleDateString("pt-PT")}
-                                            </>
-                                          )}
+                                          {p.emprestimo_fim &&
+                                            ` até ${new Date(p.emprestimo_fim).toLocaleDateString("pt-PT")}`}
                                         </div>
                                       )}
                                   </div>
                                 )}
-                                {/* Aba Venda OU peça com info de venda na aba Todas */}
                                 {(inventarioTab === "venda" ||
                                   (inventarioTab === "catalogo" &&
                                     p.id_venda)) && (
                                   <>
                                     {p.vendedor &&
                                       p.vendedor !== p.registado_por && (
-                                        <div style={{ marginTop: "4px" }}>
-                                          <span style={{ color: "#888" }}>
+                                        <div className="mt-4">
+                                          <span className="text-muted">
                                             Vendedor:
                                           </span>{" "}
-                                          <strong>{p.vendedor}</strong>
+                                          <strong className="font-bold">
+                                            {p.vendedor}
+                                          </strong>
                                         </div>
                                       )}
                                     {p.comprador ? (
-                                      <div style={{ marginTop: "4px" }}>
-                                        <span style={{ color: "#888" }}>
+                                      <div className="mt-4">
+                                        <span className="text-muted">
                                           Comprador:
                                         </span>{" "}
-                                        <strong>{p.comprador}</strong>
+                                        <strong className="font-bold">
+                                          {p.comprador}
+                                        </strong>
                                         {p.estado_venda && (
                                           <span
+                                            className="text-xs"
                                             style={{
                                               marginLeft: 6,
                                               color: "#38a169",
-                                              fontSize: "0.75rem",
                                             }}
                                           >
                                             ({p.estado_venda})
@@ -3640,12 +3141,7 @@ export default function AdminDashboard({ irParaLanding }) {
                                       </div>
                                     ) : (
                                       inventarioTab === "venda" && (
-                                        <div
-                                          style={{
-                                            marginTop: "4px",
-                                            color: "#aaa",
-                                          }}
-                                        >
+                                        <div className="mt-4 text-light-muted">
                                           Sem comprador ainda
                                         </div>
                                       )
@@ -3654,7 +3150,6 @@ export default function AdminDashboard({ irParaLanding }) {
                                 )}
                               </td>
 
-                              {/* Ações */}
                               <td className="text-center whitespace-nowrap">
                                 <button
                                   className="btn-sm btn-sm--primary mr-8"
@@ -3665,11 +3160,7 @@ export default function AdminDashboard({ irParaLanding }) {
                                 {inventarioTab === "venda" &&
                                   p.preco_venda == null && (
                                     <button
-                                      className="btn-sm mr-8"
-                                      style={{
-                                        background: "#c9a961",
-                                        color: "#fff",
-                                      }}
+                                      className="btn-sm btn-sm--gold mr-8"
                                       onClick={() => handleDefinirPrecoVenda(p)}
                                     >
                                       Definir Preço
@@ -3697,11 +3188,7 @@ export default function AdminDashboard({ irParaLanding }) {
                                     ? 8
                                     : 10
                               }
-                              style={{
-                                textAlign: "center",
-                                padding: "30px",
-                                color: "#888",
-                              }}
+                              className="empty-row"
                             >
                               {inventarioTab === "emprestimo"
                                 ? "Nenhuma peça configurada para empréstimo."
@@ -3721,7 +3208,11 @@ export default function AdminDashboard({ irParaLanding }) {
         )}
       </main>
 
-      {/* --- MODAIS: INVENTÁRIO --- */}
+      {/* ────────────────────────────────────────────────────────
+          MODALS ZONE
+      ───────────────────────────────────────────────────────── */}
+
+      {/* Modal: Inventário */}
       {modalPeca.isOpen && (
         <div className="admin-modal-overlay">
           <div className="admin-modal-content">
@@ -3822,15 +3313,8 @@ export default function AdminDashboard({ irParaLanding }) {
                   />
                 </div>
               </div>
-              <div className="form-group-row" style={{ gap: "24px" }}>
-                <label
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                    cursor: "pointer",
-                  }}
-                >
+              <div className="form-group-row modal-checkbox-group">
+                <label className="modal-checkbox-row">
                   <input
                     type="checkbox"
                     checked={!!modalPeca.data.disponivelVenda}
@@ -3846,14 +3330,7 @@ export default function AdminDashboard({ irParaLanding }) {
                   />
                   Disponível para Venda
                 </label>
-                <label
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                    cursor: "pointer",
-                  }}
-                >
+                <label className="modal-checkbox-row">
                   <input
                     type="checkbox"
                     checked={!!modalPeca.data.disponivelEmprestimo}
@@ -3870,22 +3347,17 @@ export default function AdminDashboard({ irParaLanding }) {
                   Disponível para Empréstimo
                 </label>
               </div>
+
               {modalPeca.data.disponivelVenda && (
-                <div className="field" style={{ marginTop: "12px" }}>
+                <div className="field mt-12">
                   <label>Métodos de Pagamento Aceites (Venda)</label>
-                  <div
-                    style={{ display: "flex", gap: "10px", marginTop: "6px" }}
-                  >
+                  <div className="methods-group">
                     {["MBWay", "Transferência", "Numerário"].map((metodo) => {
                       const selecionados =
                         modalPeca.data.metodosPagamento || [];
                       const estaChecked = selecionados.includes(metodo);
                       return (
-                        <label
-                          key={metodo}
-                          className="check-label-styled"
-                          style={{ padding: "8px 14px", margin: 0 }}
-                        >
+                        <label key={metodo} className="check-label-styled m-0">
                           <input
                             type="checkbox"
                             checked={estaChecked}
@@ -3909,13 +3381,11 @@ export default function AdminDashboard({ irParaLanding }) {
                   </div>
                 </div>
               )}
-              {/* Escolha dos Métodos de Pagamento no Empréstimo */}
+
               {modalPeca.data.disponivelEmprestimo && (
-                <div className="field" style={{ marginTop: "12px" }}>
+                <div className="field mt-12">
                   <label>Métodos de Pagamento Aceites (Empréstimo)</label>
-                  <div
-                    style={{ display: "flex", gap: "10px", marginTop: "6px" }}
-                  >
+                  <div className="methods-group">
                     {["MBWay", "Transferência", "Numerário"].map((metodo) => {
                       const selecionados =
                         modalPeca.data.metodosPagamentoEmprestimo || [];
@@ -3923,8 +3393,7 @@ export default function AdminDashboard({ irParaLanding }) {
                       return (
                         <label
                           key={`emp-${metodo}`}
-                          className="check-label-styled"
-                          style={{ padding: "8px 14px", margin: 0 }}
+                          className="check-label-styled m-0"
                         >
                           <input
                             type="checkbox"
@@ -3950,7 +3419,7 @@ export default function AdminDashboard({ irParaLanding }) {
                 </div>
               )}
 
-              <div className="field" style={{ marginTop: "12px" }}>
+              <div className="field mt-12">
                 <label>Fotografias</label>
                 <input
                   type="file"
@@ -3959,52 +3428,19 @@ export default function AdminDashboard({ irParaLanding }) {
                   onChange={handleAdicionarFotos}
                 />
                 {(modalPeca.data.fotos || []).length > 0 && (
-                  <div
-                    style={{
-                      display: "flex",
-                      flexWrap: "wrap",
-                      gap: "8px",
-                      marginTop: "10px",
-                    }}
-                  >
+                  <div className="photo-preview-grid">
                     {(modalPeca.data.fotos || []).map((f, i) => (
-                      <div
-                        key={i}
-                        style={{
-                          position: "relative",
-                          width: "90px",
-                          height: "90px",
-                        }}
-                      >
+                      <div key={i} className="photo-preview-item">
                         <img
                           src={f}
                           alt={`foto-${i}`}
-                          style={{
-                            width: "100%",
-                            height: "100%",
-                            objectFit: "cover",
-                            borderRadius: "8px",
-                            border: "2px solid var(--accent-gold, #c9a961)",
-                          }}
+                          className="photo-preview-img"
                         />
                         <button
                           type="button"
                           onClick={() => handleRemoverFoto(i)}
                           title="Remover"
-                          style={{
-                            position: "absolute",
-                            top: "-6px",
-                            right: "-6px",
-                            width: "22px",
-                            height: "22px",
-                            borderRadius: "50%",
-                            border: "none",
-                            background: "#c0392b",
-                            color: "#fff",
-                            cursor: "pointer",
-                            fontSize: "0.8rem",
-                            lineHeight: 1,
-                          }}
+                          className="btn-remove-photo"
                         >
                           ×
                         </button>
@@ -4012,13 +3448,7 @@ export default function AdminDashboard({ irParaLanding }) {
                     ))}
                   </div>
                 )}
-                <div
-                  style={{
-                    fontSize: "0.78rem",
-                    color: "#888",
-                    marginTop: "6px",
-                  }}
-                >
+                <div className="text-small text-muted mt-8">
                   Podes adicionar múltiplas fotos. Ao editar uma peça, as fotos
                   aqui exibidas substituirão todas as anteriores.
                 </div>
@@ -4045,6 +3475,7 @@ export default function AdminDashboard({ irParaLanding }) {
         </div>
       )}
 
+      {/* Modal: Estado da Peça */}
       {modalEstado.isOpen && (
         <div className="admin-modal-overlay">
           <div className="admin-modal-content" style={{ maxWidth: "440px" }}>
@@ -4066,15 +3497,8 @@ export default function AdminDashboard({ irParaLanding }) {
                   <option value="Danificado">Danificado</option>
                 </select>
               </div>
-              <div style={{ display: "flex", gap: "24px", marginTop: "8px" }}>
-                <label
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                    cursor: "pointer",
-                  }}
-                >
+              <div className="modal-checkbox-group">
+                <label className="modal-checkbox-row">
                   <input
                     type="checkbox"
                     checked={!!modalEstado.dispEmp}
@@ -4087,14 +3511,7 @@ export default function AdminDashboard({ irParaLanding }) {
                   />
                   Disponível Empréstimo
                 </label>
-                <label
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                    cursor: "pointer",
-                  }}
-                >
+                <label className="modal-checkbox-row">
                   <input
                     type="checkbox"
                     checked={!!modalEstado.dispVenda}
@@ -4133,7 +3550,7 @@ export default function AdminDashboard({ irParaLanding }) {
         </div>
       )}
 
-      {/* --- MODAIS DE ADMINISTRAÇÃO BÁSICA --- */}
+      {/* Modal: Editar/Criar Utilizador */}
       {modalUser.isOpen && (
         <div className="admin-modal-overlay">
           <div className="admin-modal-content">
@@ -4283,6 +3700,7 @@ export default function AdminDashboard({ irParaLanding }) {
         </div>
       )}
 
+      {/* Modal: Modalidades Professor */}
       {modalMods.isOpen && (
         <div className="admin-modal-overlay">
           <div className="admin-modal-content admin-modal-content--sm">
@@ -4336,7 +3754,7 @@ export default function AdminDashboard({ irParaLanding }) {
         </div>
       )}
 
-      {/* --- MODAL: EDITAR PREÇO --- */}
+      {/* Modal: Editar Preço */}
       {modalPreco.isOpen && (
         <div className="admin-modal-overlay">
           <div className="admin-modal-content" style={{ maxWidth: "450px" }}>
@@ -4348,7 +3766,6 @@ export default function AdminDashboard({ irParaLanding }) {
                 : "Fins-de-Semana"}
               )
             </p>
-
             <form className="admin-form" onSubmit={submeterModalPreco}>
               <div className="form-group-row">
                 <div className="field form-col-1">
@@ -4357,10 +3774,7 @@ export default function AdminDashboard({ irParaLanding }) {
                     type="number"
                     readOnly
                     value={modalPreco.data.duracao_minutos}
-                    style={{
-                      backgroundColor: "#f0f0f0",
-                      cursor: "not-allowed",
-                    }}
+                    className="input-readonly"
                   />
                 </div>
                 <div className="field form-col-1">
@@ -4380,36 +3794,23 @@ export default function AdminDashboard({ irParaLanding }) {
                   />
                 </div>
               </div>
-
-              <div className="field" style={{ marginTop: "15px" }}>
-                <label
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "10px",
-                    cursor: "pointer",
-                  }}
-                >
+              <div className="field mt-16">
+                <label className="modal-checkbox-row">
                   <input
                     type="checkbox"
                     checked={modalPreco.data.ativo}
+                    className="modal-checkbox-large"
                     onChange={(e) =>
                       setModalPreco({
                         ...modalPreco,
                         data: { ...modalPreco.data, ativo: e.target.checked },
                       })
                     }
-                    style={{
-                      width: "18px",
-                      height: "18px",
-                      accentColor: "var(--green)",
-                    }}
                   />
-                  <span style={{ fontWeight: "600" }}>Regra Ativa</span>
+                  <span className="font-semibold">Regra Ativa</span>
                 </label>
               </div>
-
-              <div className="modal-actions" style={{ marginTop: "25px" }}>
+              <div className="modal-actions mt-24">
                 <button
                   type="button"
                   className="btn-cancel"
@@ -4426,111 +3827,63 @@ export default function AdminDashboard({ irParaLanding }) {
         </div>
       )}
 
-      {/* MODAL: Detalhe da Fatura (drill-down — aulas que a compõem) */}
+      {/* Modal: Detalhe Fatura */}
       {modalDetalheFatura.isOpen && (
         <div className="admin-modal-overlay" onClick={fecharDetalheFatura}>
           <div
-            className="admin-modal-content"
-            style={{ maxWidth: "780px", width: "92%" }}
+            className="admin-modal-content admin-modal-content--xl"
             onClick={(e) => e.stopPropagation()}
           >
             <h2 className="admin-modal-title">Detalhe da Fatura</h2>
-
             {modalDetalheFatura.loading ? (
-              <p
-                style={{
-                  textAlign: "center",
-                  padding: "30px",
-                  color: "#888",
-                }}
-              >
-                A carregar detalhes…
-              </p>
+              <p className="empty-row">A carregar detalhes…</p>
             ) : modalDetalheFatura.erro ? (
-              <div
-                style={{
-                  background: "#fdecea",
-                  borderLeft: "4px solid #d9534f",
-                  padding: "14px 18px",
-                  borderRadius: "8px",
-                  color: "#a02a25",
-                }}
-              >
+              <div className="info-note info-note--error">
                 {modalDetalheFatura.erro}
               </div>
             ) : (
               <>
-                {/* Cabeçalho da fatura */}
                 {modalDetalheFatura.fatura && (
-                  <div
-                    style={{
-                      background: "#fdfaf5",
-                      border: "1px solid #ecdfc4",
-                      borderRadius: "10px",
-                      padding: "14px 18px",
-                      marginBottom: "18px",
-                      display: "grid",
-                      gridTemplateColumns: "repeat(2, 1fr)",
-                      gap: "10px 24px",
-                      fontSize: "0.9rem",
-                    }}
-                  >
+                  <div className="invoice-header-card">
                     <div>
-                      <div style={{ color: "#888", fontSize: "0.75rem" }}>
-                        Fatura
-                      </div>
-                      <strong>#{modalDetalheFatura.fatura.id_faturacao}</strong>
+                      <div className="detail-label">Fatura</div>
+                      <strong className="font-bold">
+                        #{modalDetalheFatura.fatura.id_faturacao}
+                      </strong>
                     </div>
                     <div>
-                      <div style={{ color: "#888", fontSize: "0.75rem" }}>
-                        Utilizador
-                      </div>
-                      <strong>
+                      <div className="detail-label">Utilizador</div>
+                      <strong className="font-bold">
                         {modalDetalheFatura.fatura.nome_utilizador || "—"}
                       </strong>
-                      <div style={{ fontSize: "0.78rem", color: "#888" }}>
+                      <div className="text-small text-muted">
                         {modalDetalheFatura.fatura.email_utilizador || ""}
                       </div>
                     </div>
                     <div>
-                      <div style={{ color: "#888", fontSize: "0.75rem" }}>
-                        Período
-                      </div>
-                      <strong>
+                      <div className="detail-label">Período</div>
+                      <strong className="font-bold">
                         {String(modalDetalheFatura.fatura.mes).padStart(2, "0")}
                         /{modalDetalheFatura.fatura.ano}
                       </strong>
                     </div>
                     <div>
-                      <div style={{ color: "#888", fontSize: "0.75rem" }}>
-                        Estado
-                      </div>
+                      <div className="detail-label">Estado</div>
                       <span
-                        className={`badge badge--${
-                          modalDetalheFatura.fatura.estado_pagamento === "Pago"
-                            ? "green"
-                            : modalDetalheFatura.fatura.estado_pagamento ===
-                                "Cancelado"
-                              ? "danger"
-                              : "orange"
-                        }`}
+                        className={`badge badge--${modalDetalheFatura.fatura.estado_pagamento === "Pago" ? "green" : modalDetalheFatura.fatura.estado_pagamento === "Cancelado" ? "danger" : "orange"}`}
                       >
                         {modalDetalheFatura.fatura.estado_pagamento || "—"}
                       </span>
                     </div>
                     <div>
-                      <div style={{ color: "#888", fontSize: "0.75rem" }}>
-                        Método de pagamento
-                      </div>
-                      <strong>
+                      <div className="detail-label">Método de pagamento</div>
+                      <strong className="font-bold">
                         {modalDetalheFatura.fatura.metodo_pagamento || "—"}
                       </strong>
                     </div>
                     <div>
-                      <div style={{ color: "#888", fontSize: "0.75rem" }}>
-                        Data de pagamento
-                      </div>
-                      <strong>
+                      <div className="detail-label">Data de pagamento</div>
+                      <strong className="font-bold">
                         {modalDetalheFatura.fatura.data_pagamento
                           ? new Date(
                               modalDetalheFatura.fatura.data_pagamento,
@@ -4538,16 +3891,9 @@ export default function AdminDashboard({ irParaLanding }) {
                           : "—"}
                       </strong>
                     </div>
-                    <div style={{ gridColumn: "1 / -1", marginTop: "4px" }}>
-                      <div style={{ color: "#888", fontSize: "0.75rem" }}>
-                        Total
-                      </div>
-                      <strong
-                        style={{
-                          fontSize: "1.3rem",
-                          color: "var(--primary-dark)",
-                        }}
-                      >
+                    <div style={{ gridColumn: "1 / -1" }} className="mt-4">
+                      <div className="detail-label">Total</div>
+                      <strong className="font-bold detail-value-large">
                         {Number(modalDetalheFatura.fatura.total || 0).toFixed(
                           2,
                         )}
@@ -4556,18 +3902,8 @@ export default function AdminDashboard({ irParaLanding }) {
                     </div>
                   </div>
                 )}
-
-                {/* Conteúdo: ficha individual quando há 1 aula, lista quando há várias */}
                 {modalDetalheFatura.linhas.length === 0 ? (
-                  <div
-                    style={{
-                      padding: "20px",
-                      textAlign: "center",
-                      color: "#888",
-                      background: "#fafafa",
-                      borderRadius: "8px",
-                    }}
-                  >
+                  <div className="invoice-detail-empty empty-row">
                     Nenhuma aula encontrada para esta fatura.
                   </div>
                 ) : modalDetalheFatura.modoIndividual ||
@@ -4590,65 +3926,42 @@ export default function AdminDashboard({ irParaLanding }) {
                             : "orange";
                     return (
                       <>
-                        <h3
-                          style={{
-                            margin: "0 0 12px",
-                            fontSize: "1rem",
-                            color: "var(--primary-dark)",
-                          }}
-                        >
+                        <h3 className="lesson-detail-title font-bold">
                           Detalhes da aula
                         </h3>
-                        <div
-                          style={{
-                            background: "#fff",
-                            border: "1px solid #e8e3d6",
-                            borderRadius: "10px",
-                            padding: "18px 22px",
-                            display: "grid",
-                            gridTemplateColumns: "repeat(2, 1fr)",
-                            gap: "14px 28px",
-                            fontSize: "0.92rem",
-                          }}
-                        >
+                        <div className="lesson-detail-card">
                           <div>
-                            <div style={{ color: "#888", fontSize: "0.75rem" }}>
-                              ID Coaching
-                            </div>
-                            <strong>#{aula.id_coaching}</strong>
+                            <div className="detail-label">ID Coaching</div>
+                            <strong className="font-bold">
+                              #{aula.id_coaching}
+                            </strong>
                           </div>
                           <div>
-                            <div style={{ color: "#888", fontSize: "0.75rem" }}>
-                              Estado
-                            </div>
+                            <div className="detail-label">Estado</div>
                             <span className={`badge badge--${corEstado}`}>
                               {aula.estado_coaching || "—"}
                             </span>
                           </div>
-
                           <div>
-                            <div style={{ color: "#888", fontSize: "0.75rem" }}>
-                              Modalidade
-                            </div>
-                            <strong>{aula.modalidade || "—"}</strong>
+                            <div className="detail-label">Modalidade</div>
+                            <strong className="font-bold">
+                              {aula.modalidade || "—"}
+                            </strong>
                           </div>
                           <div>
-                            <div style={{ color: "#888", fontSize: "0.75rem" }}>
+                            <div className="detail-label">
                               Formato / Participantes
                             </div>
-                            <strong>
+                            <strong className="font-bold">
                               {aula.formato_aula || "—"}
                               {aula.numero_participantes
                                 ? ` · ${aula.numero_participantes} aluno(s)`
                                 : ""}
                             </strong>
                           </div>
-
                           <div>
-                            <div style={{ color: "#888", fontSize: "0.75rem" }}>
-                              Data
-                            </div>
-                            <strong>
+                            <div className="detail-label">Data</div>
+                            <strong className="font-bold">
                               {aula.data_aula
                                 ? new Date(aula.data_aula).toLocaleDateString(
                                     "pt-PT",
@@ -4657,45 +3970,36 @@ export default function AdminDashboard({ irParaLanding }) {
                             </strong>
                           </div>
                           <div>
-                            <div style={{ color: "#888", fontSize: "0.75rem" }}>
-                              Hora · Duração
-                            </div>
-                            <strong>
+                            <div className="detail-label">Hora · Duração</div>
+                            <strong className="font-bold">
                               {hh}
                               {horaFim ? ` – ${horaFim}` : ""}{" "}
-                              <span style={{ color: "#999", fontWeight: 400 }}>
+                              <span className="text-muted font-normal">
                                 ({aula.duracao_minutos || "—"} min)
                               </span>
                             </strong>
                           </div>
-
                           <div>
-                            <div style={{ color: "#888", fontSize: "0.75rem" }}>
-                              Professor
-                            </div>
-                            <strong>{aula.nome_professor || "—"}</strong>
+                            <div className="detail-label">Professor</div>
+                            <strong className="font-bold">
+                              {aula.nome_professor || "—"}
+                            </strong>
                           </div>
                           <div>
-                            <div style={{ color: "#888", fontSize: "0.75rem" }}>
-                              Sala
-                            </div>
-                            <strong>{aula.sala || "—"}</strong>
+                            <div className="detail-label">Sala</div>
+                            <strong className="font-bold">
+                              {aula.sala || "—"}
+                            </strong>
                           </div>
-
                           <div>
-                            <div style={{ color: "#888", fontSize: "0.75rem" }}>
+                            <div className="detail-label">
                               Validação do professor
                             </div>
-                            <strong>
+                            <strong className="font-bold">
                               {aula.validacao_professor || "Pendente"}
                             </strong>
                             {aula.data_validacao_professor && (
-                              <div
-                                style={{
-                                  fontSize: "0.78rem",
-                                  color: "#888",
-                                }}
-                              >
+                              <div className="text-small text-muted">
                                 {new Date(
                                   aula.data_validacao_professor,
                                 ).toLocaleString("pt-PT")}
@@ -4703,67 +4007,35 @@ export default function AdminDashboard({ irParaLanding }) {
                             )}
                           </div>
                           <div>
-                            <div style={{ color: "#888", fontSize: "0.75rem" }}>
-                              Valor da aula
-                            </div>
+                            <div className="detail-label">Valor da aula</div>
                             <strong
-                              style={{
-                                fontSize: "1.05rem",
-                                color: "var(--primary-dark)",
-                              }}
+                              className="font-bold text-primary"
+                              style={{ fontSize: "1.05rem" }}
                             >
                               {Number(aula.valor_final || 0).toFixed(2)}€
                             </strong>
                             {aula.custo_estimado != null &&
                               Math.round(Number(aula.custo_estimado) * 100) !==
                                 Math.round(Number(aula.valor_final) * 100) && (
-                                <div
-                                  style={{
-                                    fontSize: "0.78rem",
-                                    color: "#888",
-                                  }}
-                                >
+                                <div className="text-small text-muted">
                                   estimado:{" "}
                                   {Number(aula.custo_estimado).toFixed(2)}€
                                 </div>
                               )}
                           </div>
-
                           {aula.observacoes_professor && (
                             <div style={{ gridColumn: "1 / -1" }}>
-                              <div
-                                style={{
-                                  color: "#888",
-                                  fontSize: "0.75rem",
-                                }}
-                              >
+                              <div className="detail-label">
                                 Observações do professor
                               </div>
-                              <div
-                                style={{
-                                  background: "#fdfaf5",
-                                  border: "1px solid #ecdfc4",
-                                  borderRadius: "8px",
-                                  padding: "10px 12px",
-                                  marginTop: "4px",
-                                  fontSize: "0.88rem",
-                                  whiteSpace: "pre-wrap",
-                                }}
-                              >
+                              <div className="lesson-obs-box">
                                 {aula.observacoes_professor}
                               </div>
                             </div>
                           )}
-
                           {aula.data_pedido && (
                             <div style={{ gridColumn: "1 / -1" }}>
-                              <div
-                                style={{
-                                  color: "#aaa",
-                                  fontSize: "0.72rem",
-                                  marginTop: "4px",
-                                }}
-                              >
+                              <div className="text-light-muted mt-4 text-xs">
                                 Pedido submetido em{" "}
                                 {new Date(aula.data_pedido).toLocaleString(
                                   "pt-PT",
@@ -4777,28 +4049,12 @@ export default function AdminDashboard({ irParaLanding }) {
                   })()
                 ) : (
                   <>
-                    <h3
-                      style={{
-                        margin: "0 0 10px",
-                        fontSize: "1rem",
-                        color: "var(--primary-dark)",
-                      }}
-                    >
+                    <h3 className="lesson-detail-title font-bold">
                       Aulas faturadas neste período (
                       {modalDetalheFatura.linhas.length})
                     </h3>
-                    <div
-                      style={{
-                        maxHeight: "360px",
-                        overflowY: "auto",
-                        border: "1px solid #eee",
-                        borderRadius: "8px",
-                      }}
-                    >
-                      <table
-                        className="admin-table"
-                        style={{ margin: 0, fontSize: "0.88rem" }}
-                      >
+                    <div className="table-scrollable">
+                      <table className="admin-table m-0">
                         <thead>
                           <tr>
                             <th>Data</th>
@@ -4806,7 +4062,7 @@ export default function AdminDashboard({ irParaLanding }) {
                             <th>Modalidade</th>
                             <th>Professor</th>
                             <th>Sala</th>
-                            <th style={{ textAlign: "right" }}>Valor</th>
+                            <th className="text-right">Valor</th>
                             <th>Estado</th>
                           </tr>
                         </thead>
@@ -4826,44 +4082,30 @@ export default function AdminDashboard({ irParaLanding }) {
                                     : "orange";
                             return (
                               <tr key={l.id_coaching}>
-                                <td style={{ whiteSpace: "nowrap" }}>
+                                <td className="whitespace-nowrap">
                                   {l.data_aula
                                     ? new Date(l.data_aula).toLocaleDateString(
                                         "pt-PT",
                                       )
                                     : "—"}
                                 </td>
-                                <td style={{ whiteSpace: "nowrap" }}>
+                                <td className="whitespace-nowrap">
                                   {horaCurta}{" "}
-                                  <span
-                                    style={{
-                                      color: "#999",
-                                      fontSize: "0.78rem",
-                                    }}
-                                  >
+                                  <span className="text-muted text-small">
                                     ({l.duracao_minutos}min)
                                   </span>
                                 </td>
                                 <td>
-                                  <strong>{l.modalidade || "—"}</strong>
-                                  <div
-                                    style={{
-                                      fontSize: "0.75rem",
-                                      color: "#888",
-                                    }}
-                                  >
+                                  <strong className="font-bold">
+                                    {l.modalidade || "—"}
+                                  </strong>
+                                  <div className="text-xs text-muted">
                                     {l.formato_aula || ""}
                                   </div>
                                 </td>
                                 <td>{l.nome_professor || "—"}</td>
                                 <td>{l.sala || "—"}</td>
-                                <td
-                                  style={{
-                                    textAlign: "right",
-                                    whiteSpace: "nowrap",
-                                    fontWeight: 700,
-                                  }}
-                                >
+                                <td className="text-right whitespace-nowrap font-bold">
                                   {Number(l.valor_final || 0).toFixed(2)}€
                                 </td>
                                 <td>
@@ -4881,14 +4123,7 @@ export default function AdminDashboard({ irParaLanding }) {
                 )}
               </>
             )}
-
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "flex-end",
-                marginTop: "20px",
-              }}
-            >
+            <div className="modal-actions mt-20">
               <button className="btn-cancel" onClick={fecharDetalheFatura}>
                 Fechar
               </button>
@@ -4897,38 +4132,34 @@ export default function AdminDashboard({ irParaLanding }) {
         </div>
       )}
 
+      {/* Modal: Aprovar Coaching */}
       {modalAprovar.isOpen && modalAprovar.pedido && (
         <div className="admin-modal-overlay">
           <div className="admin-modal-content">
             <h2 className="admin-modal-title">
               Aprovar Pedido #{modalAprovar.pedido.id_pedido_coaching}
             </h2>
-            <div
-              style={{
-                backgroundColor: "#f4f4f4",
-                padding: "10px",
-                borderRadius: "8px",
-                marginBottom: "20px",
-                fontSize: "0.9rem",
-              }}
-            >
+            <div className="approval-info-box">
               <p>
-                <strong>EE:</strong> {modalAprovar.pedido.encarregado}
+                <strong className="font-bold">EE:</strong>{" "}
+                {modalAprovar.pedido.encarregado}
               </p>
               <p>
-                <strong>Aluno(s):</strong> {modalAprovar.pedido.alunos}
+                <strong className="font-bold">Aluno(s):</strong>{" "}
+                {modalAprovar.pedido.alunos}
               </p>
               <p>
-                <strong>Modalidade:</strong> {modalAprovar.pedido.modalidade} (
+                <strong className="font-bold">Modalidade:</strong>{" "}
+                {modalAprovar.pedido.modalidade} (
                 {modalAprovar.pedido.duracao_minutos} min)
               </p>
               <p>
-                <strong>Data/Hora:</strong>{" "}
+                <strong className="font-bold">Data/Hora:</strong>{" "}
                 {formatDataApi(modalAprovar.pedido.data_aula_pretendida)} às{" "}
                 {formatHoraCurta(modalAprovar.pedido.hora_inicio_pretendida)}
               </p>
               <p>
-                <strong>Preço do Sistema:</strong>{" "}
+                <strong className="font-bold">Preço do Sistema:</strong>{" "}
                 {modalAprovar.pedido.custo_estimado} €
               </p>
             </div>
@@ -5009,6 +4240,7 @@ export default function AdminDashboard({ irParaLanding }) {
         </div>
       )}
 
+      {/* Modal: Agendar Coaching Direto */}
       {modalAgendarDireto.isOpen && (
         <div className="admin-modal-overlay">
           <div className="admin-modal-content admin-modal-content--lg">
@@ -5033,7 +4265,6 @@ export default function AdminDashboard({ irParaLanding }) {
                   />
                 </div>
               </div>
-
               <div className="form-group-row">
                 <div className="field form-col-1">
                   <label>Modalidade *</label>
@@ -5060,7 +4291,6 @@ export default function AdminDashboard({ irParaLanding }) {
                   />
                 </div>
               </div>
-
               <div className="form-group-row">
                 <div className="field form-col-1">
                   <label>Sala *</label>
@@ -5079,7 +4309,6 @@ export default function AdminDashboard({ irParaLanding }) {
                     }
                   />
                 </div>
-
                 <div className="field form-col-1">
                   <label>Data da Aula *</label>
                   <input
@@ -5109,7 +4338,6 @@ export default function AdminDashboard({ irParaLanding }) {
                   />
                 </div>
               </div>
-
               <div className="form-group-row">
                 <div className="field form-col-1">
                   <label>Formato *</label>
@@ -5183,7 +4411,6 @@ export default function AdminDashboard({ irParaLanding }) {
                   </select>
                 </div>
               </div>
-
               <div className="modal-actions">
                 <button
                   type="button"
@@ -5206,6 +4433,7 @@ export default function AdminDashboard({ irParaLanding }) {
         </div>
       )}
 
+      {/* Alertas Toast */}
       {msg && <div className={`toast toast--${msg.tipo}`}>{msg.texto}</div>}
     </div>
   );

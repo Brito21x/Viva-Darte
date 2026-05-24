@@ -11,12 +11,15 @@ export default function Landing({
   irParaMinhaAgendaProfessor,
   irParaMinhaAgendaEE,
 }) {
+  // --- ESTADOS DE CONTROLO DE SESSÃO E CONTEXTO ---
   const [utilizador, setUtilizador] = useState(null);
   const [modoPortal, setModoPortal] = useState(false);
 
+  // --- REFERÊNCIAS DOS ELEMENTOS DO CARROSSEL (DOM) ---
   const modalidadesRef = useRef(null);
   const professoresRef = useRef(null);
 
+  // --- LEITURA DA SESSÃO LOCAL AO INICIALIZAR ---
   useEffect(() => {
     const userGuardado = localStorage.getItem("viva_user");
     if (userGuardado) {
@@ -26,6 +29,7 @@ export default function Landing({
     document.title = "Viva D'arte | Escola de Dança";
   }, []);
 
+  // --- ENCERRAMENTO DE SESSÃO (LOGOUT) ---
   const handleLogout = () => {
     localStorage.removeItem("viva_user");
     localStorage.removeItem("viva_token");
@@ -35,6 +39,7 @@ export default function Landing({
     window.location.reload();
   };
 
+  // --- RETORNO AO TOPO DA PÁGINA INICIAL ---
   const handleIrParaInicio = (e) => {
     if (e) e.preventDefault();
     setModoPortal(false);
@@ -49,6 +54,7 @@ export default function Landing({
     }
   };
 
+  // --- DESLOCAMENTO MANUAL DO CARROSSEL ---
   const scrollCarrossel = (ref, direcao, tipo) => {
     if (ref.current) {
       const scrollAmount = tipo === "unico" ? ref.current.clientWidth : 420;
@@ -59,11 +65,11 @@ export default function Landing({
     }
   };
 
+  // --- TIMEOUT AUTOMÁTICO PARA SCROLL DO CARROSSEL DE PROFESSORES ---
   useEffect(() => {
     const autoScroll = setInterval(() => {
       if (professoresRef.current) {
         const container = professoresRef.current;
-
         const isAtEnd =
           container.scrollLeft + container.clientWidth >=
           container.scrollWidth - 10;
@@ -84,7 +90,7 @@ export default function Landing({
 
   return (
     <div className="landing-container">
-      {/* --- NAVBAR --- */}
+      {/* --- BARRA DE NAVEGAÇÃO (NAVBAR) --- */}
       <nav className="navbar">
         <div className="nav-brand">
           <img src={logoImg} alt="Logo" className="nav-logo-img" />
@@ -93,10 +99,7 @@ export default function Landing({
               <span
                 key={index}
                 className="letra-ritmo"
-                style={{
-                  animationDelay: `${index * 0.1}s`,
-                  whiteSpace: "pre",
-                }}
+                style={{ animationDelay: `${index * 0.1}s` }}
               >
                 {letra}
               </span>
@@ -136,130 +139,66 @@ export default function Landing({
               </li>
 
               <li className="nav-separator">|</li>
-              {isProfessorUtilizador(utilizador) ? (
-                <>
-                  <li
-                    className="student-menu-group"
-                    onClick={() => setModoPortal(true)}
+              <li
+                className="student-menu-group"
+                onClick={() => setModoPortal(true)}
+              >
+                <div className="student-menu-bg">
+                  <a
+                    href="#portal"
+                    className="student-link"
+                    onClick={(e) => e.preventDefault()}
                   >
-                    <div
-                      className="student-menu-bg"
-                      style={{ cursor: "pointer", padding: "8px 20px" }}
-                    >
-                      <a
-                        href="#portal"
-                        className="student-link"
-                        onClick={(e) => e.preventDefault()}
-                      >
-                        Portal do Professor
-                      </a>
-                    </div>
-                  </li>
-                </>
-              ) : (
-                <>
-                  <li
-                    className="student-menu-group"
-                    onClick={() => setModoPortal(true)}
-                  >
-                    <div
-                      className="student-menu-bg"
-                      style={{ cursor: "pointer", padding: "8px 20px" }}
-                    >
-                      <a
-                        href="#portal"
-                        className="student-link"
-                        onClick={(e) => e.preventDefault()}
-                      >
-                        Portal do EE
-                      </a>
-                    </div>
-                  </li>
-                </>
-              )}
+                    {isProfessorUtilizador(utilizador)
+                      ? "Portal do Professor"
+                      : "Portal do EE"}
+                  </a>
+                </div>
+              </li>
             </>
           ) : (
             <>
               <li className="nav-separator">|</li>
-              {isProfessorUtilizador(utilizador) ? (
-                <>
-                  <li>
-                    <a
-                      href="#minha-agenda-professor"
-                      className="special-link"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        irParaMinhaAgendaProfessor?.();
-                      }}
-                    >
-                      Minha agenda
-                    </a>
-                  </li>
-                  <li>
-                    <a
-                      href="#emprestimos"
-                      className="special-link"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        irParaEmprestimos();
-                      }}
-                    >
-                      Empréstimos de peças
-                    </a>
-                  </li>
-                  <li>
-                    <a
-                      href="#figurinos"
-                      className="special-link"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        irParaVendaFigurinos();
-                      }}
-                    >
-                      Venda de figurinos
-                    </a>
-                  </li>
-                </>
-              ) : (
-                <>
-                  <li>
-                    <a
-                      href="#minha-agenda-ee"
-                      className="special-link"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        irParaMinhaAgendaEE?.();
-                      }}
-                    >
-                      Minha agenda
-                    </a>
-                  </li>
-                  <li>
-                    <a
-                      href="#emprestimos"
-                      className="special-link"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        irParaEmprestimos();
-                      }}
-                    >
-                      Empréstimos de peças
-                    </a>
-                  </li>
-                  <li>
-                    <a
-                      href="#figurinos"
-                      className="special-link"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        irParaVendaFigurinos();
-                      }}
-                    >
-                      Venda de figurinos
-                    </a>
-                  </li>
-                </>
-              )}
+              <li>
+                <a
+                  href="#minha-agenda"
+                  className="special-link"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    if (isProfessorUtilizador(utilizador)) {
+                      irParaMinhaAgendaProfessor?.();
+                    } else {
+                      irParaMinhaAgendaEE?.();
+                    }
+                  }}
+                >
+                  Minha agenda
+                </a>
+              </li>
+              <li>
+                <a
+                  href="#emprestimos"
+                  className="special-link"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    irParaEmprestimos();
+                  }}
+                >
+                  Empréstimos de peças
+                </a>
+              </li>
+              <li>
+                <a
+                  href="#figurinos"
+                  className="special-link"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    irParaVendaFigurinos();
+                  }}
+                >
+                  Venda de figurinos
+                </a>
+              </li>
             </>
           )}
         </ul>
@@ -287,7 +226,7 @@ export default function Landing({
         </div>
       </nav>
 
-      {/* 1. INÍCIO (HERO) */}
+      {/* --- 1. APRESENTAÇÃO PRINCIPAL (HERO) --- */}
       <header id="inicio" className="hero">
         <div className="hero-content">
           <h1>
@@ -301,7 +240,7 @@ export default function Landing({
         </div>
       </header>
 
-      {/* 2. SOBRE NÓS */}
+      {/* --- 2. SECÇÃO SOBRE NÓS --- */}
       <section id="sobre" className="section-container">
         <div className="sobre-layout">
           <h2>A Nossa Escola</h2>
@@ -321,7 +260,7 @@ export default function Landing({
         </div>
       </section>
 
-      {/* 3. MODALIDADES */}
+      {/* --- 3. SECÇÃO MODALIDADES --- */}
       <section id="modalidades" className="section-container bg-light">
         <div className="section-header">
           <h2>Modalidades</h2>
@@ -372,8 +311,8 @@ export default function Landing({
               <div className="modalidade-right">
                 <span className="subtitle">Expressão Livre</span>
                 <p>
-                  Movimentos fluidos e expressão corporal que quebram as
-                  barreiras do estilo clássico, conectando corpo e mente.
+                  Movimentos fluidos e expressionais corporais que quebram as
+                  barreiras do estilo clássico, ligando o corpo e a mente.
                 </p>
               </div>
             </div>
@@ -390,7 +329,7 @@ export default function Landing({
         </div>
       </section>
 
-      {/* 4. PROFESSORES */}
+      {/* --- 4. SECÇÃO EQUIPA DOCENTE (PROFESSORES) --- */}
       <section id="professores" className="section-container">
         <div className="section-header">
           <h2>Os Nossos Professores</h2>
@@ -407,10 +346,7 @@ export default function Landing({
           <div className="carousel-container single-item" ref={professoresRef}>
             <div className="horizontal-card">
               <div className="card-left">
-                <div
-                  className="prof-avatar"
-                  style={{ backgroundImage: "url('')" }}
-                ></div>
+                <div className="prof-avatar ana"></div>
               </div>
               <div className="card-right">
                 <h3>Ana Silva</h3>
@@ -425,10 +361,7 @@ export default function Landing({
 
             <div className="horizontal-card">
               <div className="card-left">
-                <div
-                  className="prof-avatar"
-                  style={{ backgroundImage: "url('')" }}
-                ></div>
+                <div className="prof-avatar carlos"></div>
               </div>
               <div className="card-right">
                 <h3>Carlos Mendes</h3>
@@ -443,10 +376,7 @@ export default function Landing({
 
             <div className="horizontal-card">
               <div className="card-left">
-                <div
-                  className="prof-avatar"
-                  style={{ backgroundImage: "url('')" }}
-                ></div>
+                <div className="prof-avatar joana"></div>
               </div>
               <div className="card-right">
                 <h3>Joana Ferreira</h3>
@@ -469,7 +399,7 @@ export default function Landing({
         </div>
       </section>
 
-      {/* --- FOOTER  --- */}
+      {/* --- INFORMAÇÕES DE RODAPÉ (FOOTER) --- */}
       <footer className="main-footer">
         <div className="footer-container">
           <div className="footer-column">
@@ -517,8 +447,6 @@ export default function Landing({
                   stroke="currentColor"
                   strokeWidth="2"
                   fill="none"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
                 >
                   <rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect>
                   <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path>
@@ -537,8 +465,6 @@ export default function Landing({
                   stroke="currentColor"
                   strokeWidth="2"
                   fill="none"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
                 >
                   <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"></path>
                 </svg>

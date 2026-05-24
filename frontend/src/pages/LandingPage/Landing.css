@@ -57,7 +57,7 @@ body {
   height: 70px;
   width: auto;
   object-fit: contain;
-  transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  transition: transform 0.4s ease;
 }
 
 .nav-logo-img:hover {
@@ -118,6 +118,7 @@ body {
   border: 1px solid rgba(171, 133, 90, 0.4);
   box-shadow: 0 4px 15px rgba(42, 39, 36, 0.08);
   transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  cursor: pointer;
 }
 
 .student-menu-bg:hover {
@@ -317,7 +318,7 @@ body {
   width: 100%;
 }
 
-/* --- NOVO ESTILO: CARTÕES DE MODALIDADES --- */
+/* --- CARTÕES DE MODALIDADES --- */
 .modalidade-card {
   display: flex;
   background-color: var(--white);
@@ -421,6 +422,18 @@ body {
   background-position: center;
   transition: transform 0.6s ease;
 }
+
+/* Fallbacks de Imagens de Professores para evitar inline styles */
+.prof-avatar.ana {
+  background-image: url("");
+}
+.prof-avatar.carlos {
+  background-image: url("");
+}
+.prof-avatar.joana {
+  background-image: url("");
+}
+
 .horizontal-card:hover .prof-avatar {
   transform: scale(1.08);
 }
@@ -452,7 +465,7 @@ body {
   opacity: 0.85;
 }
 
-/* --- BOTÕES DO CARROSSEL  --- */
+/* --- BOTÕES DO CARROSSEL --- */
 .carousel-btn {
   position: absolute;
   top: 50%;
@@ -581,10 +594,38 @@ body {
   letter-spacing: 0.5px;
 }
 
+/* --- ANIMAÇÃO DE RITMO DA MARCA --- */
+.texto-viva-simples {
+  display: inline-flex;
+  font-weight: 900;
+  font-size: 1.5rem;
+  color: #2a2724;
+  letter-spacing: -0.5px;
+}
+
+.letra-ritmo {
+  animation: balancoSuave 2.5s ease-in-out infinite;
+  white-space: pre;
+}
+
+.texto-viva-simples:hover .letra-ritmo {
+  color: #b38b59;
+  transition: color 0.3s ease;
+}
+
+@keyframes balancoSuave {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
 /* ========================================= */
 /* --- RESPONSIVIDADE (MOBILE & TABLETS) --- */
 /* ========================================= */
-
 @media (max-width: 1024px) {
   .hero h1 {
     font-size: 4rem;
@@ -617,7 +658,6 @@ body {
   .nav-actions {
     margin-top: 10px;
   }
-
   .hero {
     height: auto;
     padding: 100px 0;
@@ -628,14 +668,12 @@ body {
   .hero p {
     font-size: 1.1rem;
   }
-
   .carousel-container {
     overflow-x: auto;
   }
   .carousel-btn {
     display: none;
   }
-
   .modalidade-card {
     flex-direction: column;
     height: auto;
@@ -647,7 +685,6 @@ body {
     padding: 30px 20px;
     text-align: center;
   }
-
   .horizontal-card {
     flex-direction: column;
     height: auto;
@@ -660,41 +697,8 @@ body {
     padding: 30px 20px;
     text-align: center;
   }
-
-  .section-header h2 {
-    font-size: 2.2rem;
-  }
+  .section-header h2,
   .sobre-layout h2 {
     font-size: 2.2rem;
-  }
-}
-
-/* ========================================= */
-/* --- EFEITO DANÇA SIMPLES (FLUIDO) ---     */
-/* ========================================= */
-.texto-viva-simples {
-  display: inline-flex;
-  font-weight: 900;
-  font-size: 1.5rem;
-  color: #2a2724;
-  letter-spacing: -0.5px;
-}
-
-.letra-ritmo {
-  animation: balancoSuave 2.5s ease-in-out infinite;
-}
-
-.texto-viva-simples:hover .letra-ritmo {
-  color: #b38b59;
-  transition: color 0.3s ease;
-}
-
-@keyframes balancoSuave {
-  0%,
-  100% {
-    transform: translateY(0);
-  }
-  50% {
-    transform: translateY(-6px);
   }
 }

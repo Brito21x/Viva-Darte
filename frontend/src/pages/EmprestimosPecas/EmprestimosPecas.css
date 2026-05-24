@@ -32,7 +32,6 @@
   display: flex;
   align-items: center;
   gap: 15px;
-  cursor: pointer;
 }
 .nav-logo-img {
   height: 70px;
@@ -162,30 +161,6 @@
   transform: translateY(-2px);
 }
 
-/* BARRA DE FERRAMENTAS: FILTROS E PESQUISA */
-.filtros-toolbar {
-  display: flex;
-  gap: 15px;
-  margin-bottom: 25px;
-  flex-wrap: wrap;
-}
-.filtros-toolbar input {
-  flex: 1;
-  min-width: 220px;
-  padding: 12px 16px;
-  border-radius: 8px;
-  border: 1px solid rgba(0, 0, 0, 0.12);
-  font-size: 0.95rem;
-}
-.filtros-toolbar select {
-  padding: 12px 16px;
-  border-radius: 8px;
-  border: 1px solid rgba(0, 0, 0, 0.12);
-  font-size: 0.95rem;
-  cursor: pointer;
-  background-color: #fff;
-}
-
 /* ========================================= */
 /* --- GRID E CARTÕES ---                    */
 /* ========================================= */
@@ -206,18 +181,19 @@
     box-shadow 0.3s ease;
   display: flex;
   flex-direction: column;
-  cursor: pointer;
 }
 .peca-card:hover {
   transform: translateY(-5px);
   box-shadow: 0 10px 25px rgba(42, 39, 36, 0.12);
 }
 
-/* --- ESTADO EMPRESTADO --- */
+/* ----------------------------------------- */
+/* --- ESTADO EMPRESTADO (IGUAL A VENDIDO) --*/
+/* ----------------------------------------- */
 .peca-card.emprestado {
   opacity: 1;
   filter: none;
-  background-color: #d1cdc3;
+  background-color: #d1cdc3; /* Igual ao VendaFigurinos.css */
 }
 .peca-card.emprestado .peca-content {
   opacity: 0.6;
@@ -242,9 +218,6 @@
   background-position: center;
   position: relative;
   transition: background-image 0.4s ease-in-out;
-}
-.peca-image-container.sem-foto {
-  background-color: #dcd7ce;
 }
 
 .img-nav-btn {
@@ -360,14 +333,14 @@
 .action-btn.delete-btn {
   background-color: #e74c3c;
   color: #fff;
-  box-shadow: 0 4px 12 rgba(231, 76, 60, 0.3);
+  box-shadow: 0 4px 12px rgba(231, 76, 60, 0.3);
 }
 .action-btn.delete-btn:hover {
   background-color: #c0392b;
   transform: scale(1.1);
 }
 
-/* --- INFO DO CARD --- */
+/* --- INFO --- */
 .peca-content {
   padding: 18px;
   display: flex;
@@ -413,10 +386,10 @@
   overflow: hidden;
 }
 .peca-owner {
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   color: #b38b59;
   font-weight: 600;
-  margin: 0 0 10px 0;
+  margin-bottom: 15px;
 }
 
 .peca-pagamentos {
@@ -450,9 +423,11 @@
   align-items: baseline;
   gap: 4px;
 }
-.preco small {
-  font-size: 0.6rem;
+.texto-dia {
+  font-size: 0.75rem;
   color: #888;
+  font-weight: 500;
+  font-style: normal;
 }
 .texto-teu-item {
   font-size: 0.75rem;
@@ -461,24 +436,11 @@
   font-weight: 500;
 }
 .texto-emprestado-rodape {
-  color: #b38b59;
+  color: #aaa;
   font-style: italic;
   font-weight: bold;
-  font-size: 0.9rem;
+  font-size: 1rem;
 }
-.peca-footer-gestao-wrapper {
-  text-align: right;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-}
-.peca-footer-requisitante {
-  font-size: 0.75rem;
-  color: #666;
-  margin-top: 4px;
-  font-weight: 600;
-}
-
 .empty-state-container {
   grid-column: 1 / -1;
   text-align: center;
@@ -634,7 +596,7 @@
 }
 
 /* ========================================= */
-/* --- MODAIS & ALERTAS EM GERAL ---         */
+/* --- MODAIS & ALERTAS ---                  */
 /* ========================================= */
 .modal-overlay {
   position: fixed;
@@ -670,14 +632,14 @@
 }
 
 .modal-content.alert-box {
-  max-width: 350px;
+  max-width: 400px;
   text-align: center;
   padding: 35px;
 }
 .alert-message {
-  font-size: 1rem;
+  font-size: 1.15rem;
   color: #2a2724;
-  margin-bottom: 25px;
+  margin-bottom: 30px;
   font-weight: 500;
   line-height: 1.4;
 }
@@ -825,290 +787,4 @@
   margin-top: 30px;
   border-top: 1px solid rgba(0, 0, 0, 0.06);
   padding-top: 20px;
-}
-
-/* ========================================= */
-/* --- HUD DETALHES AVANÇADA & LIGHTBOX ---  */
-/* ========================================= */
-.modal-overlay.hud-detalhes {
-  z-index: 2005;
-  background: rgba(21, 19, 17, 0.92);
-}
-.modal-overlay.lightbox {
-  z-index: 3000;
-  background: rgba(0, 0, 0, 0.95);
-}
-
-/* Botões laterais de navegação entre artigos */
-.btn-nav-modal {
-  position: absolute;
-  background: rgba(238, 234, 226, 0.9);
-  color: #2a2724;
-  border: none;
-  border-radius: 50%;
-  width: 45px;
-  height: 45px;
-  font-size: 1.8rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  z-index: 2006;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
-  transition: transform 0.2s;
-}
-.btn-nav-modal:hover {
-  transform: scale(1.1);
-}
-.btn-nav-modal.left {
-  left: 20px;
-}
-.btn-nav-modal.right {
-  right: 20px;
-}
-
-/* Estrutura interna da janela HUD */
-.hud-content {
-  max-width: 900px;
-  width: 90%;
-  max-height: 85vh;
-  padding: 0;
-  display: flex;
-  flex-direction: row;
-  overflow: hidden;
-  background-color: #eeeae2;
-  border: 1px solid rgba(0, 0, 0, 0.1);
-  min-height: 500px;
-}
-.hud-galeria {
-  flex: 1.1;
-  display: flex;
-  flex-direction: column;
-  background-color: #dcd7ce;
-  border-right: 1px solid rgba(0, 0, 0, 0.05);
-  min-height: 0;
-}
-.hud-foto-principal-wrapper {
-  flex: 1;
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  padding: 20px;
-  min-height: 0;
-}
-.hud-foto-principal {
-  max-width: 100%;
-  max-height: 100%;
-  width: auto;
-  height: auto;
-  object-fit: contain;
-  cursor: zoom-in;
-}
-.hud-thumbnails-container {
-  display: flex;
-  gap: 12px;
-  padding: 15px;
-  background-color: rgba(0, 0, 0, 0.04);
-  border-top: 1px solid rgba(0, 0, 0, 0.05);
-  overflow-x: auto;
-  justify-content: center;
-}
-.hud-thumbnail {
-  width: 65px;
-  height: 65px;
-  object-fit: cover;
-  cursor: pointer;
-  border-radius: 8px;
-  border: 2px solid transparent;
-  opacity: 0.6;
-  transition: all 0.2s ease;
-}
-.hud-thumbnail:hover {
-  opacity: 1;
-}
-.hud-thumbnail.active {
-  border: 3px solid #ab855a;
-  opacity: 1;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
-}
-
-/* Painel de Informação (Lado Direito) */
-.hud-info-lado {
-  flex: 1;
-  padding: 40px;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  overflow-y: auto;
-}
-.hud-header-meta {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 25px;
-}
-.hud-btn-fechar {
-  background: none;
-  border: none;
-  font-size: 1.8rem;
-  cursor: pointer;
-  color: #8a8480;
-}
-.hud-titulo-peca {
-  font-size: 2.4rem;
-  color: #2a2724;
-  margin: 0 0 10px 0;
-  font-family: "Cormorant Garamond", serif;
-}
-.hud-blocos-meta {
-  display: flex;
-  gap: 15px;
-  margin-bottom: 30px;
-}
-.hud-bloco {
-  background: #dfdbd2;
-  padding: 10px 15px;
-  border-radius: 8px;
-}
-.hud-bloco strong {
-  font-size: 0.9rem;
-}
-.hud-descricao {
-  color: #5a5450;
-  line-height: 1.6;
-  font-size: 1rem;
-  margin-bottom: 30px;
-}
-.hud-detalhes-dono {
-  color: #b38b59;
-  font-weight: 600;
-  margin: 4px 0 15px 0;
-  font-size: 1.1rem;
-}
-.hud-pagamentos-tags {
-  display: flex;
-  gap: 8px;
-  margin-top: 8px;
-  flex-wrap: wrap;
-}
-.hud-pagamentos-tags span {
-  font-size: 0.75rem;
-  background: #fff;
-  border: 1px solid #dcd7ce;
-  padding: 5px 12px;
-  border-radius: 15px;
-}
-
-/* Rodapé do Bloco HUD */
-.hud-footer {
-  border-top: 1px solid #dcd7ce;
-  padding-top: 30px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-top: 20px;
-}
-.hud-footer-preco {
-  font-size: 2.2rem;
-  font-weight: 800;
-  color: #2a2724;
-}
-.hud-status-indisponivel {
-  font-style: italic;
-  color: #2a2724;
-  font-weight: 700;
-  font-size: 1.3rem;
-  display: block;
-}
-.hud-requisitante-nome {
-  font-size: 0.9rem;
-  color: #666;
-  font-weight: 500;
-}
-.hud-texto-proprio {
-  font-style: italic;
-  color: #ab855a;
-  font-weight: 600;
-}
-.hud-btn-solicitar {
-  padding: 15px 35px;
-  border-radius: 30px;
-  white-space: nowrap;
-}
-
-/* Classes utilitárias do JS transferidas para o CSS */
-.hud-label-estilizada {
-  font-size: 0.75rem;
-  color: #8a8480;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  font-weight: 700;
-  margin: 0 0 4px 0;
-  display: block;
-}
-.hud-badge-estilizada {
-  padding: 6px 14px;
-  border-radius: 20px;
-  font-size: 0.8rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: #fff;
-}
-
-/* Elementos do Lightbox Fullscreen */
-.lightbox-fechar {
-  position: absolute;
-  top: 20px;
-  right: 30px;
-  background: none;
-  border: none;
-  color: white;
-  font-size: 3rem;
-  cursor: pointer;
-}
-.btn-nav-lightbox {
-  position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
-  background: rgba(255, 255, 255, 0.1);
-  color: white;
-  border: none;
-  border-radius: 50%;
-  width: 60px;
-  height: 60px;
-  font-size: 2.5rem;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: background 0.3s;
-}
-.btn-nav-lightbox:hover {
-  background: rgba(255, 255, 255, 0.3);
-}
-.btn-nav-lightbox.left {
-  left: 30px;
-}
-.btn-nav-lightbox.right {
-  right: 30px;
-}
-.lightbox-imagem {
-  max-width: 90%;
-  max-height: 90vh;
-  object-fit: contain;
-  user-select: none;
-}
-
-/* Estilos adicionais para o Modal de Solicitação Clássico */
-.modal-solicitar-pequeno {
-  max-width: 450px;
-  padding: 35px;
-}
-.modal-solicitar-subtitulo {
-  color: #8a8480;
-  font-size: 0.9rem;
-  margin-bottom: 25px;
 }

@@ -10,31 +10,25 @@ export default function EmprestimosPecas({
   irParaMinhaAgendaProfessor,
   irParaMinhaAgendaEE,
 }) {
-  // --- ESTADOS DO UTILIZADOR E INVENTÁRIO ---
   const [utilizador, setUtilizador] = useState(null);
   const [pecas, setPecas] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // --- ESTADOS DE FILTRAGEM E PESQUISA ---
   const [pesquisa, setPesquisa] = useState("");
   const [filtroEstado, setFiltroEstado] = useState("Todos");
   const [ordenacao, setOrdenacao] = useState("recentes");
 
-  // --- NAVEGAÇÃO DE IMAGENS NOS CARGÕES [idPeca]: indiceAtivo ---
   const [indicesImagens, setIndicesImagens] = useState({});
 
-  // --- CONTROLOS DE VISIBILIDADE DOS MODAIS ---
   const [isAdicionarModalOpen, setIsAdicionarModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isSolicitarModalOpen, setIsSolicitarModalOpen] = useState(false);
   const [isAcoesModalOpen, setIsAcoesModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // --- HUD DE DETALHES AVANÇADO E LIGHTBOX ---
   const [pecaDetalhe, setPecaDetalhe] = useState(null);
   const [isLightboxOpen, setIsLightboxOpen] = useState(false);
 
-  // --- ESTADO PARA CRIAR NOVA PEÇA ---
   const [novaPeca, setNovaPeca] = useState({
     nome: "",
     tamanho: "",
@@ -45,10 +39,8 @@ export default function EmprestimosPecas({
     fotos: [],
   });
 
-  // --- ESTADO PARA EDIÇÃO DE UMA PEÇA ---
   const [pecaEmEdicao, setPecaEmEdicao] = useState(null);
 
-  // --- ESTADOS PARA SOLICITAR UM EMPRÉSTIMO ---
   const [pecaSelecionada, setPecaSelecionada] = useState(null);
   const [metodoPagamentoSolicitacao, setMetodoPagamentoSolicitacao] =
     useState("MBWay");
@@ -56,7 +48,6 @@ export default function EmprestimosPecas({
   const [dataFim, setDataFim] = useState("");
   const [observacoesSolicitacao, setObservacoesSolicitacao] = useState("");
 
-  // --- ESTADOS PARA GESTÃO INTERNA DO PROPRIETÁRIO (DEVOLUÇÃO/PAGAMENTOS) ---
   const [acaoPeca, setAcaoPeca] = useState(null);
   const [acaoForm, setAcaoForm] = useState({
     idEmprestimo: "",
@@ -72,7 +63,6 @@ export default function EmprestimosPecas({
     descricaoPenalizacao: "",
   });
 
-  // --- ALERTA CUSTOMIZADO DE SISTEMA ---
   const [customAlert, setCustomAlert] = useState({
     show: false,
     message: "",
@@ -82,9 +72,7 @@ export default function EmprestimosPecas({
 
   const API_URL_BASE = "http://localhost:3000/api/inventario";
 
-  // --- AUXILIARES DE SESSÃO E DE ALERTAS ---
   const getToken = () => getAuthToken() || "";
-
   const mostrarAlerta = (msg) =>
     setCustomAlert({
       show: true,
@@ -92,7 +80,6 @@ export default function EmprestimosPecas({
       type: "alert",
       onConfirm: null,
     });
-
   const fecharAlerta = () =>
     setCustomAlert({
       show: false,
@@ -101,10 +88,6 @@ export default function EmprestimosPecas({
       onConfirm: null,
     });
 
-  /**
-   * Converte a string guardada no campo 'localizacao' ou lê diretamente
-   * as propriedades do objeto da peça para extrair o valor diário e métodos aceites.
-   */
   const parsearLocalizacao = (peca) => {
     if (!peca || typeof peca !== "object")
       return { valor_dia: "0", metodos: ["MBWay"] };
@@ -133,10 +116,6 @@ export default function EmprestimosPecas({
     };
   };
 
-  /**
-   * Procura todas as peças elegíveis para empréstimo a partir da API externa.
-   * Executa uma pesquisa secundária assíncrona por cada item para obter a galeria completa de fotos.
-   */
   const carregarPecas = async (mostrarLoading = false) => {
     if (mostrarLoading) setIsLoading(true);
     try {
@@ -189,13 +168,12 @@ export default function EmprestimosPecas({
         });
       }
     } catch (error) {
-      console.error("Erro a carregar as peças:", error);
+      console.error("Erro a carregar peças:", error);
     } finally {
       if (mostrarLoading) setIsLoading(false);
     }
   };
 
-  // --- RENDER INICIAL E POLLING DE ATUALIZAÇÃO SÍNCRONA ---
   useEffect(() => {
     document.title = "Empréstimos | Viva D'arte";
     const userGuardado = localStorage.getItem("viva_user");
@@ -207,7 +185,6 @@ export default function EmprestimosPecas({
 
   const userId = utilizador?.id_utilizador || utilizador?.id;
 
-  // --- FILTRAGEM, PROCESSAMENTO E ORDENAÇÃO DE LISTAGEM EM TEMPO REAL ---
   const pecasFiltradas = pecas
     .filter((p) =>
       (p?.nome_peca || p?.nome || "")
@@ -220,7 +197,6 @@ export default function EmprestimosPecas({
         : (p?.condicao_peca || p?.estado) === filtroEstado,
     )
     .sort((a, b) => {
-      // Artigos pertencentes ao próprio utilizador passam para o topo da lista
       const eMeuA = Boolean(
         userId &&
         a?.UTILIZADORid_utilizador &&
@@ -233,7 +209,6 @@ export default function EmprestimosPecas({
       );
       if (eMeuA && !eMeuB) return -1;
       if (!eMeuA && eMeuB) return 1;
-
       const vaA = parseFloat(parsearLocalizacao(a).valor_dia || 0);
       const vaB = parseFloat(parsearLocalizacao(b).valor_dia || 0);
       if (ordenacao === "preco_asc") return vaA - vaB;
@@ -241,7 +216,6 @@ export default function EmprestimosPecas({
       return (b?.id_peca || 0) - (a?.id_peca || 0);
     });
 
-  // --- EVENT LISTENER: ESCAPE E NAVEGAÇÃO POR SETAS DO TECLADO ---
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA")
@@ -298,7 +272,6 @@ export default function EmprestimosPecas({
     isEditModalOpen,
   ]);
 
-  // --- LOGOUT DE SESSÃO ---
   const handleLogout = () => {
     localStorage.clear();
     setUtilizador(null);
@@ -306,7 +279,6 @@ export default function EmprestimosPecas({
     window.location.reload();
   };
 
-  // --- NAVEGAÇÃO MANUAL DE CARROSSEL NA GRID ---
   const proximaImagem = (e, id_peca, totalFotos) => {
     e.stopPropagation();
     setIndicesImagens((prev) => ({
@@ -322,7 +294,6 @@ export default function EmprestimosPecas({
     }));
   };
 
-  // --- PROCESSAMENTO E COMPRESSÃO DE IMAGENS EM BASE64 CLIENT-SIDE ---
   const handleFotosUpload = async (e) => {
     const files = Array.from(e.target.files);
     if (!files.length) return;
@@ -377,7 +348,6 @@ export default function EmprestimosPecas({
         : [...prev.metodos_pagamento, metodo],
     }));
 
-  // --- ENVIO DO NOVO ARTIGO PARA A API ---
   const handleSubmeterNovo = async (e) => {
     e.preventDefault();
     if (!utilizador) return mostrarAlerta("Erro: Sessão inválida.");
@@ -427,7 +397,6 @@ export default function EmprestimosPecas({
     }
   };
 
-  // --- MODAL DE EDIÇÃO ---
   const abrirEdicao = (peca) => {
     const metaParsed = parsearLocalizacao(peca);
     setPecaEmEdicao({
@@ -489,7 +458,6 @@ export default function EmprestimosPecas({
     }
   };
 
-  // --- SISTEMA DE REMOÇÃO DE ARTIGO ---
   const confirmarEliminacao = (idPeca) => {
     setCustomAlert({
       show: true,
@@ -521,7 +489,6 @@ export default function EmprestimosPecas({
     }
   };
 
-  // --- SOLICITAÇÃO DE NOVO PEDIDO DE REQUISIÇÃO ---
   const handleAbrirSolicitar = (peca) => {
     const meta = parsearLocalizacao(peca);
     setPecaSelecionada({
@@ -584,7 +551,6 @@ export default function EmprestimosPecas({
     }
   };
 
-  // --- GESTÃO OPERACIONAL DE EMPRÉSTIMOS ATIVOS (DONOS) ---
   const handleAbrirAcoesEmprestimo = (peca) => {
     setAcaoPeca(peca);
     setAcaoForm({ ...acaoForm, idEmprestimo: "" });
@@ -672,11 +638,34 @@ export default function EmprestimosPecas({
     }
   };
 
+  const stylesHUD = {
+    badge: {
+      padding: "6px 14px",
+      borderRadius: "20px",
+      fontSize: "0.8rem",
+      fontWeight: "700",
+      textTransform: "uppercase",
+      letterSpacing: "0.5px",
+    },
+    label: {
+      fontSize: "0.75rem",
+      color: "#8a8480",
+      textTransform: "uppercase",
+      letterSpacing: "1px",
+      fontWeight: "700",
+      margin: "0 0 4px 0",
+      display: "block",
+    },
+  };
+
   return (
     <div className="emprestimos-page">
-      {/* --- BARRA DE NAVEGAÇÃO SUPERIOR --- */}
       <nav className="navbar interna">
-        <div className="nav-brand" onClick={irParaLanding}>
+        <div
+          className="nav-brand"
+          onClick={irParaLanding}
+          style={{ cursor: "pointer" }}
+        >
           <img src={logoImg} alt="Logo" className="nav-logo-img" />
           <span>VIVA D'ARTE</span>
         </div>
@@ -744,7 +733,6 @@ export default function EmprestimosPecas({
         </div>
       </nav>
 
-      {/* --- CORPO PRINCIPAL DA PÁGINA --- */}
       <div className="emprestimos-content-wrapper">
         <div className="emprestimos-header-section">
           <div>
@@ -774,18 +762,40 @@ export default function EmprestimosPecas({
           )}
         </div>
 
-        {/* --- TOOLBAR DE FILTROS --- */}
         {!isLoading && pecas.length > 0 && (
-          <div className="filtros-toolbar">
+          <div
+            style={{
+              display: "flex",
+              gap: "15px",
+              marginBottom: "25px",
+              flexWrap: "wrap",
+            }}
+          >
             <input
               type="text"
               placeholder="Pesquisar por nome..."
               value={pesquisa}
               onChange={(e) => setPesquisa(e.target.value)}
+              style={{
+                flex: 1,
+                minWidth: "220px",
+                padding: "12px 16px",
+                borderRadius: "8px",
+                border: "1px solid rgba(0,0,0,0.12)",
+                fontSize: "0.95rem",
+              }}
             />
             <select
               value={filtroEstado}
               onChange={(e) => setFiltroEstado(e.target.value)}
+              style={{
+                padding: "12px 16px",
+                borderRadius: "8px",
+                border: "1px solid rgba(0,0,0,0.12)",
+                fontSize: "0.95rem",
+                cursor: "pointer",
+                backgroundColor: "#fff",
+              }}
             >
               <option value="Todos">Todos os Estados</option>
               <option value="Novo">Novo</option>
@@ -796,6 +806,14 @@ export default function EmprestimosPecas({
             <select
               value={ordenacao}
               onChange={(e) => setOrdenacao(e.target.value)}
+              style={{
+                padding: "12px 16px",
+                borderRadius: "8px",
+                border: "1px solid rgba(0,0,0,0.12)",
+                fontSize: "0.95rem",
+                cursor: "pointer",
+                backgroundColor: "#fff",
+              }}
             >
               <option value="recentes">Mais Recentes</option>
               <option value="preco_asc">Preço: Mais Barato</option>
@@ -804,7 +822,6 @@ export default function EmprestimosPecas({
           </div>
         )}
 
-        {/* --- GRELHA DE PRODUTOS --- */}
         <div className="pecas-grid">
           {isLoading ? (
             <div className="empty-state-container">
@@ -824,6 +841,7 @@ export default function EmprestimosPecas({
                 userId && peca.UTILIZADORid_utilizador === userId,
               );
 
+              // FALLBACKS para Proprietário e Requisitante baseados na BD
               const dono =
                 peca.registado_por ||
                 peca.vendedor ||
@@ -837,13 +855,14 @@ export default function EmprestimosPecas({
                   key={peca.id_peca}
                   className={`peca-card ${estaEmprestado ? "emprestado" : ""}`}
                   onClick={() => setPecaDetalhe(peca)}
+                  style={{ cursor: "pointer" }}
                 >
                   <div
-                    className={`peca-image-container ${totalFotos === 0 ? "sem-foto" : ""}`}
+                    className="peca-image-container"
                     style={
                       totalFotos > 0
                         ? { backgroundImage: `url(${peca.fotos[idxImg]})` }
-                        : undefined
+                        : { backgroundColor: "#dcd7ce" }
                     }
                   >
                     <span
@@ -851,7 +870,6 @@ export default function EmprestimosPecas({
                     >
                       {estaEmprestado ? "Indisponível" : "Disponível"}
                     </span>
-
                     {totalFotos > 1 && (
                       <>
                         <button
@@ -880,7 +898,6 @@ export default function EmprestimosPecas({
                         </div>
                       </>
                     )}
-
                     {eMinha && (
                       <div className="owner-actions">
                         <button
@@ -906,7 +923,6 @@ export default function EmprestimosPecas({
                       </div>
                     )}
                   </div>
-
                   <div className="peca-content">
                     <h3 className="peca-nome">{peca.nome_peca || peca.nome}</h3>
 
@@ -916,7 +932,18 @@ export default function EmprestimosPecas({
                     </div>
 
                     <p className="peca-descricao">{peca.descricao}</p>
-                    <p className="peca-owner">Por: {dono}</p>
+
+                    {/* DONO NA GRID */}
+                    <p
+                      style={{
+                        fontSize: "0.85rem",
+                        color: "#b38b59",
+                        fontWeight: "600",
+                        margin: "0 0 10px 0",
+                      }}
+                    >
+                      Por: {dono}
+                    </p>
 
                     <div className="peca-pagamentos">
                       {meta.metodos.map((m) => (
@@ -929,11 +956,19 @@ export default function EmprestimosPecas({
                     <div className="peca-footer">
                       <span className="preco">
                         {parseFloat(meta.valor_dia).toFixed(2)}€{" "}
-                        <small>/dia</small>
+                        <small style={{ fontSize: "0.6rem", color: "#888" }}>
+                          /dia
+                        </small>
                       </span>
-
                       {estaEmprestado ? (
-                        <div className="peca-footer-gestao-wrapper">
+                        <div
+                          style={{
+                            textAlign: "right",
+                            display: "flex",
+                            flexDirection: "column",
+                            alignItems: "flex-end",
+                          }}
+                        >
                           {eMinha ? (
                             <button
                               className="btn-dark btn-sm"
@@ -945,13 +980,28 @@ export default function EmprestimosPecas({
                               Gerir Empréstimo
                             </button>
                           ) : (
-                            <span className="texto-emprestado-rodape">
+                            <span
+                              className="texto-emprestado-rodape"
+                              style={{
+                                color: "#b38b59",
+                                fontWeight: "bold",
+                                fontSize: "0.9rem",
+                              }}
+                            >
                               Emprestado
                             </span>
                           )}
 
+                          {/* REQUISITANTE NA GRID */}
                           {requisitante && (
-                            <span className="peca-footer-requisitante">
+                            <span
+                              style={{
+                                fontSize: "0.75rem",
+                                color: "#666",
+                                marginTop: "4px",
+                                fontWeight: "600",
+                              }}
+                            >
                               a {requisitante}
                             </span>
                           )}
@@ -979,7 +1029,7 @@ export default function EmprestimosPecas({
         </div>
       </div>
 
-      {/* --- HUD DE DETALHES EXPANDIDO --- */}
+      {/* --- HUD DE DETALHES MELHORADA --- */}
       {pecaDetalhe &&
         (() => {
           const meta = parsearLocalizacao(pecaDetalhe);
@@ -1014,13 +1064,37 @@ export default function EmprestimosPecas({
 
           return (
             <div
-              className="modal-overlay hud-detalhes"
+              className="modal-overlay"
               onClick={() => setPecaDetalhe(null)}
+              style={{ zIndex: 2005, background: "rgba(21, 19, 17, 0.92)" }}
             >
               {pecasFiltradas.length > 1 && (
                 <button
                   onClick={(e) => navigatePiece(-1, e)}
-                  className="btn-nav-modal left"
+                  style={{
+                    position: "absolute",
+                    left: "20px",
+                    background: "rgba(238, 234, 226, 0.9)",
+                    color: "#2a2724",
+                    border: "none",
+                    borderRadius: "50%",
+                    width: "45px",
+                    height: "45px",
+                    fontSize: "1.8rem",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    cursor: "pointer",
+                    zIndex: 2006,
+                    boxShadow: "0 4px 15px rgba(0,0,0,0.2)",
+                    transition: "transform 0.2s",
+                  }}
+                  onMouseEnter={(e) =>
+                    (e.currentTarget.style.transform = "scale(1.1)")
+                  }
+                  onMouseLeave={(e) =>
+                    (e.currentTarget.style.transform = "scale(1)")
+                  }
                 >
                   ‹
                 </button>
@@ -1029,20 +1103,85 @@ export default function EmprestimosPecas({
               {pecasFiltradas.length > 1 && (
                 <button
                   onClick={(e) => navigatePiece(1, e)}
-                  className="btn-nav-modal right"
+                  style={{
+                    position: "absolute",
+                    right: "20px",
+                    background: "rgba(238, 234, 226, 0.9)",
+                    color: "#2a2724",
+                    border: "none",
+                    borderRadius: "50%",
+                    width: "45px",
+                    height: "45px",
+                    fontSize: "1.8rem",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    cursor: "pointer",
+                    zIndex: 2006,
+                    boxShadow: "0 4px 15px rgba(0,0,0,0.2)",
+                    transition: "transform 0.2s",
+                  }}
+                  onMouseEnter={(e) =>
+                    (e.currentTarget.style.transform = "scale(1.1)")
+                  }
+                  onMouseLeave={(e) =>
+                    (e.currentTarget.style.transform = "scale(1)")
+                  }
                 >
                   ›
                 </button>
               )}
 
-              <div className="hud-content" onClick={(e) => e.stopPropagation()}>
-                <div className="hud-galeria">
-                  <div className="hud-foto-principal-wrapper">
+              <div
+                className="modal-content"
+                onClick={(e) => e.stopPropagation()}
+                style={{
+                  maxWidth: "900px",
+                  width: "90%",
+                  maxHeight: "85vh",
+                  padding: "0",
+                  display: "flex",
+                  flexDirection: "row",
+                  overflow: "hidden",
+                  backgroundColor: "#eeeae2",
+                  border: "1px solid rgba(0,0,0,0.1)",
+                  minHeight: "500px",
+                }}
+              >
+                <div
+                  style={{
+                    flex: 1.1,
+                    display: "flex",
+                    flexDirection: "column",
+                    backgroundColor: "#dcd7ce",
+                    borderRight: "1px solid rgba(0,0,0,0.05)",
+                    minHeight: 0,
+                  }}
+                >
+                  <div
+                    style={{
+                      flex: 1,
+                      position: "relative",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      overflow: "hidden",
+                      padding: "20px",
+                      minHeight: 0,
+                    }}
+                  >
                     {totalFotos > 0 ? (
                       <img
                         src={pecaDetalhe.fotos[idxImg]}
                         alt="Peça"
-                        className="hud-foto-principal"
+                        style={{
+                          maxWidth: "100%",
+                          maxHeight: "100%",
+                          width: "auto",
+                          height: "auto",
+                          objectFit: "contain",
+                          cursor: "zoom-in",
+                        }}
                         onClick={() => setIsLightboxOpen(true)}
                         title="Clicar para ver em Ecrã Inteiro"
                       />
@@ -1052,13 +1191,39 @@ export default function EmprestimosPecas({
                   </div>
 
                   {totalFotos > 1 && (
-                    <div className="hud-thumbnails-container">
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: "12px",
+                        padding: "15px",
+                        backgroundColor: "rgba(0,0,0,0.04)",
+                        borderTop: "1px solid rgba(0,0,0,0.05)",
+                        overflowX: "auto",
+                        justifyContent: "center",
+                      }}
+                    >
                       {pecaDetalhe.fotos.map((foto, index) => (
                         <img
                           key={index}
                           src={foto}
                           alt={`Thumbnail ${index}`}
-                          className={`hud-thumbnail ${index === idxImg ? "active" : ""}`}
+                          style={{
+                            width: "65px",
+                            height: "65px",
+                            objectFit: "cover",
+                            cursor: "pointer",
+                            borderRadius: "8px",
+                            border:
+                              index === idxImg
+                                ? "3px solid #ab855a"
+                                : "2px solid transparent",
+                            opacity: index === idxImg ? 1 : 0.6,
+                            transition: "all 0.2s ease",
+                            boxShadow:
+                              index === idxImg
+                                ? "0 4px 10px rgba(0,0,0,0.1)"
+                                : "none",
+                          }}
                           onClick={(e) => {
                             e.stopPropagation();
                             setIndicesImagens((prev) => ({
@@ -1066,21 +1231,45 @@ export default function EmprestimosPecas({
                               [pecaDetalhe.id_peca]: index,
                             }));
                           }}
+                          onMouseEnter={(e) =>
+                            (e.currentTarget.style.opacity = 1)
+                          }
+                          onMouseLeave={(e) => {
+                            if (index !== idxImg)
+                              e.currentTarget.style.opacity = 0.6;
+                          }}
                         />
                       ))}
                     </div>
                   )}
                 </div>
 
-                <div className="hud-info-lado">
+                <div
+                  style={{
+                    flex: 1,
+                    padding: "40px",
+                    display: "flex",
+                    flexDirection: "column",
+                    justifyContent: "space-between",
+                    overflowY: "auto",
+                  }}
+                >
                   <div>
-                    <div className="hud-header-meta">
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        marginBottom: "25px",
+                      }}
+                    >
                       <span
-                        className="hud-badge-estilizada"
                         style={{
+                          ...stylesHUD.badge,
                           backgroundColor: estaEmprestado
                             ? "#2a2724"
                             : "#ab855a",
+                          color: "#fff",
                         }}
                       >
                         {estaEmprestado
@@ -1089,82 +1278,195 @@ export default function EmprestimosPecas({
                       </span>
                       <button
                         onClick={() => setPecaDetalhe(null)}
-                        className="hud-btn-fechar"
+                        style={{
+                          background: "none",
+                          border: "none",
+                          fontSize: "1.8rem",
+                          cursor: "pointer",
+                          color: "#8a8480",
+                        }}
                       >
                         &times;
                       </button>
                     </div>
 
-                    <h2 className="hud-titulo-peca">
+                    <h2
+                      style={{
+                        fontSize: "2.4rem",
+                        color: "#2a2724",
+                        margin: "0 0 10px 0",
+                        fontFamily: "'Cormorant Garamond', serif",
+                      }}
+                    >
                       {pecaDetalhe.nome_peca || pecaDetalhe.nome}
                     </h2>
 
-                    <div className="hud-blocos-meta">
-                      <div className="hud-bloco">
-                        <span className="hud-label-estilizada">Estado</span>
-                        <strong>
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: "15px",
+                        marginBottom: "30px",
+                      }}
+                    >
+                      <div
+                        style={{
+                          background: "#dfdbd2",
+                          padding: "10px 15px",
+                          borderRadius: "8px",
+                        }}
+                      >
+                        <span style={stylesHUD.label}>Estado</span>
+                        <strong style={{ fontSize: "0.9rem" }}>
                           {pecaDetalhe.condicao_peca ||
                             pecaDetalhe.estado ||
                             "Bom"}
                         </strong>
                       </div>
-                      <div className="hud-bloco">
-                        <span className="hud-label-estilizada">Tamanho</span>
-                        <strong>{pecaDetalhe.tamanho || "Universal"}</strong>
+                      <div
+                        style={{
+                          background: "#dfdbd2",
+                          padding: "10px 15px",
+                          borderRadius: "8px",
+                        }}
+                      >
+                        <span style={stylesHUD.label}>Tamanho</span>
+                        <strong style={{ fontSize: "0.9rem" }}>
+                          {pecaDetalhe.tamanho || "Universal"}
+                        </strong>
                       </div>
                     </div>
 
-                    <span className="hud-label-estilizada">
-                      Descrição do Artigo
-                    </span>
-                    <p className="hud-descricao">
+                    <span style={stylesHUD.label}>Descrição do Artigo</span>
+                    <p
+                      style={{
+                        color: "#5a5450",
+                        lineHeight: "1.6",
+                        fontSize: "1rem",
+                        marginBottom: "30px",
+                      }}
+                    >
                       {pecaDetalhe.descricao || "Sem descrição detalhada."}
                     </p>
 
                     <div style={{ marginBottom: "30px" }}>
-                      <span className="hud-label-estilizada">
-                        Disponibilizado Por
-                      </span>
-                      <p className="hud-detalhes-dono">{donoHUD}</p>
+                      {/* DONO NA HUD */}
+                      <span style={stylesHUD.label}>Disponibilizado Por</span>
+                      <p
+                        style={{
+                          color: "#b38b59",
+                          fontWeight: "600",
+                          margin: "4px 0 15px 0",
+                          fontSize: "1.1rem",
+                        }}
+                      >
+                        {donoHUD}
+                      </p>
 
-                      <span className="hud-label-estilizada">
-                        Métodos de Pagamento
-                      </span>
-                      <div className="hud-pagamentos-tags">
+                      <span style={stylesHUD.label}>Métodos de Pagamento</span>
+                      <div
+                        style={{
+                          display: "flex",
+                          gap: "8px",
+                          marginTop: "8px",
+                          flexWrap: "wrap",
+                        }}
+                      >
                         {meta.metodos.map((m) => (
-                          <span key={m}>{m}</span>
+                          <span
+                            key={m}
+                            style={{
+                              fontSize: "0.75rem",
+                              background: "#fff",
+                              border: "1px solid #dcd7ce",
+                              padding: "5px 12px",
+                              borderRadius: "15px",
+                            }}
+                          >
+                            {m}
+                          </span>
                         ))}
                       </div>
                     </div>
                   </div>
 
-                  <div className="hud-footer">
+                  <div
+                    style={{
+                      borderTop: "1px solid #dcd7ce",
+                      paddingTop: "30px",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      marginTop: "20px",
+                    }}
+                  >
                     <div>
-                      <span className="hud-label-estilizada">Custo Diário</span>
-                      <div className="hud-footer-preco">
+                      <span style={stylesHUD.label}>Custo Diário</span>
+                      <div
+                        style={{
+                          fontSize: "2.2rem",
+                          fontWeight: "800",
+                          color: "#2a2724",
+                        }}
+                      >
                         {parseFloat(meta.valor_dia).toFixed(2)}€
-                        <small> / dia</small>
+                        <small
+                          style={{
+                            fontSize: "0.9rem",
+                            color: "#8a8480",
+                            fontWeight: "400",
+                          }}
+                        >
+                          {" "}
+                          / dia
+                        </small>
                       </div>
                     </div>
 
                     {estaEmprestado ? (
                       <div style={{ textAlign: "right" }}>
-                        <span className="hud-status-indisponivel">
+                        <span
+                          style={{
+                            fontStyle: "italic",
+                            color: "#2a2724",
+                            fontWeight: "700",
+                            fontSize: "1.3rem",
+                            display: "block",
+                          }}
+                        >
                           Emprestado
                         </span>
+
+                        {/* REQUISITANTE NA HUD */}
                         {requisitanteHUD && (
-                          <span className="hud-requisitante-nome">
+                          <span
+                            style={{
+                              fontSize: "0.9rem",
+                              color: "#666",
+                              fontWeight: "500",
+                            }}
+                          >
                             a {requisitanteHUD}
                           </span>
                         )}
                       </div>
                     ) : eMinha ? (
-                      <span className="hud-texto-proprio">
+                      <span
+                        style={{
+                          fontStyle: "italic",
+                          color: "#ab855a",
+                          fontWeight: "600",
+                        }}
+                      >
                         Este artigo é teu
                       </span>
                     ) : (
                       <button
-                        className="btn-dark hud-btn-solicitar"
+                        className="btn-dark"
+                        style={{
+                          padding: "15px 35px",
+                          borderRadius: "30px",
+                          whiteSpace: "nowrap",
+                        }}
                         onClick={() => {
                           setPecaDetalhe(null);
                           handleAbrirSolicitar(pecaDetalhe);
@@ -1181,7 +1483,7 @@ export default function EmprestimosPecas({
           );
         })()}
 
-      {/* --- LIGHTBOX (ECRÃ INTEIRO DE FOTOS) --- */}
+      {/* --- ECRÃ INTEIRO DAS IMAGENS (LIGHTBOX) --- */}
       {isLightboxOpen &&
         pecaDetalhe &&
         (() => {
@@ -1190,11 +1492,21 @@ export default function EmprestimosPecas({
 
           return (
             <div
-              className="modal-overlay lightbox"
+              className="modal-overlay"
+              style={{ zIndex: 3000, background: "rgba(0,0,0,0.95)" }}
               onClick={() => setIsLightboxOpen(false)}
             >
               <button
-                className="lightbox-fechar"
+                style={{
+                  position: "absolute",
+                  top: "20px",
+                  right: "30px",
+                  background: "none",
+                  border: "none",
+                  color: "white",
+                  fontSize: "3rem",
+                  cursor: "pointer",
+                }}
                 onClick={() => setIsLightboxOpen(false)}
               >
                 &times;
@@ -1202,7 +1514,30 @@ export default function EmprestimosPecas({
 
               {totalFotos > 1 && (
                 <button
-                  className="btn-nav-lightbox left"
+                  style={{
+                    position: "absolute",
+                    left: "30px",
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    background: "rgba(255,255,255,0.1)",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "50%",
+                    width: "60px",
+                    height: "60px",
+                    fontSize: "2.5rem",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    transition: "background 0.3s",
+                  }}
+                  onMouseEnter={(e) =>
+                    (e.currentTarget.style.background = "rgba(255,255,255,0.3)")
+                  }
+                  onMouseLeave={(e) =>
+                    (e.currentTarget.style.background = "rgba(255,255,255,0.1)")
+                  }
                   onClick={(e) => {
                     e.stopPropagation();
                     imagemAnterior(e, pecaDetalhe.id_peca, totalFotos);
@@ -1214,14 +1549,42 @@ export default function EmprestimosPecas({
 
               <img
                 src={pecaDetalhe.fotos[idxImg]}
-                className="lightbox-imagem"
+                style={{
+                  maxWidth: "90%",
+                  maxHeight: "90vh",
+                  objectFit: "contain",
+                  userSelect: "none",
+                }}
                 alt="Fullscreen"
                 onClick={(e) => e.stopPropagation()}
               />
 
               {totalFotos > 1 && (
                 <button
-                  className="btn-nav-lightbox right"
+                  style={{
+                    position: "absolute",
+                    right: "30px",
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    background: "rgba(255,255,255,0.1)",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "50%",
+                    width: "60px",
+                    height: "60px",
+                    fontSize: "2.5rem",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    transition: "background 0.3s",
+                  }}
+                  onMouseEnter={(e) =>
+                    (e.currentTarget.style.background = "rgba(255,255,255,0.3)")
+                  }
+                  onMouseLeave={(e) =>
+                    (e.currentTarget.style.background = "rgba(255,255,255,0.1)")
+                  }
                   onClick={(e) => {
                     e.stopPropagation();
                     proximaImagem(e, pecaDetalhe.id_peca, totalFotos);
@@ -1234,7 +1597,7 @@ export default function EmprestimosPecas({
           );
         })()}
 
-      {/* --- MODAL: DISPONIBILIZAR NOVA PEÇA --- */}
+      {/* --- MODAL DE DISPONIBILIZAR PEÇA --- */}
       {isAdicionarModalOpen && (
         <div className="modal-overlay" style={{ zIndex: 2002 }}>
           <div className="modal-content form-venda">
@@ -1304,7 +1667,7 @@ export default function EmprestimosPecas({
                 <textarea
                   rows="3"
                   maxLength="120"
-                  placeholder="Descreve o material, detalhes... (Máx: 120 caracteres)"
+                  placeholder="Descreve o material, detalhes ou marcas de uso... (Máx: 120 caracteres)"
                   value={novaPeca.descricao}
                   onChange={(e) =>
                     setNovaPeca({ ...novaPeca, descricao: e.target.value })
@@ -1381,7 +1744,7 @@ export default function EmprestimosPecas({
         </div>
       )}
 
-      {/* --- MODAL: EDITAR PEÇA --- */}
+      {/* --- MODAL DE EDITAR PEÇA --- */}
       {isEditModalOpen && pecaEmEdicao && (
         <div className="modal-overlay" style={{ zIndex: 2002 }}>
           <div className="modal-content form-venda">
@@ -1518,7 +1881,7 @@ export default function EmprestimosPecas({
         </div>
       )}
 
-      {/* --- MODAL: SOLICITAÇÃO CLÁSSICA DETALHADA --- */}
+      {/* --- MODAL DE SOLICITAÇÃO (VERSÃO ANTIGA CLÁSSICA E DETALHADA RESTAURADA) --- */}
       {isSolicitarModalOpen &&
         pecaSelecionada &&
         (() => {
@@ -1530,21 +1893,30 @@ export default function EmprestimosPecas({
                 )
               : null;
           const totalEstimado = dias
-            ? (parseFloat(peccaSelecionada.valor_dia || 0) * dias).toFixed(2)
+            ? (parseFloat(pecaSelecionada.valor_dia || 0) * dias).toFixed(2)
             : null;
 
           return (
             <div className="modal-overlay" style={{ zIndex: 2010 }}>
-              <div className="modal-content modal-solicitar-pequeno">
-                <h2>Solicitar Empréstimo</h2>
-                <p className="modal-solicitar-subtitulo">
+              <div
+                className="modal-content"
+                style={{ maxWidth: "450px", padding: "35px" }}
+              >
+                <h2 style={{ marginBottom: "10px" }}>Solicitar Empréstimo</h2>
+                <p
+                  style={{
+                    color: "#8a8480",
+                    fontSize: "0.9rem",
+                    marginBottom: "25px",
+                  }}
+                >
                   Estás a solicitar:{" "}
                   <strong>
                     {pecaSelecionada.nome_peca || pecaSelecionada.nome}
                   </strong>
                 </p>
 
-                <div className="resumo-compra">
+                <div className="resumo-compra" style={{ marginBottom: "25px" }}>
                   <p>
                     <strong>Preço:</strong>{" "}
                     {Number(pecaSelecionada.valor_dia || 0).toFixed(2)} € / dia
@@ -1560,8 +1932,8 @@ export default function EmprestimosPecas({
                 </div>
 
                 <form onSubmit={confirmarSolicitacao}>
-                  <div className="form-row">
-                    <div className="form-group">
+                  <div className="form-row" style={{ marginBottom: "20px" }}>
+                    <div className="form-group" style={{ flex: 1 }}>
                       <label>Início</label>
                       <input
                         type="date"
@@ -1571,7 +1943,7 @@ export default function EmprestimosPecas({
                         required
                       />
                     </div>
-                    <div className="form-group">
+                    <div className="form-group" style={{ flex: 1 }}>
                       <label>Fim</label>
                       <input
                         type="date"
@@ -1585,7 +1957,7 @@ export default function EmprestimosPecas({
                     </div>
                   </div>
 
-                  <div className="form-group">
+                  <div className="form-group" style={{ marginBottom: "25px" }}>
                     <label>Forma de Pagamento</label>
                     <select
                       value={metodoPagamentoSolicitacao}
@@ -1604,7 +1976,7 @@ export default function EmprestimosPecas({
                     </select>
                   </div>
 
-                  <div className="form-group">
+                  <div className="form-group" style={{ marginBottom: "25px" }}>
                     <label>Observações (opcional)</label>
                     <textarea
                       rows="2"
@@ -1640,7 +2012,7 @@ export default function EmprestimosPecas({
           );
         })()}
 
-      {/* --- MODAL: GERIR OPERAÇÕES DO EMPRÉSTIMO --- */}
+      {/* --- MODAL DE GERIR EMPRÉSTIMO --- */}
       {isAcoesModalOpen && acaoPeca && (
         <div className="modal-overlay" style={{ zIndex: 2002 }}>
           <div className="modal-content form-venda">
@@ -1650,7 +2022,8 @@ export default function EmprestimosPecas({
               style={{ fontSize: "0.9rem", marginBottom: "20px" }}
             >
               Estás a gerir o empréstimo ativo da peça:{" "}
-              <strong>{acaoPeca.nome_peca || acaoPeca.nome}</strong>.
+              <strong>{acaoPeca.nome_peca || acaoPeca.nome}</strong>. Seleciona
+              a ação que pretendes realizar.
             </p>
 
             <form onSubmit={handleSubmeterAcaoEmprestimo}>
@@ -1763,7 +2136,7 @@ export default function EmprestimosPecas({
                     <label>Observações sobre a devolução</label>
                     <textarea
                       rows="2"
-                      placeholder="Ex: Devolvido a tempo..."
+                      placeholder="Ex: Devolvido a tempo e horas..."
                       value={acaoForm.observacoesDevolucao}
                       onChange={(e) =>
                         setAcaoForm({
@@ -1818,7 +2191,7 @@ export default function EmprestimosPecas({
                     <textarea
                       rows="2"
                       required
-                      placeholder="Ex: A peça foi entregue com atraso..."
+                      placeholder="Ex: A peça foi entregue com 3 dias de atraso..."
                       value={acaoForm.descricaoPenalizacao}
                       onChange={(e) =>
                         setAcaoForm({
@@ -1852,7 +2225,6 @@ export default function EmprestimosPecas({
         </div>
       )}
 
-      {/* --- RODAPÉ DA INSTITUIÇÃO --- */}
       <footer className="main-footer">
         <div className="footer-container">
           <div className="footer-column">
@@ -1899,6 +2271,8 @@ export default function EmprestimosPecas({
                   stroke="currentColor"
                   strokeWidth="2"
                   fill="none"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
                 >
                   <rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect>
                   <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path>
@@ -1916,6 +2290,8 @@ export default function EmprestimosPecas({
                   stroke="currentColor"
                   strokeWidth="2"
                   fill="none"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
                 >
                   <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"></path>
                 </svg>
@@ -1929,11 +2305,18 @@ export default function EmprestimosPecas({
         </div>
       </footer>
 
-      {/* --- JANELAS DE ALERTA ALINHADAS (ALERT / CONFIRM) --- */}
       {customAlert.show && (
         <div className="modal-overlay" style={{ zIndex: 9999 }}>
-          <div className="modal-content alert-box">
-            <p className="alert-message">{customAlert.message}</p>
+          <div
+            className="modal-content alert-box"
+            style={{ maxWidth: "350px" }}
+          >
+            <p
+              className="alert-message"
+              style={{ fontSize: "1rem", marginBottom: "25px" }}
+            >
+              {customAlert.message}
+            </p>
             <div className="alert-buttons">
               {customAlert.type === "confirm" && (
                 <button className="btn-outline btn-sm" onClick={fecharAlerta}>

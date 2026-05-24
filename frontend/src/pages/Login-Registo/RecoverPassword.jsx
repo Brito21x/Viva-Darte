@@ -131,7 +131,11 @@ export default function RecoverPassword({ irParaLogin, irParaLanding }) {
 
   return (
     <div className="login-container">
-      <button className="voltar-landing" onClick={irParaLanding}>
+      <button
+        className="voltar-landing"
+        onClick={irParaLanding}
+        aria-label="Voltar"
+      >
         <span className="seta-voltar">&#8592;</span>
       </button>
 

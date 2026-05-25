@@ -841,7 +841,6 @@ export default function EmprestimosPecas({
                 userId && peca.UTILIZADORid_utilizador === userId,
               );
 
-              // FALLBACKS para Proprietário e Requisitante baseados na BD
               const dono =
                 peca.registado_por ||
                 peca.vendedor ||
@@ -933,7 +932,6 @@ export default function EmprestimosPecas({
 
                     <p className="peca-descricao">{peca.descricao}</p>
 
-                    {/* DONO NA GRID */}
                     <p
                       style={{
                         fontSize: "0.85rem",
@@ -992,7 +990,6 @@ export default function EmprestimosPecas({
                             </span>
                           )}
 
-                          {/* REQUISITANTE NA GRID */}
                           {requisitante && (
                             <span
                               style={{
@@ -1029,7 +1026,6 @@ export default function EmprestimosPecas({
         </div>
       </div>
 
-      {/* --- HUD DE DETALHES MELHORADA --- */}
       {pecaDetalhe &&
         (() => {
           const meta = parsearLocalizacao(pecaDetalhe);
@@ -1349,7 +1345,6 @@ export default function EmprestimosPecas({
                     </p>
 
                     <div style={{ marginBottom: "30px" }}>
-                      {/* DONO NA HUD */}
                       <span style={stylesHUD.label}>Disponibilizado Por</span>
                       <p
                         style={{
@@ -1436,7 +1431,6 @@ export default function EmprestimosPecas({
                           Emprestado
                         </span>
 
-                        {/* REQUISITANTE NA HUD */}
                         {requisitanteHUD && (
                           <span
                             style={{
@@ -1483,7 +1477,6 @@ export default function EmprestimosPecas({
           );
         })()}
 
-      {/* --- ECRÃ INTEIRO DAS IMAGENS (LIGHTBOX) --- */}
       {isLightboxOpen &&
         pecaDetalhe &&
         (() => {
@@ -1881,7 +1874,7 @@ export default function EmprestimosPecas({
         </div>
       )}
 
-      {/* --- MODAL DE SOLICITAÇÃO (VERSÃO ANTIGA CLÁSSICA E DETALHADA RESTAURADA) --- */}
+      {/* --- MODAL DE SOLICITAÇÃO  --- */}
       {isSolicitarModalOpen &&
         pecaSelecionada &&
         (() => {

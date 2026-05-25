@@ -55,7 +55,6 @@ export default function Login({
         localStorage.setItem("viva_user", JSON.stringify(resultado.utilizador));
         localStorage.setItem("viva_token", resultado.token);
 
-        // Redireciona sempre para a Landing Page após o login
         irParaLanding?.();
       } else {
         setTentativasFalhadas((prev) => prev + 1);

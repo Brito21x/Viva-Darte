@@ -25,7 +25,6 @@ export default function VendaFigurinos({
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Novos estados para a HUD e Lightbox
   const [figurinoDetalhe, setFigurinoDetalhe] = useState(null);
   const [isLightboxOpen, setIsLightboxOpen] = useState(false);
 
@@ -99,7 +98,6 @@ export default function VendaFigurinos({
     return () => clearInterval(interval);
   }, []);
 
-  // --- NAVEGAÇÃO COM TECLADO ---
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA")
@@ -471,7 +469,6 @@ export default function VendaFigurinos({
     }
   };
 
-  // --- LÓGICA DOS FILTROS E ORDENAÇÃO ---
   const figurinosFiltrados = figurinos
     .filter((fig) =>
       fig.nome_peca?.toLowerCase().includes(pesquisa.toLowerCase()),
@@ -487,7 +484,6 @@ export default function VendaFigurinos({
       return b.id_venda - a.id_venda;
     });
 
-  // ESTILOS LOCAIS PARA A NOVA HUD (DETALHE)
   const stylesHUD = {
     badge: {
       padding: "6px 14px",
@@ -873,7 +869,7 @@ export default function VendaFigurinos({
         )}
       </div>
 
-      {/* --- HUD DE DETALHES MELHORADA --- */}
+      {/* --- HUD DE DETALHES  --- */}
       {figurinoDetalhe &&
         (() => {
           const idxImg = indicesImagens[figurinoDetalhe.id_venda] || 0;
@@ -904,7 +900,6 @@ export default function VendaFigurinos({
               onClick={() => setFigurinoDetalhe(null)}
               style={{ zIndex: 2005, background: "rgba(21, 19, 17, 0.92)" }}
             >
-              {/* SETAS LATERAIS REDUZIDAS PARA SALTAR ENTRE PEÇAS */}
               {figurinosFiltrados.length > 1 && (
                 <button
                   onClick={(e) => navigatePiece(-1, e)}
@@ -1297,7 +1292,7 @@ export default function VendaFigurinos({
           );
         })()}
 
-      {/* --- ECRÃ INTEIRO DAS IMAGENS (LIGHTBOX) --- */}
+      {/* --- ECRÃ INTEIRO DAS IMAGENS  --- */}
       {isLightboxOpen &&
         figurinoDetalhe &&
         (() => {
@@ -1761,7 +1756,7 @@ export default function VendaFigurinos({
         </div>
       )}
 
-      {/* --- MODAL 3: COMPRA (CLÁSSICO) --- */}
+      {/* --- MODAL 3: COMPRA  --- */}
       {isCompraModalOpen && figurinoSelecionado && (
         <div className="modal-overlay" style={{ zIndex: 2010 }}>
           <div

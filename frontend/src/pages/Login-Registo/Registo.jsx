@@ -12,7 +12,7 @@ export default function Registo({ irParaLogin, irParaLanding }) {
   const [nomeAluno, setNomeAluno] = useState("");
   const [dataNascimentoAluno, setDataNascimentoAluno] = useState("");
 
-  const [captchaToken, setCaptchaToken] = useState(null); // <-- 2. Estado para o token do CAPTCHA
+  const [captchaToken, setCaptchaToken] = useState(null);
   const recaptchaRef = useRef(null);
 
   const [customAlert, setCustomAlert] = useState({

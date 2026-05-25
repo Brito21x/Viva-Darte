@@ -1,4 +1,3 @@
-/* --- PALETA DE CORES (Igual à Landing Page) --- */
 :root {
   --bg-creme: #dfdbd2;
   --bg-section: #d5d0c5;
@@ -151,7 +150,6 @@
   color: rgba(58, 54, 50, 0.4);
 }
 
-/* --- ESTILOS DO NOVO CAMPO DE TELEFONE --- */
 .phone-input-wrapper {
   display: flex;
   align-items: center;
@@ -181,7 +179,6 @@
   padding-left: 0;
 }
 
-/* --- BOTÃO E FOOTER --- */
 .btn-login {
   width: 100%;
   padding: 16px;

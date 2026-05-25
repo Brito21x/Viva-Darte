@@ -12,7 +12,6 @@ export default function RecoverPassword({ irParaLogin, irParaLanding }) {
 
   const [novaPassword, setNovaPassword] = useState("");
 
-  // Estados e ref para o reCAPTCHA
   const [captchaToken, setCaptchaToken] = useState(null);
   const recaptchaRef = useRef(null);
 
@@ -51,11 +50,11 @@ export default function RecoverPassword({ irParaLogin, irParaLanding }) {
 
     try {
       const response = await fetch(
-        `http://localhost:3000/api/auth/recuperar-password`,
+        "http://localhost:3000/api/auth/recuperar-password",
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, captchaToken }), // Adicionado o captchaToken
+          body: JSON.stringify({ email, captchaToken }),
         },
       );
 
@@ -83,7 +82,7 @@ export default function RecoverPassword({ irParaLogin, irParaLanding }) {
     e.preventDefault();
 
     if (token.trim().toUpperCase() === tokenGerado.trim().toUpperCase()) {
-      setEtapa(3); // Se for igual, avança
+      setEtapa(3);
     } else {
       mostrarAlerta(
         "❌ O código inserido está incorreto. Verifica o token que recebeste no teu email.",

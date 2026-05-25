@@ -125,7 +125,6 @@
   flex: 1;
 }
 
-/* CALENDÁRIO */
 .calendar-container {
   display: flex;
   flex-direction: column;
@@ -332,7 +331,6 @@
   text-overflow: ellipsis;
 }
 
-/* SIDEBAR & HUD */
 .sidebar {
   position: sticky;
   top: 100px;
@@ -354,7 +352,6 @@
   font-weight: 800;
 }
 
-/* NOVO VISUAL PARA PAINEL DE ATIVIDADE NA SIDEBAR */
 .activity-panel-card {
   background: linear-gradient(135deg, var(--primary-dark) 0%, #1a1816 100%);
   color: #fff;
@@ -503,7 +500,6 @@
   font-weight: 600;
 }
 
-/* OS MEUS PEDIDOS (EE HUD) */
 .pedido-item-simples {
   display: flex;
   justify-content: space-between;
@@ -544,7 +540,6 @@
   color: #fff;
 }
 
-/* BOTOES GERAIS E UTILITÁRIOS */
 .m-0 {
   margin: 0;
 }
@@ -630,7 +625,6 @@
   display: block;
 }
 
-/* TOAST E ALERTAS */
 .global-toast {
   position: fixed;
   bottom: 30px;
@@ -682,7 +676,6 @@
   margin: 0 0 24px;
 }
 
-/* MODAIS */
 .modal-overlay {
   position: fixed;
   inset: 0;
@@ -747,7 +740,6 @@
   font-size: 0.95rem;
 }
 
-/* NOVO DESIGN: PAINEL DO PROFESSOR (MODAL) */
 .prof-dashboard-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -902,7 +894,6 @@
   padding: 30px 0;
 }
 
-/* OUTROS MODAIS DA AGENDA E CÁLCULO DE PREÇO */
 .price-summary-card {
   background: #fdfaf5;
   border: 1px solid rgba(179, 139, 89, 0.2);
@@ -1158,7 +1149,6 @@
   font-size: 0.9rem;
 }
 
-/* FOOTER */
 .main-footer {
   background-color: var(--primary-dark);
   color: #c4c0b5;
@@ -1267,11 +1257,6 @@
   }
 }
 
-/* ============================================================
-   CLASSES ADICIONADAS: substituição de inline styles
-   ============================================================ */
-
-/* Toast centrado (modal-style) */
 .global-toast {
   position: fixed;
   top: 50%;
@@ -1293,7 +1278,6 @@
   font-size: 1.5rem;
 }
 
-/* Cabeçalho do calendário – células dos dias */
 .day-sticky-cell {
   flex-direction: column;
   line-height: 1.2;
@@ -1307,7 +1291,6 @@
   opacity: 0.8;
 }
 
-/* Disponibilidade modal – aviso de disciplinas */
 .dispo-modal-info {
   margin-top: 12px;
   padding: 12px;
@@ -1324,13 +1307,11 @@
   margin-top: 4px;
 }
 
-/* EE – lista de pedidos com altura maior */
 .dispo-list-hud--tall {
   max-height: 400px;
   margin-top: 10px;
 }
 
-/* Data do pedido na lista EE */
 .pedido-date-text {
   font-size: 0.8rem;
   color: #888;
@@ -1338,7 +1319,6 @@
   margin-top: 4px;
 }
 
-/* Painel do professor – cabeçalho do resumo financeiro */
 .resumo-header {
   display: flex;
   justify-content: space-between;
@@ -1377,7 +1357,6 @@
   outline: none;
 }
 
-/* Card "A Receber" clicável */
 .prof-stat-card--clickable {
   cursor: pointer;
   transition: transform 0.2s;
@@ -1389,23 +1368,19 @@
   display: block;
 }
 
-/* Secções com margem superior no painel */
 .prof-panel-section--mt {
   margin-top: 24px;
 }
 
-/* Ícone de aviso laranja */
 .section-icon--warning {
   color: #e6a23c;
 }
 
-/* Aula pendente EE na lista */
 .aula-item-modern--pending-ee {
   border-left-color: #e6a23c;
   background-color: #fffcf5;
 }
 
-/* Texto de aviso de pedido pendente */
 .pending-warning-text {
   color: #e6a23c;
   font-weight: 600;
@@ -1413,19 +1388,16 @@
   font-size: 0.85rem;
 }
 
-/* Modal pequeno (detalhes de faturação) */
 .modal-modern--sm {
   max-width: 500px;
 }
 
-/* Lista de horários dentro de modal */
 .horarios-list-container--modal {
   max-height: 300px;
   overflow-y: auto;
   margin-top: 15px;
 }
 
-/* Tabela de detalhes de faturação */
 .admin-table {
   width: 100%;
   text-align: left;
@@ -1445,7 +1417,6 @@
   color: #888;
 }
 
-/* Dia tag na modal de disponibilidades */
 .dia-tag {
   background: var(--accent-gold);
   color: white;
@@ -1457,9 +1428,6 @@
   letter-spacing: 0.5px;
 }
 
-/* ============================================================
-   BARRA DE NAVEGAÇÃO DA SEMANA (acima do calendário)
-   ============================================================ */
 .calendar-nav-bar {
   display: flex;
   align-items: center;
@@ -1490,7 +1458,6 @@
   background: #1a1816;
   border-color: #1a1816;
 }
-/* --- Modal de pagamento: garante z-index acima dos outros modais e da navbar --- */
 .modal-overlay-high-z {
   z-index: 999999;
 }

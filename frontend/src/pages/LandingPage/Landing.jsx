@@ -287,7 +287,7 @@ export default function Landing({
         </div>
       </nav>
 
-      {/* 1. INÍCIO (HERO) */}
+      {/* 1. INÍCIO  */}
       <header id="inicio" className="hero">
         <div className="hero-content">
           <h1>

@@ -1,6 +1,3 @@
-/* ========================================= */
-/* --- GERAL ---                             */
-/* ========================================= */
 .page-wrapper {
   font-family: "Inter", sans-serif;
   color: #3a3632;
@@ -10,9 +7,6 @@
   flex-direction: column;
 }
 
-/* ========================================= */
-/* --- NAVBAR ---                            */
-/* ========================================= */
 .navbar {
   display: flex;
   justify-content: space-between;
@@ -102,10 +96,6 @@
   background-color: #1a1816;
   transform: scale(1.05);
 }
-
-/* ========================================= */
-/* --- CONTEÚDO PRINCIPAL ---                */
-/* ========================================= */
 .vendas-container {
   padding: 50px 10%;
   flex: 1;
@@ -152,9 +142,6 @@
   transform: translateY(-2px);
 }
 
-/* ========================================= */
-/* --- GRID E CARTÕES ---                    */
-/* ========================================= */
 .figurinos-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
@@ -177,7 +164,6 @@
   box-shadow: 0 10px 25px rgba(42, 39, 36, 0.12);
 }
 
-/* --- ESTADO VENDIDO --- */
 .figurino-card.vendido {
   opacity: 1;
   filter: none;
@@ -199,7 +185,6 @@
   z-index: 5;
 }
 
-/* --- CARROSSEL IMAGEM --- */
 .figurino-img {
   height: 230px;
   background-size: cover;
@@ -266,7 +251,6 @@
   transform: scale(1.3);
 }
 
-/* --- BADGES E AÇÕES DO DONO --- */
 .badge-estado {
   position: absolute;
   top: 12px;
@@ -333,7 +317,6 @@
   transform: scale(1.1);
 }
 
-/* --- INFO  --- */
 .figurino-info {
   padding: 18px;
   display: flex;
@@ -430,9 +413,6 @@
   border-radius: 12px;
 }
 
-/* ========================================= */
-/* --- BOTÕES GERAIS ---                     */
-/* ========================================= */
 .btn-dark {
   background-color: #2a2724;
   color: #fff;
@@ -485,9 +465,6 @@
   color: #b38b59;
 }
 
-/* ========================================= */
-/* --- FOOTER ---                            */
-/* ========================================= */
 .main-footer {
   background-color: #2a2724;
   color: #c4c0b5;
@@ -574,9 +551,6 @@
   letter-spacing: 0.5px;
 }
 
-/* ========================================= */
-/* --- MODAIS & ALERTAS ---                  */
-/* ========================================= */
 .modal-overlay {
   position: fixed;
   top: 0;
@@ -628,7 +602,6 @@
   gap: 15px;
 }
 
-/* Formulários */
 .form-group {
   margin-bottom: 22px;
   display: flex;
@@ -673,7 +646,6 @@
   box-shadow: 0 0 0 4px rgba(179, 139, 89, 0.15);
 }
 
-/* Checkboxes */
 .checkbox-group {
   display: flex;
   flex-direction: column;
@@ -700,7 +672,6 @@
   margin: 0;
 }
 
-/* Upload de Fotos */
 .fotos-preview-container {
   display: flex;
   gap: 10px;

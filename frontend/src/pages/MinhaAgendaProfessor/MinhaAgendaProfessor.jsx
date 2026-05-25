@@ -211,7 +211,6 @@ export default function MinhaAgendaProfessor({
   const [erroAgenda, setErroAgenda] = useState("");
   const [weekStart, setWeekStart] = useState(() => getMonday(new Date()));
 
-  // ESTADO DO PAINEL DO PROFESSOR
   const [isProfMenuOpen, setIsProfMenuOpen] = useState(false);
 
   const [disponibilidades, setDisponibilidades] = useState([]);
@@ -263,7 +262,6 @@ export default function MinhaAgendaProfessor({
   });
   const [minhasModalidades, setMinhasModalidades] = useState([]);
 
-  // --- Constantes derivadas do estado ---
   const horas = [
     "08:00",
     "09:00",
@@ -282,7 +280,6 @@ export default function MinhaAgendaProfessor({
   ];
   const dias = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
 
-  // --- Memos derivados ---
   const isPerfilEE = useMemo(() => {
     const perfil = String(utilizador?.perfil || "").toLowerCase();
     if (perfil.includes("ee") || perfil.includes("encarregado")) return true;
@@ -302,13 +299,11 @@ export default function MinhaAgendaProfessor({
   const isAgendaEE = modo === "ee" || isPerfilEE;
   const podePedirAula = isAgendaEE;
 
-  // --- Helpers ---
   function mostrarToast(texto, tipo = "sucesso") {
     setGlobalToast({ texto, tipo });
     setTimeout(() => setGlobalToast(null), 5000);
   }
 
-  // --- Efeitos ---
   useEffect(() => {
     document.title = "Minha agenda | Viva D'arte";
   }, []);
@@ -363,7 +358,6 @@ export default function MinhaAgendaProfessor({
         const anosArray = Array.isArray(anos) ? anos : [];
         setAnosLetivosPedido(anosArray);
 
-        // --- PREENCHE OS FILTROS LOGO AQUI ---
         if (anosArray.length > 0) {
           setSelectedAnoLetivoId(anosArray[0].id_ano_letivo);
           setPedidoForm((prev) => ({
@@ -489,15 +483,11 @@ export default function MinhaAgendaProfessor({
 
   const resumoMensal = useMemo(() => {
     const aulasDadasNoPeriodo = agenda.filter((a) => {
-      // 1. A aula tem de estar realizada
       if (a.estado !== "Realizado") return false;
 
-      // 2. Tem de pertencer ao Ano Letivo selecionado
-      // (Nota: Garantir que a API envia o campo id_ano_letivo ou ANO_LETIVOid_ano_letivo na agenda)
       const idAnoAula = a.id_ano_letivo || a.ANO_LETIVOid_ano_letivo;
       if (String(idAnoAula) !== String(selectedAnoLetivoId)) return false;
 
-      // 3. Tem de pertencer ao mês selecionado
       const dataAula = parseDataCalendario(a.data_aula);
       if (!dataAula) return false;
       return dataAula.getMonth() === selectedMonth;
@@ -522,7 +512,6 @@ export default function MinhaAgendaProfessor({
       map.get(key).push(event);
     };
 
-    // Intervalo da semana visível
     const semanaInicio = weekStart;
     const semanaFim = addDays(weekStart, 6);
 
@@ -532,7 +521,6 @@ export default function MinhaAgendaProfessor({
       return d >= semanaInicio && d <= semanaFim;
     }
 
-    // 1. Lógica inteligente para o nome da disciplina no slot livre
     const labelModalidade =
       minhasModalidades.length === 1
         ? minhasModalidades[0].modalidade
@@ -554,7 +542,7 @@ export default function MinhaAgendaProfessor({
         addEvent(k, {
           origem: "disponibilidade",
           id_disponibilidade: d.id_disponibilidade,
-          modalidade: labelModalidade, // <--- Aqui removemos o "Ballet" fixo!
+          modalidade: labelModalidade,
           nome_professor: utilizador?.nome || "Professor",
           hora_inicio: horaSlot,
           duracao_minutos: 60,
@@ -602,7 +590,7 @@ export default function MinhaAgendaProfessor({
           formato_aula: p.formato_aula,
           modalidade: p.modalidade,
           encarregado: utilizador?.nome || "Eu",
-          alunos: p.alunos || p.nome_aluno, // <-- ADICIONA ESTA LINHA AQUI
+          alunos: p.alunos || p.nome_aluno,
           estado: isAgendado ? p.estado_coaching : p.estado,
           sala: p.nome_sala,
           nome_professor: isAgendado ? p.nome_professor_agendado : p.professor,
@@ -632,7 +620,7 @@ export default function MinhaAgendaProfessor({
             formato_aula: p.formato_aula,
             modalidade: p.modalidade,
             encarregado: p.encarregado,
-            alunos: p.alunos || p.nome_aluno, // <-- ADICIONA ESTA LINHA AQUI TAMBÉM
+            alunos: p.alunos || p.nome_aluno,
             estado: p.estado,
             sala: null,
             id_coaching: null,
@@ -650,18 +638,15 @@ export default function MinhaAgendaProfessor({
     weekStart,
   ]);
 
-  // AULAS POR CONFIRMAR A EXECUÇÃO (AGENDADAS OU CONFIRMADAS)
   const aulasParaValidar = useMemo(() => {
     return agenda.filter(
       (a) => a.estado === "Agendado" || a.estado === "Confirmado",
     );
   }, [agenda]);
 
-  // PRÓXIMAS AULAS MARCADAS (EXCLUI AS QUE O PROFESSOR JÁ CONFIRMOU)
   const proximasAulas = useMemo(() => {
     const agora = new Date();
     return agenda.filter((a) => {
-      // Exclui estados que já saíram do fluxo de marcação ativa para o professor
       if (
         a.estado === "Cancelado" ||
         a.estado === "Rejeitado" ||
@@ -693,7 +678,6 @@ export default function MinhaAgendaProfessor({
     });
   }, [agenda]);
 
-  // NOVA LISTA: AULAS QUE O PROFESSOR JÁ CONFIRMOU, À ESPERA DA COORDENAÇÃO
   const aulasAguardandoCoordenacao = useMemo(() => {
     return pedidosPendentesProf
       .filter((p) => p.estado === "Pendente")
@@ -1109,7 +1093,6 @@ export default function MinhaAgendaProfessor({
           <div className="calendar-days-sticky">
             <div className="time-corner"></div>
             {dias.map((dia, idx) => {
-              // Calcula a data exata para cada coluna somando os dias à segunda-feira atual
               const dataDoDia = addDays(weekStart, idx);
 
               return (
@@ -1380,11 +1363,11 @@ export default function MinhaAgendaProfessor({
                   </select>
                 </div>
                 <div className="form-group">
-                  <label>Professor</label> {/* Removido o "(Opcional)" */}
+                  <label>Professor</label>
                   <select
                     className="form-control"
                     value={pedidoForm.idProfessor}
-                    required // Adicionado atributo de validação
+                    required
                     onChange={(e) => {
                       const id = e.target.value;
                       setPedidoForm((p) => ({ ...p, idProfessor: id }));
@@ -1819,7 +1802,7 @@ export default function MinhaAgendaProfessor({
                     </div>
 
                     <div className="resumo-filters">
-                      {/* Seletor de Mês (Design Moderno) */}
+                      {/* Seletor de Mês */}
                       <select
                         value={selectedMonth}
                         onChange={(e) =>
@@ -1834,7 +1817,7 @@ export default function MinhaAgendaProfessor({
                         ))}
                       </select>
 
-                      {/* Seletor de Ano Letivo (Design Moderno) */}
+                      {/* Seletor de Ano Letivo  */}
                       <select
                         value={selectedAnoLetivoId}
                         onChange={(e) => setSelectedAnoLetivoId(e.target.value)}
@@ -1869,7 +1852,7 @@ export default function MinhaAgendaProfessor({
                   </div>
                 </div>
 
-                {/* SECÇÃO 2: CONFIRMAR EXECUÇÃO (O código que perguntaste entra aqui) */}
+                {/* SECÇÃO 2: CONFIRMAR EXECUÇÃO */}
                 <div className="prof-panel-section prof-panel-section--mt">
                   <h3>
                     <svg

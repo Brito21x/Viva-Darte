@@ -3,6 +3,19 @@ import "./Landing.css";
 import logoImg from "../../assets/logo.png";
 import { isProfessorUtilizador } from "../../utils/perfilUtilizador";
 
+/*
+import anaSilva from "../../assets/ana-silva.jpg";
+import carlosMendes from "../../assets/carlos-mendes.jpg";
+import joanaFerreira from "../../assets/joana-ferreira.jpg";
+
+import acrobatica from "../../assets/acrobatica.jpg";
+import acrodance from "../../assets/acrodance.jpg";
+import ballet from "../../assets/ballet.jpg";
+import dançaUrbana from "../../assets/dança-urbana.jpg";
+import hipHop from "../../assets/hip-hop.jpg";
+import jazz from "../../assets/jazz.jpg";
+*/
+
 export default function Landing({
   irParaLogin,
   irParaRegisto,
@@ -58,6 +71,29 @@ export default function Landing({
       });
     }
   };
+
+  useEffect(() => {
+    const autoScroll = setInterval(() => {
+      if (modalidadesRef.current) {
+        const container = modalidadesRef.current;
+
+        const isAtEnd =
+          container.scrollLeft + container.clientWidth >=
+          container.scrollWidth - 10;
+
+        if (isAtEnd) {
+          container.scrollTo({ left: 0, behavior: "smooth" });
+        } else {
+          container.scrollBy({
+            left: container.clientWidth,
+            behavior: "smooth",
+          });
+        }
+      }
+    }, 6000);
+
+    return () => clearInterval(autoScroll);
+  }, []);
 
   useEffect(() => {
     const autoScroll = setInterval(() => {
@@ -325,7 +361,6 @@ export default function Landing({
       <section id="modalidades" className="section-container bg-light">
         <div className="section-header">
           <h2>Modalidades</h2>
-          <p>Descobre o estilo que faz o teu coração vibrar.</p>
         </div>
 
         <div className="carousel-wrapper">
@@ -341,39 +376,79 @@ export default function Landing({
           <div className="carousel-container" ref={modalidadesRef}>
             <div className="modalidade-card">
               <div className="modalidade-left">
-                <span className="emoji-gigante">🩰</span>
+                <img src="" alt="Acrobática" className="imagem-modalidade" />
               </div>
               <div className="modalidade-right">
-                <span className="subtitle">Técnica e Elegância</span>
+                <span className="subtitle">Acrobática</span>
                 <p>
-                  A base de todas as danças, focada na postura, flexibilidade e
-                  disciplina artística para alunos de todas as idades.
+                  Combina a técnica da dança com elementos de ginástica,
+                  desenvolvendo força, flexibilidade e um enorme controlo
+                  corporal.
                 </p>
               </div>
             </div>
 
             <div className="modalidade-card">
               <div className="modalidade-left">
-                <span className="emoji-gigante">👟</span>
+                <img src="" alt="Acrodance" className="imagem-modalidade" />
               </div>
               <div className="modalidade-right">
-                <span className="subtitle">Ritmo e Atitude</span>
+                <span className="subtitle">Acrodance</span>
                 <p>
-                  Explora a cultura urbana através de coreografias dinâmicas,
-                  focadas em groove, coordenação e muita energia.
+                  Uma fusão perfeita e fluida entre a arte e expressão da dança
+                  e o atletismo da acrobacia em movimentos dinâmicos.
                 </p>
               </div>
             </div>
 
             <div className="modalidade-card">
               <div className="modalidade-left">
-                <span className="emoji-gigante">💃</span>
+                <img src="" alt="Ballet" className="imagem-modalidade" />
               </div>
               <div className="modalidade-right">
-                <span className="subtitle">Expressão Livre</span>
+                <span className="subtitle">Ballet</span>
                 <p>
-                  Movimentos fluidos e expressão corporal que quebram as
-                  barreiras do estilo clássico, conectando corpo e mente.
+                  A base clássica de todas as danças. Foca-se na graciosidade,
+                  postura, precisão técnica e disciplina.
+                </p>
+              </div>
+            </div>
+
+            <div className="modalidade-card">
+              <div className="modalidade-left">
+                <img src="" alt="Dança Urbana" className="imagem-modalidade" />
+              </div>
+              <div className="modalidade-right">
+                <span className="subtitle">Dança Urbana</span>
+                <p>
+                  Movimentos fortes nascidos nas ruas, englobando vários estilos
+                  repletos de atitude, energia e criatividade.
+                </p>
+              </div>
+            </div>
+
+            <div className="modalidade-card">
+              <div className="modalidade-left">
+                <img src="" alt="Hip Hop" className="imagem-modalidade" />
+              </div>
+              <div className="modalidade-right">
+                <span className="subtitle">Hip Hop</span>
+                <p>
+                  Ritmo contagiante e expressão livre. Aprende coreografias
+                  dinâmicas ao som das melhores batidas urbanas.
+                </p>
+              </div>
+            </div>
+
+            <div className="modalidade-card">
+              <div className="modalidade-left">
+                <img src="" alt="Jazz" className="imagem-modalidade" />
+              </div>
+              <div className="modalidade-right">
+                <span className="subtitle">Jazz</span>
+                <p>
+                  Uma dança enérgica e versátil que mistura técnica clássica com
+                  movimentos soltos, ritmados e muita expressão teatral.
                 </p>
               </div>
             </div>
@@ -407,10 +482,11 @@ export default function Landing({
           <div className="carousel-container single-item" ref={professoresRef}>
             <div className="horizontal-card">
               <div className="card-left">
-                <div
-                  className="prof-avatar"
-                  style={{ backgroundImage: "url('')" }}
-                ></div>
+                <img
+                  src=""
+                  alt="Ana Silva - Ballet Clássico"
+                  className="prof-avatar-img"
+                />
               </div>
               <div className="card-right">
                 <h3>Ana Silva</h3>
@@ -425,10 +501,11 @@ export default function Landing({
 
             <div className="horizontal-card">
               <div className="card-left">
-                <div
-                  className="prof-avatar"
-                  style={{ backgroundImage: "url('')" }}
-                ></div>
+                <img
+                  src=""
+                  alt="Carlos Mendes - Hip Hop & Dança Urbana"
+                  className="prof-avatar-img"
+                />
               </div>
               <div className="card-right">
                 <h3>Carlos Mendes</h3>
@@ -443,10 +520,11 @@ export default function Landing({
 
             <div className="horizontal-card">
               <div className="card-left">
-                <div
-                  className="prof-avatar"
-                  style={{ backgroundImage: "url('')" }}
-                ></div>
+                <img
+                  src=""
+                  alt="Joana Ferreira - Dança Acrobática"
+                  className="prof-avatar-img"
+                />
               </div>
               <div className="card-right">
                 <h3>Joana Ferreira</h3>

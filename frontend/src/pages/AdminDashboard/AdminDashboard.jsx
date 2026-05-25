@@ -49,7 +49,6 @@ async function apiFetchChecked(path, token, opts = {}) {
   return data;
 }
 
-// --- COMPONENTE: Dropdown com Pesquisa (Autocomplete) ---
 function SearchableSelect({ options, value, onChange, placeholder }) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -66,7 +65,7 @@ function SearchableSelect({ options, value, onChange, placeholder }) {
     function handleClickOutside(event) {
       if (wrapperRef.current && !wrapperRef.current.contains(event.target)) {
         setIsOpen(false);
-        setSearch(""); // Limpa a pesquisa ao fechar para mostrar a lista toda na próxima vez
+        setSearch("");
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
@@ -87,7 +86,7 @@ function SearchableSelect({ options, value, onChange, placeholder }) {
         onChange={(e) => {
           setSearch(e.target.value);
           setIsOpen(true);
-          if (value) onChange(""); // Limpa a seleção se começar a apagar/escrever
+          if (value) onChange("");
         }}
         onFocus={() => {
           setIsOpen(true);
@@ -119,11 +118,8 @@ function SearchableSelect({ options, value, onChange, placeholder }) {
   );
 }
 
-// Normaliza um valor 'time' vindo do SQL Server ("19:00:00", ISO "1970-01-01T19:00:00.000Z"
-// ou Date) para a string "HH:MM". Devolve "—" se não conseguir interpretar.
 function formatarHoraSqlTime(valor) {
   if (valor == null) return "—";
-  // Se for um Date object (alguns drivers fazem isto)
   if (valor instanceof Date && !Number.isNaN(valor.getTime())) {
     const hh = String(valor.getUTCHours()).padStart(2, "0");
     const mm = String(valor.getUTCMinutes()).padStart(2, "0");
@@ -131,10 +127,8 @@ function formatarHoraSqlTime(valor) {
   }
   const s = String(valor).trim();
   if (!s) return "—";
-  // Caso ISO completo "1970-01-01T19:00:00.000Z"
   const isoMatch = s.match(/T(\d{2}):(\d{2})/);
   if (isoMatch) return `${isoMatch[1]}:${isoMatch[2]}`;
-  // Caso "HH:MM" ou "HH:MM:SS"
   const hmMatch = s.match(/^(\d{1,2}):(\d{2})/);
   if (hmMatch) {
     return `${String(hmMatch[1]).padStart(2, "0")}:${hmMatch[2]}`;
@@ -142,8 +136,6 @@ function formatarHoraSqlTime(valor) {
   return "—";
 }
 
-// Calcula a hora de fim somando 'duracaoMinutos' a uma hora de início (formato igual ao SQL).
-// Devolve string "HH:MM" ou "" se inválido.
 function calcularHoraFim(horaInicio, duracaoMinutos) {
   const hi = formatarHoraSqlTime(horaInicio);
   if (hi === "—") return "";
@@ -221,7 +213,6 @@ function formatDataApi(valor) {
   return `${yyyy}-${mm}-${dd}`;
 }
 
-// Tabela de tradução dos códigos de eventos de auditoria para texto legível
 const AUDITORIA_LABELS = {
   LOGIN: "Login",
   LOGOUT: "Logout",
@@ -252,7 +243,6 @@ function legivelTipoEvento(tipo) {
   return AUDITORIA_LABELS[tipo] || tipo || "—";
 }
 
-// Mapeia o tipo de evento para uma cor de badge consistente
 function corDoEventoAuditoria(tipo) {
   if (!tipo) return "#888";
   if (tipo.startsWith("LOGIN") || tipo === "REGISTO") return "#5a8dee";
@@ -282,7 +272,6 @@ export default function AdminDashboard({ irParaLanding }) {
   const [pedidosPendentes, setPedidosPendentes] = useState([]);
   const [inventario, setInventario] = useState([]);
   const [tabelaPrecos, setTabelaPrecos] = useState([]);
-  // Estado para o Modal de Edição de Preços
   const [modalPreco, setModalPreco] = useState({
     isOpen: false,
     data: {
@@ -295,7 +284,6 @@ export default function AdminDashboard({ irParaLanding }) {
     },
   });
 
-  // Função para abrir o modal com os dados da regra selecionada
   function abrirModalEditarPreco(regra) {
     setModalPreco({
       isOpen: true,
@@ -310,7 +298,6 @@ export default function AdminDashboard({ irParaLanding }) {
     });
   }
 
-  // Função para submeter a alteração (RF17)
   async function submeterModalPreco(e) {
     e.preventDefault();
     try {
@@ -329,7 +316,7 @@ export default function AdminDashboard({ irParaLanding }) {
       if (res.ok) {
         mostrarMsg("Regra de preço atualizada com sucesso!", "ok");
         setModalPreco({ isOpen: false, data: {} });
-        carregarPrecos(); // Recarrega a tabela
+        carregarPrecos();
       } else {
         mostrarMsg("Erro ao atualizar o preço.", "erro");
       }
@@ -339,7 +326,6 @@ export default function AdminDashboard({ irParaLanding }) {
   }
   const [precosLoading, setPrecosLoading] = useState(false);
 
-  // Função para ir buscar a TABELA_PRECO
   async function carregarPrecos() {
     setPrecosLoading(true);
     try {
@@ -364,7 +350,6 @@ export default function AdminDashboard({ irParaLanding }) {
     }
   }
 
-  // Estado para o Modal de Criar/Editar Peças
   const [modalPeca, setModalPeca] = useState({
     isOpen: false,
     mode: "create",
@@ -406,7 +391,6 @@ export default function AdminDashboard({ irParaLanding }) {
 
   const [msg, setMsg] = useState("");
 
-  // --- FATURAÇÃO ---
   const [faturas, setFaturas] = useState([]);
   const [faturacaoFiltro, setFaturacaoFiltro] = useState({
     ano: "",
@@ -415,7 +399,6 @@ export default function AdminDashboard({ irParaLanding }) {
   });
   const [faturacaoLoading, setFaturacaoLoading] = useState(false);
 
-  // Detalhe (drill-down) de uma fatura específica: cabeçalho + linhas/aulas
   const [modalDetalheFatura, setModalDetalheFatura] = useState({
     isOpen: false,
     loading: false,
@@ -425,7 +408,6 @@ export default function AdminDashboard({ irParaLanding }) {
     modoIndividual: false,
   });
 
-  // --- INVENTÁRIO ---
   const [inventarioPecas, setInventarioPecas] = useState([]);
   const [inventarioEmprestimos, setInventarioEmprestimos] = useState([]);
   const [inventarioVendas, setInventarioVendas] = useState([]);
@@ -439,7 +421,6 @@ export default function AdminDashboard({ irParaLanding }) {
     dispVenda: false,
   });
 
-  // --- HISTÓRICO / AUDITORIA ---
   const [historicoGeral, setHistoricoGeral] = useState([]);
   const [historicoLoading, setHistoricoLoading] = useState(false);
   const [historicoIndisponivel, setHistoricoIndisponivel] = useState(false);
@@ -978,7 +959,6 @@ export default function AdminDashboard({ irParaLanding }) {
     }
   }
 
-  // Preparação de listas e lógicas de filtragem cruzada (Agendamento Direto)
   const pendentes = utilizadores.filter(
     (u) => u.ativo === false || u.ativo === 0,
   );
@@ -1012,13 +992,11 @@ export default function AdminDashboard({ irParaLanding }) {
     (c) => c.estado === "Cancelado",
   );
 
-  // OPÇÕES FORMATADAS PARA OS DROPDOWNS INTELIGENTES
   const eeOptions = encarregados.map((ee) => ({
     id: ee.id_utilizador,
     label: `${ee.nome} (Aluno: ${ee.nomeAluno || "Sem aluno registado"})`,
   }));
 
-  // FILTROS CRUZADOS: PROFESSOR <-> MODALIDADE
   const profSelecionado = profs.find(
     (p) => String(p.id_utilizador) === String(modalAgendarDireto.idProfessor),
   );
@@ -1048,7 +1026,7 @@ export default function AdminDashboard({ irParaLanding }) {
         (p) => String(p.id_utilizador) === String(nextProf),
       );
       if (mod && prof && !(prof.modalidades || "").includes(mod.nome)) {
-        nextProf = ""; // Limpa o professor se ele não leciona esta nova modalidade
+        nextProf = "";
       }
     }
     setModalAgendarDireto({
@@ -1068,7 +1046,7 @@ export default function AdminDashboard({ irParaLanding }) {
         (m) => String(m.id_modalidade) === String(nextMod),
       );
       if (prof && mod && !(prof.modalidades || "").includes(mod.nome)) {
-        nextMod = ""; // Limpa a modalidade se o novo professor não a leciona
+        nextMod = "";
       }
     }
     setModalAgendarDireto({
@@ -1248,7 +1226,6 @@ export default function AdminDashboard({ irParaLanding }) {
     if (activeTab === "inventario") carregarInventario();
     if (activeTab === "historico_geral") carregarHistoricoGeral();
 
-    // Quando entra na Tab "Faturação"
     if (activeTab === "faturacao") {
       if (faturacaoFiltro.subTab === "precos") {
         carregarPrecos();
@@ -1313,7 +1290,6 @@ export default function AdminDashboard({ irParaLanding }) {
     { id: "historico_geral", label: "🕓 Histórico" },
   ];
 
-  // --- FUNÇÕES DE FATURAÇÃO ---
   async function carregarFaturas() {
     setFaturacaoLoading(true);
     try {
@@ -1394,7 +1370,6 @@ export default function AdminDashboard({ irParaLanding }) {
     }
   }
 
-  // Abre o modal de drill-down com as aulas que compõem a fatura.
   async function abrirDetalheFatura(idFatura) {
     setModalDetalheFatura({
       isOpen: true,
@@ -1459,12 +1434,6 @@ export default function AdminDashboard({ irParaLanding }) {
     });
   }
 
-  // --- FUNÇÕES DE INVENTÁRIO ---
-  // Vai buscar o catálogo + lista de vendas e funde a info, para que cada peça
-  // à venda traga o preço correto da tabela VENDA_PECA.
-  // --- FUNÇÕES DE HISTÓRICO / AUDITORIA ---
-  // Tenta o endpoint /api/auditoria. Se não existir (404) deteta isso e
-  // mostra a mensagem apropriada na UI em vez de "explodir".
   async function carregarHistoricoGeral() {
     setHistoricoLoading(true);
     setHistoricoIndisponivel(false);
@@ -1484,7 +1453,6 @@ export default function AdminDashboard({ irParaLanding }) {
       });
 
       if (res.status === 404) {
-        // Endpoint ainda não implementado no backend
         setHistoricoIndisponivel(true);
         setHistoricoGeral([]);
         return;
@@ -1514,11 +1482,6 @@ export default function AdminDashboard({ irParaLanding }) {
       const listaCatalogo = Array.isArray(catalogo) ? catalogo : [];
       const listaVendas = Array.isArray(vendas) ? vendas : [];
 
-      // Indexa as vendas pelo id_peca. Para cada peça, prioriza:
-      // 1) Venda "Disponível" (preço atual)
-      // 2) Caso contrário, a mais recente que tenha preço (concluída no passado)
-      // Isto garante que peças à venda mostram preço mesmo que o estado da VENDA_PECA
-      // não esteja exatamente como "Disponível".
       const vendaPorPeca = new Map();
       for (const v of listaVendas) {
         if (v.id_peca == null) continue;
@@ -1532,7 +1495,6 @@ export default function AdminDashboard({ irParaLanding }) {
         const existenteIsDisp =
           existente.estado_venda === "Disponível" ||
           existente.estado_venda === "Disponivel";
-        // Disponível vence sempre; caso contrário fica o de id_venda maior (mais recente)
         if (isDisponivel && !existenteIsDisp) {
           vendaPorPeca.set(v.id_peca, v);
         } else if (
@@ -1546,7 +1508,6 @@ export default function AdminDashboard({ irParaLanding }) {
 
       const enriquecida = listaCatalogo.map((p) => {
         const venda = vendaPorPeca.get(p.id_peca);
-        // Aceita preço da venda OU um eventual campo já vindo do catálogo
         const preco =
           venda?.preco != null
             ? venda.preco
@@ -1561,7 +1522,6 @@ export default function AdminDashboard({ irParaLanding }) {
           id_venda: venda?.id_venda ?? p.id_venda ?? null,
           metodos_aceites_venda:
             venda?.metodos_aceites ?? p.metodos_aceites_venda ?? null,
-          // Quem está envolvido na venda (se aplicável)
           vendedor: venda?.vendedor ?? null,
           comprador: venda?.comprador ?? null,
           estado_venda: venda?.estado_venda ?? null,
@@ -1585,16 +1545,17 @@ export default function AdminDashboard({ irParaLanding }) {
         tamanho: "",
         estado: "Bom",
         preco: "",
-        disponivelVenda: true,
+        disponivelVenda: false,
         disponivelEmprestimo: false,
         valor_dia: "",
         fotos: [],
+        metodosPagamento: ["MBWay"],
+        metodosPagamentoEmprestimo: ["MBWay"],
       },
     });
   }
 
   async function abrirModalEditarPeca(p) {
-    // Abre logo o modal com os dados base
     setModalPeca({
       isOpen: true,
       mode: "edit",
@@ -1611,9 +1572,16 @@ export default function AdminDashboard({ irParaLanding }) {
         ),
         valor_dia: p.valor_dia ?? "",
         fotos: [],
+        metodosPagamento: p.metodos_aceites_venda
+          ? p.metodos_aceites_venda.split(",").map((m) => m.trim())
+          : ["MBWay"],
+
+        metodosPagamentoEmprestimo: p.metodos_pagamento
+          ? p.metodos_pagamento.split(",").map((m) => m.trim())
+          : ["MBWay"],
       },
     });
-    // Em paralelo, vai buscar as fotos atuais da peça
+
     try {
       const detalhes = await apiFetch(`/api/inventario/${p.id_peca}`, token);
       const fotosAtuais = Array.isArray(detalhes?.fotos)
@@ -1629,7 +1597,6 @@ export default function AdminDashboard({ irParaLanding }) {
     }
   }
 
-  // Helper: converte um File em base64 (data URL)
   function ficheiroParaBase64(file) {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -1654,7 +1621,6 @@ export default function AdminDashboard({ irParaLanding }) {
     } catch (err) {
       mostrarMsg("Erro ao processar imagem.", "erro");
     }
-    // Reset do input para permitir voltar a selecionar a mesma imagem
     e.target.value = "";
   }
 
@@ -1671,9 +1637,26 @@ export default function AdminDashboard({ irParaLanding }) {
   async function submeterModalPeca(e) {
     e.preventDefault();
     const d = modalPeca.data;
+
+    if (d.disponivelVenda) {
+      if (!d.preco || d.preco === "" || parseFloat(d.preco) <= 0) {
+        return mostrarMsg(
+          "O preço de venda é obrigatório e deve ser maior que 0€.",
+          "erro",
+        );
+      }
+    }
+
+    if (d.disponivelEmprestimo) {
+      if (!d.valor_dia || d.valor_dia === "" || parseFloat(d.valor_dia) <= 0) {
+        return mostrarMsg(
+          "O valor diário de empréstimo é obrigatório e deve ser maior que 0€.",
+          "erro",
+        );
+      }
+    }
     try {
       if (modalPeca.mode === "create") {
-        // Criar: POST /api/inventario
         await apiFetchChecked("/api/inventario", token, {
           method: "POST",
           body: {
@@ -1682,13 +1665,15 @@ export default function AdminDashboard({ irParaLanding }) {
             tamanho: d.tamanho,
             estado: d.estado,
             disponivelVenda: d.disponivelVenda,
+            disponivelEmprestimo: d.disponivelEmprestimo,
             valor_dia: d.valor_dia,
+            preco: d.preco,
+            metodosPagamento: d.metodosPagamento,
             fotos: d.fotos && d.fotos.length > 0 ? d.fotos : undefined,
           },
         });
         mostrarMsg("Peça criada com sucesso!", "ok");
       } else {
-        // Editar: PUT /api/inventario/:id/editar
         await apiFetchChecked(`/api/inventario/${d.id}/editar`, token, {
           method: "PUT",
           body: {
@@ -1697,6 +1682,11 @@ export default function AdminDashboard({ irParaLanding }) {
             tamanho: d.tamanho,
             estado: d.estado,
             preco: d.preco,
+            valor_dia: d.valor_dia,
+            disponivelVenda: d.disponivelVenda,
+            disponivelEmprestimo: d.disponivelEmprestimo,
+            metodosPagamentoEmprestimo: d.metodosPagamentoEmprestimo,
+            metodosPagamento: d.metodosPagamento,
             fotos: d.fotos && d.fotos.length > 0 ? d.fotos : undefined,
           },
         });
@@ -1714,7 +1704,7 @@ export default function AdminDashboard({ irParaLanding }) {
       `Definir preço de venda para "${peca.nome_peca || peca.nome}" (€):`,
       "",
     );
-    if (precoStr == null) return; // cancelou
+    if (precoStr == null) return;
     const preco = parseFloat(String(precoStr).replace(",", "."));
     if (Number.isNaN(preco) || preco <= 0) {
       mostrarMsg("Preço inválido.", "erro");
@@ -2126,9 +2116,7 @@ export default function AdminDashboard({ irParaLanding }) {
           </div>
         )}
 
-        {/* ================================================================
-            TAB: FATURAÇÃO
-        ================================================================ */}
+        {/* TAB: FATURAÇÃO*/}
         {activeTab === "faturacao" && (
           <div className="tab-content">
             <div
@@ -2203,9 +2191,9 @@ export default function AdminDashboard({ irParaLanding }) {
             </div>
 
             {faturacaoFiltro.subTab !== "precos" ? (
-              /* --- ÁREA DE FATURAS (RF18, RF19, RF20) --- */
+              /* --- ÁREA DE FATURAS  --- */
               <div style={{ animation: "fadeUp 0.3s ease" }}>
-                {/* 2. FILTROS E BOTÃO DE EXPORTAR (RF19) */}
+                {/* 2. FILTROS E BOTÃO DE EXPORTAR  */}
                 <div
                   style={{
                     background: "#fff",
@@ -2322,7 +2310,6 @@ export default function AdminDashboard({ irParaLanding }) {
                             "erro",
                           );
 
-                        // Preparação do CSV
                         const cabecalho =
                           "ID,Utilizador,Ano,Mes,Data Geracao,Total (€),Estado,Metodo Pagamento,Data Pagamento\n";
                         const linhas = faturas
@@ -2379,7 +2366,7 @@ export default function AdminDashboard({ irParaLanding }) {
                   </div>
                 )}
 
-                {/* 3. TABELA DE FATURAS (RF19 e RF20) */}
+                {/* 3. TABELA DE FATURAS  */}
                 <Section
                   title={`Registo de Faturas e Pagamentos (${faturas.length})`}
                   defaultOpen={true}
@@ -2487,7 +2474,7 @@ export default function AdminDashboard({ irParaLanding }) {
                                   </strong>
                                 </td>
 
-                                {/* RF20: Consulta do Método e Data */}
+                                {/* Consulta do Método e Data */}
                                 <td>
                                   {f.metodo_pagamento ? (
                                     <span
@@ -2519,7 +2506,7 @@ export default function AdminDashboard({ irParaLanding }) {
                                   </span>
                                 </td>
 
-                                {/* RF20: Registo do Pagamento */}
+                                {/* Registo do Pagamento */}
                                 <td className="text-center whitespace-nowrap">
                                   <button
                                     className="btn-sm"
@@ -2793,9 +2780,7 @@ export default function AdminDashboard({ irParaLanding }) {
           </div>
         )}
 
-        {/* ================================================================
-            TAB: HISTÓRICO / AUDITORIA
-        ================================================================ */}
+        {/* TAB: HISTÓRICO / AUDITORIA*/}
         {activeTab === "historico_geral" && (
           <div className="tab-content">
             <div style={{ marginBottom: "20px" }}>
@@ -3055,13 +3040,10 @@ export default function AdminDashboard({ irParaLanding }) {
           </div>
         )}
 
-        {/* ================================================================
-            TAB: INVENTÁRIO
-        ================================================================ */}
+        {/* TAB: INVENTÁRIO*/}
         {activeTab === "inventario" && (
           <div className="tab-content">
             {(() => {
-              // -- Cálculos para os cards de resumo (calculados a cada render) --
               const totalPecas = inventario.length;
               const pecasEmprestimo = inventario.filter(
                 (p) => p.disponivel_para_emprestimo || p.disponivel_emprestimo,
@@ -3076,7 +3058,6 @@ export default function AdminDashboard({ irParaLanding }) {
                 (p) => p.preco_venda == null,
               ).length;
 
-              // -- Decide a lista a apresentar segundo a sub-aba ativa --
               let listaAtual = inventario;
               if (inventarioTab === "emprestimo") listaAtual = pecasEmprestimo;
               else if (inventarioTab === "venda") listaAtual = pecasVenda;
@@ -3096,7 +3077,7 @@ export default function AdminDashboard({ irParaLanding }) {
                   >
                     <div>
                       <h1 className="page-title" style={{ margin: 0 }}>
-                        Gestão de Inventário
+                        📦 Gestão de Inventário
                       </h1>
                       <p
                         style={{
@@ -3836,6 +3817,85 @@ export default function AdminDashboard({ irParaLanding }) {
                   Disponível para Empréstimo
                 </label>
               </div>
+              {modalPeca.data.disponivelVenda && (
+                <div className="field" style={{ marginTop: "12px" }}>
+                  <label>Métodos de Pagamento Aceites (Venda)</label>
+                  <div
+                    style={{ display: "flex", gap: "10px", marginTop: "6px" }}
+                  >
+                    {["MBWay", "Transferência", "Numerário"].map((metodo) => {
+                      const selecionados =
+                        modalPeca.data.metodosPagamento || [];
+                      const estaChecked = selecionados.includes(metodo);
+                      return (
+                        <label
+                          key={metodo}
+                          className="check-label-styled"
+                          style={{ padding: "8px 14px", margin: 0 }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={estaChecked}
+                            onChange={(e) => {
+                              const novosMetodos = e.target.checked
+                                ? [...selecionados, metodo]
+                                : selecionados.filter((m) => m !== metodo);
+                              setModalPeca({
+                                ...modalPeca,
+                                data: {
+                                  ...modalPeca.data,
+                                  metodosPagamento: novosMetodos,
+                                },
+                              });
+                            }}
+                          />
+                          <span>{metodo}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+              {/* Escolha dos Métodos de Pagamento no Empréstimo */}
+              {modalPeca.data.disponivelEmprestimo && (
+                <div className="field" style={{ marginTop: "12px" }}>
+                  <label>Métodos de Pagamento Aceites (Empréstimo)</label>
+                  <div
+                    style={{ display: "flex", gap: "10px", marginTop: "6px" }}
+                  >
+                    {["MBWay", "Transferência", "Numerário"].map((metodo) => {
+                      const selecionados =
+                        modalPeca.data.metodosPagamentoEmprestimo || [];
+                      const estaChecked = selecionados.includes(metodo);
+                      return (
+                        <label
+                          key={`emp-${metodo}`}
+                          className="check-label-styled"
+                          style={{ padding: "8px 14px", margin: 0 }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={estaChecked}
+                            onChange={(e) => {
+                              const novosMetodos = e.target.checked
+                                ? [...selecionados, metodo]
+                                : selecionados.filter((m) => m !== metodo);
+                              setModalPeca({
+                                ...modalPeca,
+                                data: {
+                                  ...modalPeca.data,
+                                  metodosPagamentoEmprestimo: novosMetodos,
+                                },
+                              });
+                            }}
+                          />
+                          <span>{metodo}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               <div className="field" style={{ marginTop: "12px" }}>
                 <label>Fotografias</label>
@@ -4313,7 +4373,7 @@ export default function AdminDashboard({ irParaLanding }) {
         </div>
       )}
 
-      {/* MODAL: Detalhe da Fatura (drill-down — aulas que a compõem) */}
+      {/* MODAL: Detalhe da Fatura  */}
       {modalDetalheFatura.isOpen && (
         <div className="admin-modal-overlay" onClick={fecharDetalheFatura}>
           <div
@@ -4444,7 +4504,6 @@ export default function AdminDashboard({ irParaLanding }) {
                   </div>
                 )}
 
-                {/* Conteúdo: ficha individual quando há 1 aula, lista quando há várias */}
                 {modalDetalheFatura.linhas.length === 0 ? (
                   <div
                     style={{
@@ -4896,10 +4955,8 @@ export default function AdminDashboard({ irParaLanding }) {
         </div>
       )}
 
-      {/* --- MODAL MELHORADO: AGENDAMENTO DIRETO --- */}
       {modalAgendarDireto.isOpen && (
         <div className="admin-modal-overlay">
-          {/* Adicionada a classe modal-agendamento-direto para aumentar a largura */}
           <div className="admin-modal-content admin-modal-content--lg">
             <h2 className="admin-modal-title">Agendamento Direto</h2>
             <p className="admin-modal-subtitle">
@@ -4908,7 +4965,6 @@ export default function AdminDashboard({ irParaLanding }) {
             <form className="admin-form" onSubmit={handleAgendarDireto}>
               <div className="form-group-row">
                 <div className="field form-col-1">
-                  {/* O texto Aluno agora aparece automaticamente no rótulo da lista */}
                   <label>Pesquisar Encarregado / Aluno *</label>
                   <SearchableSelect
                     placeholder="Escreve o nome do EE ou Aluno..."

@@ -403,12 +403,6 @@ async function adminCriarUtilizador(req, res, next) {
     let idsModalidadesProf;
     if (tipo === "PROF") {
       idsModalidadesProf = Array.isArray(idsModalidades) ? idsModalidades : [];
-      if (idsModalidadesProf.length === 0) {
-        return res.status(400).json({
-          mensagem:
-            "Para professor, indica pelo menos uma modalidade (idsModalidades).",
-        });
-      }
     }
 
     const passwordHash = await bcrypt.hash(password, 10);

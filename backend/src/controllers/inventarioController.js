@@ -94,6 +94,7 @@ async function registarPeca(req, res, next) {
       idCategoria,
       fotos,
       valor_dia,
+      metodosPagamento,
       metodos_pagamento,
       disponivelVenda,
     } = req.body;
@@ -104,12 +105,13 @@ async function registarPeca(req, res, next) {
     const isVenda =
       disponivelVenda === true || disponivelVenda === "true" || !isEmprestimo;
 
+    const metodosSelect = metodosPagamento || metodos_pagamento;
     const metodosStr =
-      metodos_pagamento &&
-      Array.isArray(metodos_pagamento) &&
-      metodos_pagamento.length > 0
-        ? metodos_pagamento.join(",")
+      metodosSelect && Array.isArray(metodosSelect) && metodosSelect.length > 0
+        ? metodosSelect.join(",")
         : "MBWay";
+
+    const preco = req.body.preco;
 
     const idPeca = await inventarioModel.registarNovaPeca({
       nome,
@@ -121,6 +123,7 @@ async function registarPeca(req, res, next) {
       isEmprestimo,
       isVenda,
       valor_dia: parseFloat(valor_dia || 0),
+      preco: parseFloat(preco || 0),
       metodosStr,
     });
 
@@ -543,14 +546,30 @@ async function colocarPecaAVenda(req, res, next) {
 async function editarPeca(req, res, next) {
   try {
     const idPeca = parseInt(req.params.id);
-    const { nome, descricao, tamanho, estado, preco, fotos, metodosPagamento } =
-      req.body;
+    const {
+      nome,
+      descricao,
+      tamanho,
+      estado,
+      preco,
+      fotos,
+      metodosPagamento,
+      metodosPagamentoEmprestimo,
+      disponivelVenda,
+      disponivelEmprestimo,
+      valor_dia,
+    } = req.body;
 
     if (isNaN(idPeca)) {
       return res.status(400).json({ mensagem: "ID de peça inválido." });
     }
-    if (preco !== undefined && Number(preco) <= 0) {
-      return res.status(400).json({ mensagem: "O preço definido é inválido." });
+
+    if (preco !== undefined && preco !== null && preco !== "") {
+      if (Number(preco) <= 0) {
+        return res
+          .status(400)
+          .json({ mensagem: "O preço definido é inválido." });
+      }
     }
 
     const metodosStr =
@@ -560,24 +579,29 @@ async function editarPeca(req, res, next) {
         ? metodosPagamento.join(",")
         : "MBWay,Transferência,Numerário";
 
+    const metodosStrEmprestimo =
+      metodosPagamentoEmprestimo &&
+      Array.isArray(metodosPagamentoEmprestimo) &&
+      metodosPagamentoEmprestimo.length > 0
+        ? metodosPagamentoEmprestimo.join(",")
+        : "MBWay";
+
     await inventarioModel.atualizarDadosCompletosPeca(idPeca, {
       nome,
       descricao,
       tamanho,
       estado,
+      preco: preco && preco !== "" ? parseFloat(preco) : 0,
+      valor_dia: valor_dia && valor_dia !== "" ? parseFloat(valor_dia) : 0,
+      disponivelVenda: disponivelVenda === true || disponivelVenda === "true",
+      disponivelEmprestimo:
+        disponivelEmprestimo === true || disponivelEmprestimo === "true",
+      metodosStr,
+      metodosStrEmprestimo,
+      idUtilizador: req.utilizador.id || req.utilizador.id_utilizador,
     });
 
-    if (preco !== undefined) {
-      await inventarioModel.atualizarDadosVenda(
-        idPeca,
-        parseFloat(preco),
-        nome,
-        estado,
-        metodosStr,
-      );
-    }
-
-    if (fotos && Array.isArray(fotos)) {
+    if (fotos && Array.isArray(fotos) && fotos.length > 0) {
       await inventarioModel.atualizarFotosPeca(idPeca, fotos);
     }
 
@@ -586,7 +610,7 @@ async function editarPeca(req, res, next) {
       descricao: `Peça #${idPeca}${nome ? ` ("${nome}")` : ""} editada`,
       entidadeTipo: "PECA",
       entidadeId: idPeca,
-      dadosExtra: { nome, tamanho, estado, preco },
+      dadosExtra: { nome, tamanho, estado, preco, valor_dia },
     });
 
     return res

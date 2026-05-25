@@ -71,7 +71,12 @@ function AppRoutes() {
       />
       <Route
         path="/recuperar"
-        element={<RecoverPassword irParaLogin={nav.login} />}
+        element={
+          <RecoverPassword
+            irParaLogin={nav.login}
+            irParaLanding={nav.landing}
+          />
+        }
       />
 
       <Route

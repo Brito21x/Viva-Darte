@@ -199,7 +199,7 @@ function normalizeTime(hhmm) {
 export default function MinhaAgendaProfessor({
   irParaLanding,
   irParaEmprestimos,
-  irParaVendaFigurinos,
+  irParaFigurinos,
   irParaMinhaAgendaProfessor,
   irParaMinhaAgendaEE,
   modo = "professor",
@@ -305,7 +305,7 @@ export default function MinhaAgendaProfessor({
   }
 
   useEffect(() => {
-    document.title = "Minha agenda | Viva D'arte";
+    document.title = "Coaching | Viva D'arte";
   }, []);
 
   useEffect(() => {
@@ -1028,24 +1028,13 @@ export default function MinhaAgendaProfessor({
           </li>
           <li>
             <a
-              href="#emprestimos"
-              onClick={(e) => {
-                e.preventDefault();
-                irParaEmprestimos?.();
-              }}
-            >
-              Empréstimos de peças
-            </a>
-          </li>
-          <li>
-            <a
               href="#figurinos"
               onClick={(e) => {
                 e.preventDefault();
-                irParaVendaFigurinos?.();
+                irParaFigurinos?.();
               }}
             >
-              Venda de figurinos
+              Marketplace
             </a>
           </li>
         </ul>

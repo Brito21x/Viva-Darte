@@ -19,8 +19,7 @@ import jazz from "../../assets/jazz.jpg";
 export default function Landing({
   irParaLogin,
   irParaRegisto,
-  irParaVendaFigurinos,
-  irParaEmprestimos,
+  irParaFigurinos,
   irParaMinhaAgendaProfessor,
   irParaMinhaAgendaEE,
 }) {
@@ -233,26 +232,14 @@ export default function Landing({
                   </li>
                   <li>
                     <a
-                      href="#emprestimos"
-                      className="special-link"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        irParaEmprestimos();
-                      }}
-                    >
-                      Empréstimos de peças
-                    </a>
-                  </li>
-                  <li>
-                    <a
                       href="#figurinos"
                       className="special-link"
                       onClick={(e) => {
                         e.preventDefault();
-                        irParaVendaFigurinos();
+                        irParaFigurinos();
                       }}
                     >
-                      Venda de figurinos
+                      Marketplace
                     </a>
                   </li>
                 </>
@@ -272,26 +259,14 @@ export default function Landing({
                   </li>
                   <li>
                     <a
-                      href="#emprestimos"
-                      className="special-link"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        irParaEmprestimos();
-                      }}
-                    >
-                      Empréstimos de peças
-                    </a>
-                  </li>
-                  <li>
-                    <a
                       href="#figurinos"
                       className="special-link"
                       onClick={(e) => {
                         e.preventDefault();
-                        irParaVendaFigurinos();
+                        irParaFigurinos();
                       }}
                     >
-                      Venda de figurinos
+                      Marketplace
                     </a>
                   </li>
                 </>

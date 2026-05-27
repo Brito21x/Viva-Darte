@@ -101,9 +101,8 @@ async function registarPeca(req, res, next) {
 
     const idUtilizador = req.utilizador.id || req.utilizador.id_utilizador;
 
-    const isEmprestimo = valor_dia !== undefined && valor_dia !== "";
-    const isVenda =
-      disponivelVenda === true || disponivelVenda === "true" || !isEmprestimo;
+    const isEmprestimo = req.body.disponibilidade === "Emprestimo";
+    const isVenda = req.body.disponibilidade === "Venda";
 
     const metodosSelect = metodosPagamento || metodos_pagamento;
     const metodosStr =
@@ -120,9 +119,9 @@ async function registarPeca(req, res, next) {
       estado,
       idUtilizador,
       idCategoria: parseInt(idCategoria) || 1,
-      isEmprestimo,
-      isVenda,
-      valor_dia: parseFloat(valor_dia || 0),
+      isEmprestimo: isEmprestimo,
+      isVenda: isVenda,
+      valor_dia: parseFloat(req.body.preco || 0),
       preco: parseFloat(preco || 0),
       metodosStr,
     });
@@ -180,7 +179,7 @@ async function atualizarEstadoPeca(req, res, next) {
       estado,
       disponivelEmprestimo: disponivelEmprestimo ?? false,
       disponivelVenda: disponivelVenda ?? false,
-      localizacao: localizacao || null,
+      localizacao: null,
     });
 
     if (!sucesso) {
@@ -564,7 +563,12 @@ async function editarPeca(req, res, next) {
       return res.status(400).json({ mensagem: "ID de peça inválido." });
     }
 
-    if (preco !== undefined && preco !== null && preco !== "") {
+    const isVenda = disponivelVenda === true || disponivelVenda === "true";
+    const isEmp =
+      disponivelEmprestimo === true || disponivelEmprestimo === "true";
+
+    // CORREÇÃO: Apenas validar se o preço de venda é > 0 SE a peça for para venda
+    if (isVenda && preco !== undefined && preco !== null && preco !== "") {
       if (Number(preco) <= 0) {
         return res
           .status(400)
@@ -572,19 +576,26 @@ async function editarPeca(req, res, next) {
       }
     }
 
-    const metodosStr =
-      metodosPagamento &&
-      Array.isArray(metodosPagamento) &&
-      metodosPagamento.length > 0
-        ? metodosPagamento.join(",")
-        : "MBWay,Transferência,Numerário";
+    // CORREÇÃO: Apenas validar se o preço de empréstimo é > 0 SE a peça for para empréstimo
+    if (
+      isEmp &&
+      valor_dia !== undefined &&
+      valor_dia !== null &&
+      valor_dia !== ""
+    ) {
+      if (Number(valor_dia) <= 0) {
+        return res
+          .status(400)
+          .json({ mensagem: "O preço diário definido é inválido." });
+      }
+    }
 
-    const metodosStrEmprestimo =
-      metodosPagamentoEmprestimo &&
-      Array.isArray(metodosPagamentoEmprestimo) &&
-      metodosPagamentoEmprestimo.length > 0
-        ? metodosPagamentoEmprestimo.join(",")
+    const metodosStr =
+      Array.isArray(metodosPagamento) && metodosPagamento.length > 0
+        ? metodosPagamento.join(",")
         : "MBWay";
+
+    const metodosStrEmprestimo = req.body.metodosStrEmprestimo || metodosStr;
 
     await inventarioModel.atualizarDadosCompletosPeca(idPeca, {
       nome,
@@ -593,9 +604,8 @@ async function editarPeca(req, res, next) {
       estado,
       preco: preco && preco !== "" ? parseFloat(preco) : 0,
       valor_dia: valor_dia && valor_dia !== "" ? parseFloat(valor_dia) : 0,
-      disponivelVenda: disponivelVenda === true || disponivelVenda === "true",
-      disponivelEmprestimo:
-        disponivelEmprestimo === true || disponivelEmprestimo === "true",
+      disponivelVenda: isVenda,
+      disponivelEmprestimo: isEmp,
       metodosStr,
       metodosStrEmprestimo,
       idUtilizador: req.utilizador.id || req.utilizador.id_utilizador,
@@ -707,6 +717,44 @@ async function registarConclusaoVenda(req, res, next) {
   }
 }
 
+async function getPedidosEmprestimo(req, res, next) {
+  try {
+    const idPeca = parseInt(req.params.id);
+    if (isNaN(idPeca))
+      return res.status(400).json({ mensagem: "ID inválido." });
+
+    const pedidos = await inventarioModel.getPedidosEmprestimoPeca(idPeca);
+    return res.status(200).json(pedidos);
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function alterarEstadoReserva(req, res, next) {
+  try {
+    const idEmprestimo = parseInt(req.params.id);
+    const { status } = req.body;
+
+    if (isNaN(idEmprestimo) || !status) {
+      return res.status(400).json({ mensagem: "Dados inválidos." });
+    }
+
+    const sucesso = await inventarioModel.atualizarEstadoReserva(
+      idEmprestimo,
+      status,
+    );
+    if (sucesso) {
+      return res
+        .status(200)
+        .json({ mensagem: "Estado atualizado com sucesso." });
+    } else {
+      return res.status(404).json({ mensagem: "Reserva não encontrada." });
+    }
+  } catch (error) {
+    next(error);
+  }
+}
+
 /**
  * @module inventarioController
  */
@@ -724,4 +772,6 @@ module.exports = {
   editarPeca,
   apagarPeca,
   registarConclusaoVenda,
+  getPedidosEmprestimo,
+  alterarEstadoReserva,
 };

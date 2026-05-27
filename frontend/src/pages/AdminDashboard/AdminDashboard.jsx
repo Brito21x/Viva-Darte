@@ -1250,7 +1250,7 @@ export default function AdminDashboard({ irParaLanding }) {
               <div className="info-note info-note--error">{loginError}</div>
             )}
             <div className="field">
-              <label>Email / Username</label>
+              <label>Email</label>
               <input
                 type="text"
                 value={email}

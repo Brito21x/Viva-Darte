@@ -130,6 +130,12 @@ router.put("/:id/editar", inventarioController.editarPeca);
  */
 router.delete("/:id", inventarioController.apagarPeca);
 
+router.get("/pecas/:id/emprestimos", inventarioController.getPedidosEmprestimo);
+router.put(
+  "/emprestimos/:id/estado",
+  inventarioController.alterarEstadoReserva,
+);
+
 /**
  * @module inventarioRoutes
  */

@@ -10,8 +10,7 @@ import Landing from "./pages/LandingPage/Landing";
 import Login from "./pages/Login-Registo/Login";
 import Registo from "./pages/Login-Registo/Registo";
 import RecoverPassword from "./pages/Login-Registo/RecoverPassword";
-import VendaFigurinos from "./pages/VendaFigurinos/VendaFigurinos";
-import EmprestimosPecas from "./pages/EmprestimosPecas/EmprestimosPecas";
+import Figurinos from "./pages/Figurinos/Figurinos";
 import AdminDashboard from "./pages/AdminDashboard/AdminDashboard";
 import MinhaAgendaProfessor from "./pages/MinhaAgendaProfessor/MinhaAgendaProfessor";
 
@@ -30,10 +29,9 @@ function AppRoutes() {
     login: () => navigate("/login"),
     registo: () => navigate("/registo"),
     recuperar: () => navigate("/recuperar"),
-    venda_figurinos: () => navigate("/vendas-de-figurinos"),
-    emprestimos_pecas: () => navigate("/emprestimos"),
-    minha_agenda_professor: () => navigate("/agenda"),
-    minha_agenda_ee: () => navigate("/agenda"),
+    figurinos: () => navigate("/figurinos"),
+    minha_agenda_professor: () => navigate("/coaching"),
+    minha_agenda_ee: () => navigate("/coaching"),
     admin: () => navigate("/admin"),
   };
 
@@ -45,8 +43,7 @@ function AppRoutes() {
           <Landing
             irParaLogin={nav.login}
             irParaRegisto={nav.registo}
-            irParaVendaFigurinos={nav.venda_figurinos}
-            irParaEmprestimos={nav.emprestimos_pecas}
+            irParaFigurinos={nav.figurinos}
             irParaMinhaAgendaProfessor={nav.minha_agenda_professor}
             irParaMinhaAgendaEE={nav.minha_agenda_ee}
           />
@@ -80,12 +77,11 @@ function AppRoutes() {
       />
 
       <Route
-        path="/vendas-de-figurinos"
+        path="/figurinos"
         element={
-          <VendaFigurinos
+          <Figurinos
             irParaLanding={nav.landing}
-            irParaEmprestimos={nav.emprestimos_pecas}
-            irParaVendaFigurinos={nav.venda_figurinos}
+            irParaFigurinos={nav.figurinos}
             irParaMinhaAgendaProfessor={nav.minha_agenda_professor}
             irParaMinhaAgendaEE={nav.minha_agenda_ee}
           />
@@ -93,25 +89,11 @@ function AppRoutes() {
       />
 
       <Route
-        path="/emprestimos"
-        element={
-          <EmprestimosPecas
-            irParaLanding={nav.landing}
-            irParaEmprestimos={nav.emprestimos_pecas}
-            irParaVendaFigurinos={nav.venda_figurinos}
-            irParaMinhaAgendaProfessor={nav.minha_agenda_professor}
-            irParaMinhaAgendaEE={nav.minha_agenda_ee}
-          />
-        }
-      />
-
-      <Route
-        path="/agenda"
+        path="/coaching"
         element={
           <MinhaAgendaProfessor
             irParaLanding={nav.landing}
-            irParaEmprestimos={nav.emprestimos_pecas}
-            irParaVendaFigurinos={nav.venda_figurinos}
+            irParaFigurinos={nav.figurinos}
             irParaMinhaAgendaProfessor={nav.minha_agenda_professor}
             irParaMinhaAgendaEE={nav.minha_agenda_ee}
           />

@@ -43,7 +43,7 @@ async function getCatalogoPecas() {
                                    ELSE LEN(base_emp.observacoes) 
                                END
                            )
-                       ELSE 'MBWay'
+                       ELSE ISNULL(NULLIF(base_emp.observacoes, ''), 'MBWay')
                    END AS metodos_pagamento
             FROM PECA p
             JOIN CATEGORIA_PECA cp ON p.CATEGORIA_PECAid_categoria_peca = cp.id_categoria_peca
@@ -153,23 +153,23 @@ async function registarNovaPeca(dadosPeca) {
       .input("DispEmp", sql.Bit, dadosPeca.isEmprestimo ? 1 : 0)
       .input("DispVenda", sql.Bit, dadosPeca.isVenda ? 1 : 0)
       .input("IdCat", sql.Int, dadosPeca.idCategoria || 1).query(`
-                INSERT INTO PECA (nome, descricao, tamanho, estado, localizacao, disponivel_para_emprestimo, disponivel_para_venda, data_registo, UTILIZADORid_utilizador, CATEGORIA_PECAid_categoria_peca)
-                OUTPUT INSERTED.id_peca
-                VALUES (@Nome, @Desc, @Tam, @Est, NULL, @DispEmp, @DispVenda, GETDATE(), @IdUtilizador, @IdCat);
-            `);
+        INSERT INTO PECA (nome, descricao, tamanho, estado, localizacao, disponivel_para_emprestimo, disponivel_para_venda, data_registo, UTILIZADORid_utilizador, CATEGORIA_PECAid_categoria_peca)
+        OUTPUT INSERTED.id_peca
+        VALUES (@Nome, @Desc, @Tam, @Est, NULL, @DispEmp, @DispVenda, GETDATE(), @IdUtilizador, @IdCat);
+    `);
 
     const idPeca = resultPeca.recordset[0].id_peca;
 
     if (dadosPeca.isEmprestimo) {
       const resultEmp = await transaction
         .request()
-        .input("Valor", sql.Decimal(10, 2), dadosPeca.valor_dia)
-        .input("Metodos", sql.VarChar(255), `Métodos: ${dadosPeca.metodosStr}`)
+        .input("Valor", sql.Decimal(10, 2), dadosPeca.valor_dia || 0)
+        .input("Metodos", sql.VarChar(255), dadosPeca.metodosStr || "MBWay") // Ajuste conforme necessário
         .input("IdUtilizador", sql.Int, dadosPeca.idUtilizador).query(`
-                    INSERT INTO EMPRESTIMO (valor, observacoes, estado, data_pedido, UTILIZADORid_utilizador)
-                    OUTPUT INSERTED.id_emprestimo
-                    VALUES (@Valor, @Metodos, 'Disponível', GETDATE(), @IdUtilizador);
-                `);
+            INSERT INTO EMPRESTIMO (valor, observacoes, estado, data_pedido, UTILIZADORid_utilizador)
+            OUTPUT INSERTED.id_emprestimo
+            VALUES (@Valor, @Metodos, 'Disponível', GETDATE(), @IdUtilizador);
+        `);
 
       const idEmprestimo = resultEmp.recordset[0].id_emprestimo;
 
@@ -327,21 +327,17 @@ async function atualizarDadosCompletosPeca(idPeca, dados) {
     await transaction
       .request()
       .input("IdPeca", sql.Int, idPeca)
-      .input("Nome", sql.VarChar(255), dados.nome)
-      .input("Desc", sql.VarChar(255), dados.descricao || "")
-      .input("Tam", sql.VarChar(50), dados.tamanho || "")
-      .input("Est", sql.VarChar(50), dados.estado || "Novo")
-      .input("DispVenda", sql.Bit, dados.disponivelVenda ? 1 : 0)
-      .input("DispEmp", sql.Bit, dados.disponivelEmprestimo ? 1 : 0).query(`
-        UPDATE PECA 
-        SET nome = @Nome, 
-            descricao = @Desc, 
-            tamanho = @Tam, 
-            estado = @Est, 
-            disponivel_para_venda = @DispVenda, 
-            disponivel_para_emprestimo = @DispEmp 
-        WHERE id_peca = @IdPeca
-      `);
+      .input("Preco", sql.Decimal(10, 2), dados.preco)
+      .input("NomePeca", sql.VarChar(255), dados.nome)
+      .input("Condicao", sql.VarChar(50), dados.estado)
+      .input("Metodos", sql.VarChar(255), dados.metodosStr).query(`
+    UPDATE VENDA_PECA 
+    SET preco = @Preco, 
+        nome_peca = @NomePeca, 
+        condicao = @Condicao, 
+        metodos_aceites = @Metodos -- Apenas substitua, sem CASE WHEN
+    WHERE PECAid_peca = @IdPeca AND estado IN ('Disponível', 'Disponivel')
+  `);
 
     if (dados.disponivelVenda && dados.preco > 0) {
       const vendaExiste = await transaction
@@ -358,11 +354,15 @@ async function atualizarDadosCompletosPeca(idPeca, dados) {
           .input("Preco", sql.Decimal(10, 2), dados.preco)
           .input("NomePeca", sql.VarChar(255), dados.nome)
           .input("Condicao", sql.VarChar(50), dados.estado)
-          .input("Metodos", sql.VarChar(255), dados.metodosStr).query(`
-            UPDATE VENDA_PECA 
-            SET preco = @Preco, nome_peca = @NomePeca, condicao = @Condicao, metodos_aceites = @Metodos
-            WHERE PECAid_peca = @IdPeca AND estado IN ('Disponível', 'Disponivel')
-          `);
+          .input("Metodos", sql.VarChar(255), dados.metodosStr || "MBWay")
+          .query(`
+    UPDATE VENDA_PECA 
+    SET preco = @Preco, 
+        nome_peca = @NomePeca, 
+        condicao = @Condicao, 
+        metodos_aceites = @Metodos
+    WHERE PECAid_peca = @IdPeca AND estado IN ('Disponível', 'Disponivel')
+  `);
       } else {
         await transaction
           .request()
@@ -389,7 +389,7 @@ async function atualizarDadosCompletosPeca(idPeca, dados) {
         .request()
         .input("IdPeca", sql.Int, idPeca)
         .query(
-          `SELECT TOP 1 [EMPRESIMO id_emprestimo] as id FROM EMPRESTIMO_ITEM WHERE PECAid_peca = @IdPeca;`,
+          `SELECT TOP 1 [EMPRESIMO id_emprestimo] as id FROM EMPRESTIMO_ITEM WHERE PECAid_peca = @IdPeca ORDER BY [EMPRESIMO id_emprestimo] ASC;`,
         );
 
       if (empExiste.recordset.length > 0) {
@@ -397,15 +397,17 @@ async function atualizarDadosCompletosPeca(idPeca, dados) {
         await transaction
           .request()
           .input("IdEmp", sql.Int, idEmprestimo)
-          .input("Valor", sql.Decimal(10, 2), dados.valor_dia || 0)
+          .input("NovoValor", sql.Decimal(10, 2), dados.valor_dia || 0) // Garante o novo valor
           .input(
             "MetodosEmp",
             sql.VarChar(255),
             `Métodos: ${dados.metodosStrEmprestimo || "MBWay"}`,
-          )
-          .query(
-            `UPDATE EMPRESTIMO SET valor = @Valor, observacoes = @MetodosEmp WHERE id_emprestimo = @IdEmp`,
-          );
+          ).query(`
+                UPDATE EMPRESTIMO 
+                SET valor = @NovoValor, 
+                    observacoes = @MetodosEmp 
+                WHERE id_emprestimo = @IdEmp
+            `);
       } else {
         const resultEmp = await transaction
           .request()
@@ -551,53 +553,51 @@ async function requisitarEmprestimo(dados) {
   await transaction.begin();
 
   try {
-    const result = await transaction
+    // 1. Descobrir a configuração base (preço e métodos)
+    const configBase = await transaction
       .request()
       .input("IdPeca", sql.Int, dados.idPeca)
       .query(
-        "SELECT TOP 1 [EMPRESIMO id_emprestimo] as id FROM EMPRESTIMO_ITEM WHERE PECAid_peca = @IdPeca",
+        "SELECT TOP 1 e.valor, e.observacoes FROM EMPRESTIMO_ITEM ei JOIN EMPRESTIMO e ON ei.[EMPRESIMO id_emprestimo] = e.id_emprestimo WHERE ei.PECAid_peca = @IdPeca ORDER BY e.id_emprestimo ASC",
       );
 
-    if (result.recordset.length === 0) {
+    if (configBase.recordset.length === 0) {
       throw new Error(
         "Configuração de empréstimo não encontrada para esta peça.",
       );
     }
 
-    const idEmprestimo = result.recordset[0].id;
-
+    const valorDia = configBase.recordset[0].valor || 0;
     let obsAppend = dados.observacoes
       ? ` | Notas Pedido: ${dados.observacoes}`
       : "";
 
-    await transaction
+    // 2. Criar um NOVO pedido de empréstimo (INSERT em vez de UPDATE)
+    const resultEmp = await transaction
       .request()
-      .input("IdEmp", sql.Int, idEmprestimo)
+      .input("Valor", sql.Decimal(10, 2), valorDia)
+      .input("Obs", sql.VarChar(255), obsAppend)
       .input("IdUser", sql.Int, dados.idUtilizador)
       .input("Inicio", sql.Date, dados.dataInicio)
       .input("Fim", sql.Date, dados.dataFim)
-      .input("Obs", sql.VarChar(255), obsAppend)
       .input("Metodo", sql.VarChar(50), dados.metodoPagamento || "MBWay")
       .query(`
-                UPDATE EMPRESTIMO 
-                SET UTILIZADORid_utilizador = @IdUser, 
-                    data_inicio = @Inicio, 
-                    data_fim = @Fim, 
-                    estado = 'Pendente',
-                    metodo_pagamento = @Metodo,
-                    observacoes = ISNULL(observacoes, '') + @Obs
-                WHERE id_emprestimo = @IdEmp
-            `);
+        INSERT INTO EMPRESTIMO (valor, observacoes, estado, data_pedido, data_inicio, data_fim, UTILIZADORid_utilizador, metodo_pagamento)
+        OUTPUT INSERTED.id_emprestimo
+        VALUES (@Valor, @Obs, 'Pendente', GETDATE(), @Inicio, @Fim, @IdUser, @Metodo);
+      `);
 
+    const novoIdEmprestimo = resultEmp.recordset[0].id_emprestimo;
+
+    // 3. Vincular o novo pedido à peça na tabela EMPRESTIMO_ITEM
     await transaction
       .request()
-      .input("IdEmp", sql.Int, idEmprestimo)
+      .input("IdEmp", sql.Int, novoIdEmprestimo)
       .input("IdPeca", sql.Int, dados.idPeca)
       .input("EstadoEntrega", sql.VarChar(50), dados.estadoEntrega).query(`
-                UPDATE EMPRESTIMO_ITEM 
-                SET estado_entrega = @EstadoEntrega 
-                WHERE [EMPRESIMO id_emprestimo] = @IdEmp AND PECAid_peca = @IdPeca
-            `);
+        INSERT INTO EMPRESTIMO_ITEM (PECAid_peca, [EMPRESIMO id_emprestimo], estado_entrega) 
+        VALUES (@IdPeca, @IdEmp, @EstadoEntrega)
+      `);
 
     await transaction.commit();
   } catch (error) {
@@ -939,6 +939,47 @@ async function registarFotosPeca(idPeca, fotosBase64) {
   }
 }
 
+async function getPedidosEmprestimoPeca(idPeca) {
+  try {
+    const pool = await poolPromise;
+    const result = await pool.request().input("IdPeca", sql.Int, idPeca).query(`
+        SELECT 
+          e.id_emprestimo as id, 
+          e.data_inicio, 
+          e.data_fim, 
+          e.estado, 
+          u.nome as requisitante,
+          e.valor,             -- <--- Adicionado
+          e.metodo_pagamento   -- <--- Adicionado
+        FROM EMPRESTIMO e
+        JOIN EMPRESTIMO_ITEM ei ON e.id_emprestimo = ei.[EMPRESIMO id_emprestimo]
+        JOIN UTILIZADOR u ON e.UTILIZADORid_utilizador = u.id_utilizador
+        WHERE ei.PECAid_peca = @IdPeca AND e.estado != 'Disponível' AND e.estado != 'Config Inicial'
+        ORDER BY e.data_inicio ASC
+      `);
+    return result.recordset;
+  } catch (error) {
+    throw error;
+  }
+}
+
+async function atualizarEstadoReserva(idEmprestimo, novoEstado) {
+  try {
+    const pool = await poolPromise;
+    const result = await pool
+      .request()
+      .input("IdEmp", sql.Int, idEmprestimo)
+      .input("Estado", sql.VarChar(50), novoEstado)
+      .query(
+        "UPDATE EMPRESTIMO SET estado = @Estado WHERE id_emprestimo = @IdEmp",
+      );
+
+    return result.rowsAffected[0] > 0;
+  } catch (error) {
+    throw error;
+  }
+}
+
 /**
  * @module inventarioModel
  */
@@ -959,4 +1000,6 @@ module.exports = {
   atualizarFotosPeca,
   registarFotosPeca,
   registarConclusaoVenda,
+  getPedidosEmprestimoPeca,
+  atualizarEstadoReserva,
 };

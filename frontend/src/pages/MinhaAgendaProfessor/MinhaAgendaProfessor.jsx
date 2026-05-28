@@ -118,6 +118,38 @@ function abrevDiaSemana(diaSemana) {
   return map[Number(diaSemana)];
 }
 
+function estadoPedidoVisual(p) {
+  const estado = p?.estado || "";
+  const estadoCoaching = p?.estado_coaching || null;
+
+  if (estado === "Aprovado") {
+    if (estadoCoaching === "Cancelado") {
+      return { label: "Cancelado", tone: "rejeitado" };
+    }
+    return { label: estadoCoaching || "Agendado", tone: "aprovado" };
+  }
+
+  if (estado === "Cancelado") {
+    return { label: "Cancelado", tone: "rejeitado" };
+  }
+  if (estado === "Rejeitado" || estado === "Rejeitado Coordenação") {
+    return {
+      label: "Rejeitado pela Coordenação",
+      tone: "rejeitado",
+    };
+  }
+  if (estado === "Rejeitado Professor") {
+    return { label: "Rejeitado pelo Professor", tone: "rejeitado" };
+  }
+  if (estado === "Pendente Professor" || estado === "Pendente") {
+    return { label: "Aguarda Professor", tone: "pendente" };
+  }
+  if (estado === "Pendente Coordenação") {
+    return { label: "Aguarda Coordenação", tone: "pendente" };
+  }
+  return { label: estado || "—", tone: "pendente" };
+}
+
 function horaParaSlot(horaInicio) {
   const hhmm = formatHoraCurta(horaInicio);
   if (!hhmm) return null;
@@ -229,9 +261,12 @@ export default function MinhaAgendaProfessor({
     aula: null,
     metodoPagamento: "Numerário",
   });
+  const [emailBusca, setEmailBusca] = useState("");
+  const [isBuscandoEmail, setIsBuscandoEmail] = useState(false);
+  const [alunosExternos, setAlunosExternos] = useState([]);
+  const [alertaExcl, setAlertaExcl] = useState({ isOpen: false, message: "" });
 
   const [globalToast, setGlobalToast] = useState(null);
-
   const [alertModal, setAlertModal] = useState({ isOpen: false, mensagem: "" });
 
   const [isPrecoModalOpen, setIsPrecoModalOpen] = useState(false);
@@ -280,6 +315,13 @@ export default function MinhaAgendaProfessor({
   ];
   const dias = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
 
+  const pedidosParaResponder = useMemo(() => {
+    return pedidosPendentesProf.filter((p) => {
+      const estLow = String(p.estado || "").toLowerCase();
+      return estLow === "pendente professor" || estLow === "pendente";
+    });
+  }, [pedidosPendentesProf]);
+
   const isPerfilEE = useMemo(() => {
     const perfil = String(utilizador?.perfil || "").toLowerCase();
     if (perfil.includes("ee") || perfil.includes("encarregado")) return true;
@@ -294,6 +336,22 @@ export default function MinhaAgendaProfessor({
       const nome = String(p?.nome || p?.perfil || "").toLowerCase();
       return nome.includes("ee") || nome.includes("encarregado");
     });
+  }, [utilizador]);
+
+  const carregarPedidosPendentesProf = async () => {
+    if (utilizador?.perfil !== "Professor") return;
+    try {
+      const data = await apiAuthFetch(
+        "/api/coaching/professor/pedidos-pendentes",
+      );
+      setPedidosPendentesProf(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error("Erro ao carregar pedidos pendentes:", error);
+    }
+  };
+
+  useEffect(() => {
+    carregarPedidosPendentesProf();
   }, [utilizador]);
 
   const isAgendaEE = modo === "ee" || isPerfilEE;
@@ -443,24 +501,17 @@ export default function MinhaAgendaProfessor({
   async function carregarAgendaSemana() {
     setIsLoadingAgenda(true);
     setErroAgenda("");
-    const dataInicio = formatYMD(weekStart);
-    const dataFim = formatYMD(addDays(weekStart, 6));
 
     try {
       if (isAgendaEE) {
-        const meusPedidos = await apiAuthFetch(
-          `/api/coaching/pedidos/meus?dataInicio=${dataInicio}&dataFim=${dataFim}`,
-        );
+        const meusPedidos = await apiAuthFetch(`/api/coaching/pedidos/meus`);
         setPedidosPendentesProf(Array.isArray(meusPedidos) ? meusPedidos : []);
         setAgenda([]);
       } else {
+        // Carrega toda a agenda e todos os pedidos globalmente
         const [dataAgenda, dataPedidos] = await Promise.all([
-          apiAuthFetch(
-            `/api/coaching/agenda?dataInicio=${dataInicio}&dataFim=${dataFim}`,
-          ),
-          apiAuthFetch(
-            `/api/coaching/pedidos/atribuidos-professor?dataInicio=${dataInicio}&dataFim=${dataFim}`,
-          ).catch(() => []),
+          apiAuthFetch(`/api/coaching/agenda`),
+          apiAuthFetch(`/api/coaching/professor/pedidos-pendentes`),
         ]);
         setAgenda(Array.isArray(dataAgenda) ? dataAgenda : []);
         setPedidosPendentesProf(Array.isArray(dataPedidos) ? dataPedidos : []);
@@ -479,7 +530,7 @@ export default function MinhaAgendaProfessor({
     return () => {
       isMounted = false;
     };
-  }, [weekStart, isAgendaEE, utilizador]);
+  }, [isAgendaEE, utilizador]);
 
   const resumoMensal = useMemo(() => {
     const aulasDadasNoPeriodo = agenda.filter((a) => {
@@ -553,6 +604,8 @@ export default function MinhaAgendaProfessor({
     }
 
     for (const row of agenda) {
+      if (!dentroSemana(row.data_aula)) continue;
+
       const diaKey = diaSemanaAbrevData(row.data_aula);
       const horaSlot = horaParaSlot(row.hora_inicio);
       if (!diaKey || !horaSlot) continue;
@@ -596,8 +649,8 @@ export default function MinhaAgendaProfessor({
           nome_professor: isAgendado ? p.nome_professor_agendado : p.professor,
         });
       } else {
-        const est = String(p.estado || "").toLowerCase();
-        if (est !== "pendente") continue;
+        const estLow = String(p.estado || "").toLowerCase();
+        if (!estLow.includes("pendente")) continue;
 
         if (!dentroSemana(p.data_aula_pretendida)) continue;
 
@@ -640,7 +693,9 @@ export default function MinhaAgendaProfessor({
 
   const aulasParaValidar = useMemo(() => {
     return agenda.filter(
-      (a) => a.estado === "Agendado" || a.estado === "Confirmado",
+      (a) =>
+        (a.estado === "Agendado" || a.estado === "Confirmado") &&
+        coachingJaTerminou(a.data_aula, a.hora_inicio, a.duracao_minutos),
     );
   }, [agenda]);
 
@@ -680,7 +735,12 @@ export default function MinhaAgendaProfessor({
 
   const aulasAguardandoCoordenacao = useMemo(() => {
     return pedidosPendentesProf
-      .filter((p) => p.estado === "Pendente")
+      .filter(
+        (p) =>
+          p.estado === "Pendente" ||
+          p.estado === "Pendente Professor" ||
+          p.estado === "Pendente Coordenação",
+      )
       .map((p) => ({
         ...p,
         isPedido: true,
@@ -700,6 +760,33 @@ export default function MinhaAgendaProfessor({
     const fim = addDays(weekStart, 6);
     return `${formatDM(inicio)} — ${formatDM(fim)}`;
   }, [weekStart]);
+
+  const handleResponderPedido = async (idPedido, aceitar) => {
+    try {
+      await apiAuthFetch(
+        `/api/coaching/professor/pedidos/${idPedido}/responder`,
+        {
+          method: "PUT",
+          body: { aceitar },
+        },
+      );
+
+      setAlertaExcl({
+        isOpen: true,
+        message: `O pedido foi ${aceitar ? "aceite e enviado para a coordenação" : "rejeitado"}.`,
+      });
+
+      carregarPedidosPendentesProf();
+      carregarAgendaSemana();
+    } catch (err) {
+      setAlertaExcl({
+        isOpen: true,
+        message:
+          err?.message ||
+          "Ocorreu um erro ao processar a resposta. Tenta novamente.",
+      });
+    }
+  };
 
   const guardarDisponibilidade = async () => {
     setErroDispo("");
@@ -776,6 +863,64 @@ export default function MinhaAgendaProfessor({
         mensagem: e?.message || "Não foi possível validar esta aula.",
       });
     }
+  };
+
+  const buscarAlunoPorEmail = async (e) => {
+    if (e) e.preventDefault();
+    if (!emailBusca.trim()) return;
+
+    setIsBuscandoEmail(true);
+    try {
+      const url = `/api/coaching/alunos/procurar?email=${encodeURIComponent(emailBusca.trim())}`;
+      const data = await apiAuthFetch(url);
+
+      if (data && data.length > 0) {
+        const novoAluno = data[0];
+
+        if (
+          alunosExternos.find((a) =>
+            a.id_aluno === Array.isArray(data)
+              ? novoAluno.id_aluno
+              : data.id_aluno,
+          ) ||
+          pedidoForm.alunosIds.includes(novoAluno.id_aluno)
+        ) {
+          setAlertaExcl({
+            isOpen: true,
+            message: "Aviso: Este aluno já está selecionado na lista.",
+          });
+        } else {
+          setAlunosExternos([...alunosExternos, novoAluno]);
+          setPedidoForm((prev) => ({
+            ...prev,
+            alunosIds: [...prev.alunosIds, novoAluno.id_aluno],
+          }));
+          setEmailBusca("");
+        }
+      } else {
+        setAlertaExcl({
+          isOpen: true,
+          message: "Não foi encontrado nenhum aluno associado a este email.",
+        });
+      }
+    } catch (err) {
+      console.error(err);
+      setAlertaExcl({
+        isOpen: true,
+        message:
+          "Nenhum Encarregado de Educação encontrado com este email. Confirme se o email está correto.",
+      });
+    } finally {
+      setIsBuscandoEmail(false);
+    }
+  };
+
+  const removerAlunoExterno = (id) => {
+    setAlunosExternos(alunosExternos.filter((a) => a.id_aluno !== id));
+    setPedidoForm((prev) => ({
+      ...prev,
+      alunosIds: prev.alunosIds.filter((idx) => idx !== id),
+    }));
   };
 
   const carregarPrecoEstimado = async ({
@@ -1023,7 +1168,7 @@ export default function MinhaAgendaProfessor({
                 }
               }}
             >
-              Minha agenda
+              Coaching
             </a>
           </li>
           <li>
@@ -1052,7 +1197,6 @@ export default function MinhaAgendaProfessor({
 
       <div className="dashboard-wrapper" id="agenda">
         <main className="calendar-container">
-          {/* BARRA DE NAVEGAÇÃO DA SEMANA */}
           <div className="calendar-nav-bar">
             <button
               className="btn-today"
@@ -1078,7 +1222,6 @@ export default function MinhaAgendaProfessor({
             </button>
           </div>
 
-          {/* CABEÇALHO COM OS DIAS DA SEMANA E DATAS */}
           <div className="calendar-days-sticky">
             <div className="time-corner"></div>
             {dias.map((dia, idx) => {
@@ -1155,8 +1298,12 @@ export default function MinhaAgendaProfessor({
                           }
 
                           if (row.origem === "pedido_pendente") {
-                            const isRejeitado =
-                              String(row.estado).toLowerCase() === "rejeitado";
+                            const estLow = String(row.estado).toLowerCase();
+                            const isRejeitado = estLow.includes("rejeitado");
+                            const isAguardaProf =
+                              estLow === "pendente professor" ||
+                              estLow === "pendente";
+
                             return (
                               <div
                                 key={`pend-${rIdx}`}
@@ -1165,7 +1312,9 @@ export default function MinhaAgendaProfessor({
                                 title={
                                   isRejeitado
                                     ? "Este pedido foi rejeitado"
-                                    : "A aguardar aprovação da coordenação"
+                                    : isAguardaProf
+                                      ? "A aguardar resposta do professor"
+                                      : "A aguardar aprovação da coordenação"
                                 }
                               >
                                 <div className="event-info">
@@ -1180,7 +1329,9 @@ export default function MinhaAgendaProfessor({
                                   >
                                     {isRejeitado
                                       ? "Rejeitado"
-                                      : "A aguardar..."}
+                                      : isAguardaProf
+                                        ? "Aguarda Professor"
+                                        : "Aguarda Coordenação"}
                                   </span>
                                   <h4 className="event-title">
                                     {row.modalidade} ({row.formato_aula})
@@ -1404,39 +1555,196 @@ export default function MinhaAgendaProfessor({
                 </select>
               </div>
 
-              <div className="form-group">
-                <label>Selecionar Alunos da Minha Conta</label>
-                {isLoadingAlunosPedido ? (
-                  <div className="form-control loading-alunos">
-                    A carregar alunos...
+              <div className="form-group" style={{ marginTop: "25px" }}>
+                <label
+                  style={{
+                    fontSize: "1.05rem",
+                    color: "#2a2724",
+                    marginBottom: "15px",
+                    display: "block",
+                  }}
+                >
+                  Participantes da Aula ({precoInfo.formatoAula})
+                </label>
+
+                <div style={{ marginBottom: "25px" }}>
+                  <span
+                    style={{
+                      fontSize: "0.8rem",
+                      color: "#8a8480",
+                      display: "block",
+                      marginBottom: "10px",
+                      fontWeight: "700",
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    Meus Educandos
+                  </span>
+                  <div
+                    style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}
+                  >
+                    {alunosPedido.map((a) => {
+                      const selecionado = pedidoForm.alunosIds.includes(
+                        a.id_aluno,
+                      );
+                      return (
+                        <div
+                          key={a.id_aluno}
+                          onClick={() => {
+                            const ids = selecionado
+                              ? pedidoForm.alunosIds.filter(
+                                  (i) => i !== a.id_aluno,
+                                )
+                              : [...pedidoForm.alunosIds, a.id_aluno];
+                            setPedidoForm({ ...pedidoForm, alunosIds: ids });
+                          }}
+                          style={{
+                            padding: "10px 18px",
+                            borderRadius: "25px",
+                            cursor: "pointer",
+                            fontSize: "0.9rem",
+                            fontWeight: "600",
+                            border: selecionado
+                              ? "2px solid #b38b59"
+                              : "1px solid #dcd7ce",
+                            backgroundColor: selecionado ? "#fdfaf5" : "#fff",
+                            color: selecionado ? "#b38b59" : "#5a5450",
+                            transition: "all 0.2s ease",
+                            boxShadow: selecionado
+                              ? "0 3px 8px rgba(179, 139, 89, 0.15)"
+                              : "none",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "6px",
+                          }}
+                        >
+                          <span style={{ fontSize: "1.1rem" }}>
+                            {selecionado ? "" : "+"}
+                          </span>{" "}
+                          {a.nome_aluno}
+                        </div>
+                      );
+                    })}
                   </div>
-                ) : alunosPedido.length === 0 ? (
-                  <div className="empty-dispo warning-alunos">
-                    <strong>Aviso:</strong> Não tens educandos associados à tua
-                    conta.
-                    <br />
-                    Não é possível requisitar coaching.
-                  </div>
-                ) : (
-                  <>
-                    <select
-                      className="form-control student-multi-select"
-                      multiple
-                      value={(pedidoForm.alunosIds || []).map(String)}
-                      onChange={(e) => {
-                        const selected = Array.from(
-                          e.target.selectedOptions,
-                        ).map((o) => Number(o.value));
-                        setPedidoForm((p) => ({ ...p, alunosIds: selected }));
+                </div>
+
+                {precoInfo.formatoAula !== "Solo" && (
+                  <div
+                    style={{
+                      background: "#fdfaf5",
+                      padding: "20px",
+                      borderRadius: "12px",
+                      border: "1px solid #e0dcd2",
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontSize: "0.8rem",
+                        color: "#8a8480",
+                        display: "block",
+                        marginBottom: "12px",
+                        fontWeight: "700",
+                        textTransform: "uppercase",
                       }}
                     >
-                      {alunosPedido.map((a) => (
-                        <option key={a.id_aluno} value={a.id_aluno}>
-                          {a.nome_aluno}
-                        </option>
-                      ))}
-                    </select>
-                  </>
+                      Convidar Colegas
+                    </span>
+
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: "10px",
+                        marginBottom: "15px",
+                      }}
+                    >
+                      <input
+                        type="email"
+                        className="form-control"
+                        placeholder="Email do Encarregado de Educação..."
+                        value={emailBusca}
+                        onChange={(e) => setEmailBusca(e.target.value)}
+                        onKeyDown={(e) =>
+                          e.key === "Enter" && buscarAlunoPorEmail(e)
+                        }
+                        disabled={isBuscandoEmail}
+                        style={{
+                          flex: 1,
+                          padding: "12px 15px",
+                          borderRadius: "8px",
+                        }}
+                      />
+                      <button
+                        type="button"
+                        className="btn-dark"
+                        onClick={buscarAlunoPorEmail}
+                        disabled={isBuscandoEmail}
+                        style={{ padding: "0 24px", borderRadius: "8px" }}
+                      >
+                        {isBuscandoEmail ? "..." : "Adicionar"}
+                      </button>
+                    </div>
+
+                    {alunosExternos.length > 0 && (
+                      <div
+                        style={{
+                          display: "flex",
+                          gap: "10px",
+                          flexWrap: "wrap",
+                          marginTop: "12px",
+                        }}
+                      >
+                        {alunosExternos.map((al) => (
+                          <div
+                            key={`ext-${al.id_aluno}`}
+                            style={{
+                              padding: "10px 18px",
+                              borderRadius: "25px",
+                              fontSize: "0.9rem",
+                              fontWeight: "600",
+                              border: "2px solid #b38b59",
+                              backgroundColor: "#fdfaf5",
+                              color: "#b38b59",
+                              boxShadow: "0 3px 8px rgba(179, 139, 89, 0.15)",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "8px",
+                            }}
+                            title={`Convidado por email — EE: ${al.nome_ee}`}
+                          >
+                            <span>
+                              {al.nome_aluno}
+                              <small
+                                style={{
+                                  opacity: 0.65,
+                                  fontWeight: "normal",
+                                  marginLeft: "6px",
+                                }}
+                              >
+                                (de {al.nome_ee})
+                              </small>
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => removerAlunoExterno(al.id_aluno)}
+                              style={{
+                                background: "none",
+                                border: "none",
+                                color: "#b38b59",
+                                cursor: "pointer",
+                                fontWeight: "bold",
+                                fontSize: "1.1rem",
+                                padding: 0,
+                                lineHeight: 1,
+                              }}
+                              title="Remover participante"
+                            >
+                              &times;
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
 
@@ -1467,7 +1775,6 @@ export default function MinhaAgendaProfessor({
           </div>
         )}
 
-        {/* ALERTA MODAL (SUCESSO OU ERRO) */}
         {alertModal.isOpen && (
           <div
             className="modal-overlay modal-overlay-high-z"
@@ -1489,10 +1796,8 @@ export default function MinhaAgendaProfessor({
         )}
 
         <aside className="sidebar">
-          {/* ORDENAÇÃO PARA O PROFESSOR */}
           {!isAgendaEE && (
             <>
-              {/* 1. PAINEL DE ATIVIDADE */}
               <div className="sidebar-card activity-panel-card">
                 <h3>Painel de Atividade</h3>
                 <p>
@@ -1500,10 +1805,25 @@ export default function MinhaAgendaProfessor({
                   consulta as próximas marcações.
                 </p>
 
+                {/* Alerta 1: Aulas para validar */}
                 {aulasParaValidar.length > 0 && (
                   <div className="alert-badge">
                     Tens {aulasParaValidar.length} aula(s) para confirmar a
                     execução!
+                  </div>
+                )}
+
+                {/* Alerta 2: Pedidos para aceitar/rejeitar */}
+                {pedidosParaResponder.length > 0 && (
+                  <div
+                    className="alert-badge"
+                    style={{
+                      backgroundColor: "#e6a23c",
+                      boxShadow: "0 4px 10px rgba(230, 162, 60, 0.25)",
+                    }}
+                  >
+                    Tens {pedidosParaResponder.length} pedido(s) de Coaching
+                    para responder!
                   </div>
                 )}
 
@@ -1515,7 +1835,6 @@ export default function MinhaAgendaProfessor({
                 </button>
               </div>
 
-              {/* 2. MINHA DISPONIBILIDADE */}
               <div className="sidebar-card">
                 <div className="sidebar-header-flex">
                   <h3>Minha Disponibilidade</h3>
@@ -1551,10 +1870,8 @@ export default function MinhaAgendaProfessor({
             </>
           )}
 
-          {/* ORDENAÇÃO PARA O EE */}
           {isAgendaEE && (
             <>
-              {/* 1. INFORMAÇÃO */}
               <div className="sidebar-card info-card">
                 <h3>Informação</h3>
                 <p>
@@ -1563,35 +1880,18 @@ export default function MinhaAgendaProfessor({
                 </p>
               </div>
 
-              {/* 3. OS MEUS PEDIDOS */}
               <div className="sidebar-card">
                 <div className="sidebar-header-flex">
                   <h3 className="m-0">Os Meus Pedidos</h3>
                 </div>
-                <div
-                  className="dispo-list-hud"
-                  className="dispo-list-hud dispo-list-hud--tall"
-                >
+                <div className="dispo-list-hud dispo-list-hud--tall">
                   {pedidosPendentesProf.length === 0 ? (
                     <div className="empty-dispo">
                       Ainda não tem pedidos de coaching.
                     </div>
                   ) : (
                     pedidosPendentesProf.map((p) => {
-                      let badgeClass = "pendente";
-                      let badgeText = "Pendente";
-
-                      if (p.estado === "Aprovado") {
-                        badgeClass = "aprovado";
-                        badgeText = p.estado_coaching || "Agendado";
-                        if (badgeText === "Cancelado") badgeClass = "rejeitado";
-                      } else if (
-                        p.estado === "Rejeitado" ||
-                        p.estado === "Cancelado"
-                      ) {
-                        badgeClass = "rejeitado";
-                        badgeText = p.estado;
-                      }
+                      const vis = estadoPedidoVisual(p);
 
                       const diaReal =
                         p.estado === "Aprovado" && p.data_aula_coaching
@@ -1605,18 +1905,73 @@ export default function MinhaAgendaProfessor({
                       return (
                         <div
                           key={p.id_pedido_coaching}
-                          className="pedido-item-simples"
+                          className={`pedido-card ${p.convidado === 1 ? "pedido-card--convidado" : ""}`}
                         >
-                          <div className="pedido-simples-info">
-                            <strong>{p.modalidade}</strong> ({p.formato_aula})
-                            <br />
-                            <span className="pedido-date-text">
-                              {formatDM(diaReal)} às {formatHoraCurta(horaReal)}
+                          <div className="pedido-card__badge-row">
+                            <span
+                              className={`badge-simples badge-${vis.tone}`}
+                              title={vis.label}
+                            >
+                              <span className="pedido-card__badge-icon">
+                                {vis.icon}
+                              </span>
+                              <span className="pedido-card__badge-label">
+                                {vis.label}
+                              </span>
                             </span>
                           </div>
-                          <span className={`badge-simples badge-${badgeClass}`}>
-                            {badgeText}
-                          </span>
+
+                          <div className="pedido-card__title-block">
+                            <div className="pedido-card__title">
+                              {p.modalidade}
+                              <span className="pedido-card__formato">
+                                · {p.formato_aula}
+                              </span>
+                            </div>
+                            <div className="pedido-card__datetime">
+                              {formatDM(diaReal)} · {formatHoraCurta(horaReal)}
+                            </div>
+                          </div>
+
+                          {vis.descricao && (
+                            <div className="pedido-card__descricao">
+                              {vis.descricao}
+                            </div>
+                          )}
+
+                          {p.convidado === 1 && p.nome_submissor && (
+                            <div className="pedido-card__convite">
+                              Convite de {p.nome_submissor}
+                            </div>
+                          )}
+
+                          {(p.alunos ||
+                            p.professor ||
+                            p.nome_professor_agendado) && (
+                            <div className="pedido-card__detalhes">
+                              {p.alunos && (
+                                <>
+                                  <span className="pedido-card__label">
+                                    Participantes
+                                  </span>
+                                  <span className="pedido-card__valor">
+                                    {p.alunos}
+                                  </span>
+                                </>
+                              )}
+
+                              {(p.professor || p.nome_professor_agendado) && (
+                                <>
+                                  <span className="pedido-card__label">
+                                    Professor
+                                  </span>
+                                  <span className="pedido-card__valor">
+                                    {p.nome_professor_agendado || p.professor}
+                                  </span>
+                                </>
+                              )}
+                            </div>
+                          )}
                         </div>
                       );
                     })
@@ -1628,7 +1983,6 @@ export default function MinhaAgendaProfessor({
         </aside>
       </div>
 
-      {/* MODAL: GERIR DISPONIBILIDADE */}
       {!isAgendaEE && isDispoModalOpen && (
         <div
           className="modal-overlay"
@@ -1642,7 +1996,6 @@ export default function MinhaAgendaProfessor({
                 Coaching.
               </p>
 
-              {/* Aviso Automático de Modalidades */}
               {minhasModalidades.length > 0 && (
                 <div className="dispo-modal-info">
                   <strong className="text-gold">As tuas disciplinas: </strong>
@@ -1759,7 +2112,6 @@ export default function MinhaAgendaProfessor({
         </div>
       )}
 
-      {/* MODAL: PAINEL DE ATIVIDADE DO PROFESSOR */}
       {isProfMenuOpen && (
         <div className="modal-overlay" onClick={() => setIsProfMenuOpen(false)}>
           <div
@@ -1767,81 +2119,141 @@ export default function MinhaAgendaProfessor({
             onClick={(e) => e.stopPropagation()}
           >
             <div className="modal-header">
-              <h2>Painel de Atividade</h2>
-              <p>O teu centro de operações da Viva D'arte</p>
+              <h2>Painel de Gestão</h2>
             </div>
 
             <div className="prof-dashboard-grid">
-              {/* COLUNA ESQUERDA: RESUMO E VALIDAÇÕES */}
+              {/* ========================================== */}
+              {/* COLUNA ESQUERDA: PEDIDOS E VALIDAÇÕES */}
+              {/* ========================================== */}
               <div className="prof-dashboard-col">
-                {/* SECÇÃO 1: RESUMO FINANCEIRO COM FILTROS */}
+                {/* 1. PEDIDOS DE COACHING */}
                 <div className="prof-panel-section">
-                  <div className="resumo-header">
-                    <div className="resumo-title-wrap">
-                      <svg
-                        viewBox="0 0 24 24"
-                        className="resumo-icon"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                      >
-                        <path d="M21 21H3V3m18 8l-6-6-4 4-4-4" />
-                      </svg>
-                      <h3 className="resumo-title">Resumo Financeiro</h3>
-                    </div>
-
-                    <div className="resumo-filters">
-                      {/* Seletor de Mês */}
-                      <select
-                        value={selectedMonth}
-                        onChange={(e) =>
-                          setSelectedMonth(Number(e.target.value))
-                        }
-                        className="filter-select"
-                      >
-                        {MESES.map((mes, idx) => (
-                          <option key={idx} value={idx}>
-                            {mes}
-                          </option>
-                        ))}
-                      </select>
-
-                      {/* Seletor de Ano Letivo  */}
-                      <select
-                        value={selectedAnoLetivoId}
-                        onChange={(e) => setSelectedAnoLetivoId(e.target.value)}
-                        className="filter-select"
-                      >
-                        <option value="">Ano Letivo</option>
-                        {anosLetivosPedido.map((ano) => (
-                          <option
-                            key={ano.id_ano_letivo}
-                            value={ano.id_ano_letivo}
-                          >
-                            {ano.ano}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className="prof-stat-cards">
-                    <div className="prof-stat-card">
-                      <span>Aulas Dadas</span>
-                      <strong>{resumoMensal.aulasDadas}</strong>
-                    </div>
-                    <div
-                      className="prof-stat-card highlight prof-stat-card--clickable"
-                      onClick={() => setIsDetalhesModalOpen(true)}
+                  <h3>
+                    <svg
+                      viewBox="0 0 24 24"
+                      className="section-icon section-icon--warning"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
                     >
-                      <span>A Receber</span>
-                      <strong>{resumoMensal.aReceber.toFixed(2)}€</strong>
-                      <span className="stat-card-hint">Ver detalhes ↗</span>
+                      <circle cx="12" cy="12" r="10" />
+                      <line x1="12" y1="8" x2="12" y2="12" />
+                      <line x1="12" y1="16" x2="12.01" y2="16" />
+                    </svg>
+                    Pedidos de Coaching
+                  </h3>
+
+                  {aulasAguardandoCoordenacao.length === 0 ? (
+                    <div className="empty-state-text">
+                      Nada pendente ou a aguardar revisão.
                     </div>
-                  </div>
+                  ) : (
+                    aulasAguardandoCoordenacao.map((item, idx) => {
+                      const estLow = String(item.estado || "").toLowerCase();
+                      const aguardaProf =
+                        estLow === "pendente professor" ||
+                        estLow === "pendente";
+
+                      return (
+                        <div
+                          key={idx}
+                          className={`aula-item-modern ${
+                            aguardaProf
+                              ? "aula-item-modern--needs-action"
+                              : "aula-item-modern--pending-ee"
+                          }`}
+                        >
+                          <div className="aula-item-badge-row">
+                            {aguardaProf ? (
+                              <span className="badge-simples badge-pendente">
+                                Aguarda a tua decisão
+                              </span>
+                            ) : (
+                              <span className="badge-simples badge-aprovado">
+                                Aceite — Aguarda Coordenação
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="aula-item-title-block">
+                            <div className="aula-item-title">
+                              {item.modalidade}
+                              <span className="aula-item-formato">
+                                · {item.formato_aula}
+                              </span>
+                            </div>
+                            <div className="aula-item-datetime">
+                              {formatDM(item.data_aula)} ·{" "}
+                              {formatHoraCurta(item.hora_inicio)}
+                            </div>
+                          </div>
+
+                          {(item.alunos || item.nome_ee) && (
+                            <div className="aula-item-detalhes">
+                              {item.alunos && (
+                                <>
+                                  <span className="aula-item-label">
+                                    Participantes
+                                  </span>
+                                  <span className="aula-item-valor">
+                                    {item.alunos}
+                                  </span>
+                                </>
+                              )}
+                              {item.nome_ee && (
+                                <>
+                                  <span className="aula-item-label">
+                                    Encarregado
+                                  </span>
+                                  <span className="aula-item-valor">
+                                    {item.nome_ee}
+                                  </span>
+                                </>
+                              )}
+                            </div>
+                          )}
+
+                          {aguardaProf ? (
+                            <div className="pending-action-buttons">
+                              <button
+                                type="button"
+                                className="btn-gold"
+                                onClick={() =>
+                                  handleResponderPedido(
+                                    item.id_pedido_coaching,
+                                    true,
+                                  )
+                                }
+                              >
+                                Aceitar
+                              </button>
+                              <button
+                                type="button"
+                                className="btn-outline btn-outline--danger"
+                                onClick={() =>
+                                  handleResponderPedido(
+                                    item.id_pedido_coaching,
+                                    false,
+                                  )
+                                }
+                              >
+                                Rejeitar
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="pending-warning-text">
+                              Aceitaste este pedido. A aguardar aprovação da
+                              coordenação…
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })
+                  )}
                 </div>
 
-                {/* SECÇÃO 2: CONFIRMAR EXECUÇÃO */}
+                {/* 2. CONFIRMAR EXECUÇÃO */}
                 <div className="prof-panel-section prof-panel-section--mt">
                   <h3>
                     <svg
@@ -1929,11 +2341,12 @@ export default function MinhaAgendaProfessor({
                   )}
                 </div>
               </div>
-              {/* FINAL DA COLUNA ESQUERDA */}
 
-              {/* COLUNA DIREITA: PRÓXIMAS AULAS E AGUARDANDO COORDENAÇÃO */}
+              {/* ========================================== */}
+              {/* COLUNA DIREITA: PRÓXIMAS AULAS E RESUMO */}
+              {/* ========================================== */}
               <div className="prof-dashboard-col">
-                {/* PRÓXIMAS MARCAÇÕES */}
+                {/* 3. PRÓXIMAS MARCAÇÕES */}
                 <div className="prof-panel-section">
                   <h3>
                     <svg
@@ -2013,54 +2426,73 @@ export default function MinhaAgendaProfessor({
                   )}
                 </div>
 
-                {/* À ESPERA DA COORDENAÇÃO */}
+                {/* 4. RESUMO FINANCEIRO */}
                 <div className="prof-panel-section prof-panel-section--mt">
-                  <h3>
-                    <svg
-                      viewBox="0 0 24 24"
-                      className="section-icon"
-                      className="section-icon section-icon--warning"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                    >
-                      <circle cx="12" cy="12" r="10" />
-                      <line x1="12" y1="8" x2="12" y2="12" />
-                      <line x1="12" y1="16" x2="12.01" y2="16" />
-                    </svg>
-                    À Espera da Coordenação
-                  </h3>
-
-                  {aulasAguardandoCoordenacao.length === 0 ? (
-                    <div className="empty-state-text">
-                      Nada pendente com a coordenação.
-                    </div>
-                  ) : (
-                    aulasAguardandoCoordenacao.map((item, idx) => (
-                      <div
-                        key={idx}
-                        className="aula-item-modern aula-item-modern--pending-ee"
+                  <div className="resumo-header">
+                    <div className="resumo-title-wrap">
+                      <svg
+                        viewBox="0 0 24 24"
+                        className="resumo-icon"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
                       >
-                        <div className="aula-item-header">
-                          <span className="aula-item-title">
-                            {item.modalidade} ({item.formato_aula})
-                          </span>
-                        </div>
-                        <div className="aula-item-details">
-                          <div>
-                            {formatDM(item.data_aula)} às{" "}
-                            {formatHoraCurta(item.hora_inicio)}
-                          </div>
-                        </div>
-                        <div className="pending-warning-text">
-                          Novo Pedido: A aguardar aprovação da coordenação...
-                        </div>
-                      </div>
-                    ))
-                  )}
+                        <path d="M21 21H3V3m18 8l-6-6-4 4-4-4" />
+                      </svg>
+                      <h3 className="resumo-title">Resumo Financeiro</h3>
+                    </div>
+
+                    <div className="resumo-filters">
+                      <select
+                        value={selectedMonth}
+                        onChange={(e) =>
+                          setSelectedMonth(Number(e.target.value))
+                        }
+                        className="filter-select"
+                      >
+                        {MESES.map((mes, idx) => (
+                          <option key={idx} value={idx}>
+                            {mes}
+                          </option>
+                        ))}
+                      </select>
+
+                      <select
+                        value={selectedAnoLetivoId}
+                        onChange={(e) => setSelectedAnoLetivoId(e.target.value)}
+                        className="filter-select"
+                      >
+                        <option value="">Ano Letivo</option>
+                        {anosLetivosPedido.map((ano) => (
+                          <option
+                            key={ano.id_ano_letivo}
+                            value={ano.id_ano_letivo}
+                          >
+                            {ano.ano}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="prof-stat-cards">
+                    <div className="prof-stat-card">
+                      <span>Aulas Dadas</span>
+                      <strong>{resumoMensal.aulasDadas}</strong>
+                    </div>
+                    <div
+                      className="prof-stat-card highlight prof-stat-card--clickable"
+                      onClick={() => setIsDetalhesModalOpen(true)}
+                    >
+                      <span>A Receber</span>
+                      <strong>{resumoMensal.aReceber.toFixed(2)}€</strong>
+                      <span className="stat-card-hint">Ver detalhes ↗</span>
+                    </div>
+                  </div>
                 </div>
               </div>
-              {/* Modal de Detalhes de Faturação */}
+
+              {/* MODAL DE DETALHES DE FATURAÇÃO */}
               {isDetalhesModalOpen && (
                 <div
                   className="modal-overlay modal-overlay-high-z"
@@ -2296,6 +2728,70 @@ export default function MinhaAgendaProfessor({
                 Confirmar e Liquidar Fatura
               </button>
             </div>
+          </div>
+        </div>
+      )}
+      {alertaExcl.isOpen && (
+        <div
+          className="modal-overlay-agenda"
+          style={{
+            zIndex: 9999,
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: "rgba(0,0,0,0.6)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <div
+            className="modal-content-agenda modal-modern--sm"
+            style={{
+              background: "#fff",
+              padding: "30px",
+              borderRadius: "12px",
+              boxShadow: "0 10px 25px rgba(0,0,0,0.2)",
+              textAlign: "center",
+              maxWidth: "420px",
+              width: "90%",
+            }}
+          >
+            <h3
+              style={{
+                margin: "0 0 15px 0",
+                color: "#2a2724",
+                fontSize: "1.3rem",
+              }}
+            >
+              Aviso do Sistema
+            </h3>
+            <p
+              style={{
+                margin: "0 0 25px 0",
+                color: "#5a5450",
+                fontSize: "0.95rem",
+                lineHeight: "1.5",
+              }}
+            >
+              {alertaExcl.message}
+            </p>
+            <button
+              type="button"
+              className="btn-gold"
+              onClick={() => setAlertaExcl({ isOpen: false, message: "" })}
+              style={{
+                padding: "10px 30px",
+                border: "none",
+                borderRadius: "6px",
+                cursor: "pointer",
+                fontWeight: "600",
+              }}
+            >
+              Entendido
+            </button>
           </div>
         </div>
       )}

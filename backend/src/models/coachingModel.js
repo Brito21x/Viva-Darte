@@ -361,7 +361,7 @@ async function criarPedidoCoaching(dadosPedido, alunosIds, opts = {}) {
       .input("IdModalidade", sql.Int, dadosPedido.idModalidade)
       .input("IdProfessor", sql.Int, dadosPedido.idProfessor || null)
       .query(
-        `INSERT INTO PEDIDO_COACHING (formato_aula, duracao_minutos, numero_participantes, data_pedido, data_aula_pretendida, hora_inicio_pretendida, estado, custo_estimado, UTILIZADORid_utilizador, ANO_LETIVOid_ano_letivo, MODALIDADEid_modalidade, UTILIZADORid_utilizador2) OUTPUT INSERTED.id_pedido_coaching VALUES (@Formato, @Duracao, @NumParticipantes, GETDATE(), @DataAula, TRY_CONVERT(time, @HoraInicio), 'Pendente', @CustoEstimado, @IdEncarregado, @IdAnoLetivo, @IdModalidade, @IdProfessor);`,
+        `INSERT INTO PEDIDO_COACHING (formato_aula, duracao_minutos, numero_participantes, data_pedido, data_aula_pretendida, hora_inicio_pretendida, estado, custo_estimado, UTILIZADORid_utilizador, ANO_LETIVOid_ano_letivo, MODALIDADEid_modalidade, UTILIZADORid_utilizador2) OUTPUT INSERTED.id_pedido_coaching VALUES (@Formato, @Duracao, @NumParticipantes, GETDATE(), @DataAula, TRY_CONVERT(time, @HoraInicio), 'Pendente Professor', @CustoEstimado, @IdEncarregado, @IdAnoLetivo, @IdModalidade, @IdProfessor);`,
       )
       .then((r) => r.recordset[0].id_pedido_coaching);
 
@@ -386,18 +386,65 @@ async function criarPedidoCoaching(dadosPedido, alunosIds, opts = {}) {
 /**
  * @async
  * @function getPedidosPorEncarregado
- * @description Obtém o histórico de pedidos submetidos por um Encarregado de Educação específico.
+ * @description Obtém os pedidos onde o EE intervém como submissor ou como Encarregado
+ * de um aluno convidado. Inclui a lista de participantes (alunos) agregada e o nome do
+ * professor pedido (não necessariamente o agendado).
  * @param {number} idEncarregado - O ID do utilizador (EE).
  * @returns {Promise<Array<Object>>} Lista de pedidos.
  */
 async function getPedidosPorEncarregado(idEncarregado) {
   const pool = await poolPromise;
-  const result = await pool
-    .request()
-    .input("IdEE", sql.Int, idEncarregado)
-    .query(
-      `SELECT pc.id_pedido_coaching, pc.formato_aula, pc.duracao_minutos, pc.data_aula_pretendida, pc.hora_inicio_pretendida, pc.estado, pc.custo_estimado, m.nome AS modalidade, prof.nome AS professor, cab.id_coaching, cab.estado AS estado_coaching, cab.data_aula AS data_aula_coaching, cab.hora_inicio AS hora_inicio_coaching, s.nome AS nome_sala, profAula.nome AS nome_professor_agendado FROM PEDIDO_COACHING pc JOIN MODALIDADE m ON pc.MODALIDADEid_modalidade = m.id_modalidade LEFT JOIN UTILIZADOR prof ON pc.UTILIZADORid_utilizador2 = prof.id_utilizador OUTER APPLY (SELECT TOP 1 c.id_coaching, c.estado, c.data_aula, c.hora_inicio, c.SALAid_sala, c.UTILIZADORid_utilizador FROM COACHING c WHERE c.PEDIDO_COACHINGid_pedido_coaching = pc.id_pedido_coaching AND c.estado <> 'Cancelado' ORDER BY c.id_coaching DESC) AS cab LEFT JOIN SALA s ON cab.SALAid_sala = s.id_sala LEFT JOIN UTILIZADOR profAula ON cab.UTILIZADORid_utilizador = profAula.id_utilizador WHERE pc.UTILIZADORid_utilizador = @IdEE ORDER BY pc.data_pedido DESC, pc.id_pedido_coaching DESC;`,
-    );
+  const result = await pool.request().input("IdEE", sql.Int, idEncarregado)
+    .query(`
+      SELECT 
+        pc.id_pedido_coaching,
+        pc.formato_aula,
+        pc.duracao_minutos,
+        pc.data_aula_pretendida,
+        pc.hora_inicio_pretendida,
+        pc.estado,
+        pc.custo_estimado,
+        m.nome AS modalidade,
+        prof.nome AS professor,
+        cab.id_coaching,
+        cab.estado AS estado_coaching,
+        cab.data_aula AS data_aula_coaching,
+        cab.hora_inicio AS hora_inicio_coaching,
+        s.nome AS nome_sala,
+        profAula.nome AS nome_professor_agendado,
+        CASE WHEN pc.UTILIZADORid_utilizador = @IdEE THEN 0 ELSE 1 END AS convidado,
+        submissor.nome AS nome_submissor,
+        (
+          SELECT STRING_AGG(a.nome, ', ')
+          FROM PEDIDO_COACHING_PARTICIPANTE pcp
+          JOIN ALUNO a ON a.id_aluno = pcp.ALUNOid_aluno
+          WHERE pcp.PEDIDO_COACHINGid_pedido_coaching = pc.id_pedido_coaching
+        ) AS alunos
+      FROM PEDIDO_COACHING pc
+      JOIN MODALIDADE m ON pc.MODALIDADEid_modalidade = m.id_modalidade
+      JOIN UTILIZADOR submissor ON pc.UTILIZADORid_utilizador = submissor.id_utilizador
+      LEFT JOIN UTILIZADOR prof ON pc.UTILIZADORid_utilizador2 = prof.id_utilizador
+      OUTER APPLY (
+        SELECT TOP 1 c.id_coaching, c.estado, c.data_aula, c.hora_inicio,
+                     c.SALAid_sala, c.UTILIZADORid_utilizador
+        FROM COACHING c
+        WHERE c.PEDIDO_COACHINGid_pedido_coaching = pc.id_pedido_coaching
+          AND c.estado <> 'Cancelado'
+        ORDER BY c.id_coaching DESC
+      ) AS cab
+      LEFT JOIN SALA s ON cab.SALAid_sala = s.id_sala
+      LEFT JOIN UTILIZADOR profAula ON cab.UTILIZADORid_utilizador = profAula.id_utilizador
+      WHERE 
+        pc.UTILIZADORid_utilizador = @IdEE
+        OR EXISTS (
+          SELECT 1
+          FROM PEDIDO_COACHING_PARTICIPANTE pcp
+          JOIN ENCARREGADO_ALUNO ea ON ea.ALUNOid_aluno = pcp.ALUNOid_aluno
+          WHERE pcp.PEDIDO_COACHINGid_pedido_coaching = pc.id_pedido_coaching
+            AND ea.UTILIZADORid_utilizador = @IdEE
+        )
+      ORDER BY pc.data_pedido DESC, pc.id_pedido_coaching DESC;
+    `);
   return result.recordset;
 }
 
@@ -416,7 +463,11 @@ async function cancelarPedidoPendenteEncarregado(idPedido, idEncarregado) {
     .input("IdPedido", sql.Int, idPedido)
     .input("IdEE", sql.Int, idEncarregado)
     .query(
-      `UPDATE PEDIDO_COACHING SET estado = 'Cancelado' WHERE id_pedido_coaching = @IdPedido AND UTILIZADORid_utilizador = @IdEE AND estado = 'Pendente';`,
+      `UPDATE PEDIDO_COACHING 
+   SET estado = 'Cancelado' 
+   WHERE id_pedido_coaching = @IdPedido 
+     AND UTILIZADORid_utilizador = @IdEE 
+     AND estado IN ('Pendente', 'Pendente Professor', 'Pendente Coordenação');`,
     );
   if (upd.rowsAffected[0] > 0) return "cancelado";
   return "nao_pendente";
@@ -443,7 +494,7 @@ async function getPedidosAtribuidosAoProfessorNoPeriodo(
     .input("DataInicio", sql.Date, dataInicio)
     .input("DataFim", sql.Date, dataFim)
     .query(
-      `SELECT pc.id_pedido_coaching, pc.data_aula_pretendida, pc.hora_inicio_pretendida, pc.formato_aula, pc.duracao_minutos, pc.estado, pc.custo_estimado, m.nome AS modalidade, ee.nome AS encarregado, ee.email AS email_encarregado FROM PEDIDO_COACHING pc JOIN UTILIZADOR ee ON pc.UTILIZADORid_utilizador = ee.id_utilizador JOIN MODALIDADE m ON pc.MODALIDADEid_modalidade = m.id_modalidade WHERE pc.UTILIZADORid_utilizador2 = @IdProf AND pc.estado = N'Pendente' AND pc.data_aula_pretendida BETWEEN @DataInicio AND @DataFim ORDER BY pc.data_aula_pretendida ASC, pc.hora_inicio_pretendida ASC;`,
+      `SELECT pc.id_pedido_coaching, pc.data_aula_pretendida, pc.hora_inicio_pretendida, pc.formato_aula, pc.duracao_minutos, pc.estado, pc.custo_estimado, m.nome AS modalidade, ee.nome AS encarregado, ee.email AS email_encarregado FROM PEDIDO_COACHING pc JOIN UTILIZADOR ee ON pc.UTILIZADORid_utilizador = ee.id_utilizador JOIN MODALIDADE m ON pc.MODALIDADEid_modalidade = m.id_modalidade WHERE pc.UTILIZADORid_utilizador2 = @IdProf AND pc.estado IN (N'Pendente', N'Pendente Professor', N'Pendente Coordenação') AND pc.data_aula_pretendida BETWEEN @DataInicio AND @DataFim ORDER BY pc.data_aula_pretendida ASC, pc.hora_inicio_pretendida ASC;`,
     );
   return result.recordset;
 }
@@ -481,7 +532,7 @@ async function getPedidosPendentes() {
       JOIN UTILIZADOR ee ON pc.UTILIZADORid_utilizador = ee.id_utilizador 
       LEFT JOIN UTILIZADOR prof ON pc.UTILIZADORid_utilizador2 = prof.id_utilizador 
       JOIN MODALIDADE m ON pc.MODALIDADEid_modalidade = m.id_modalidade 
-      WHERE pc.estado = 'Pendente' 
+      WHERE pc.estado = 'Pendente Coordenação' 
       ORDER BY pc.data_aula_pretendida ASC;`,
   );
   return result.recordset;
@@ -631,7 +682,10 @@ async function rejeitarPedidoCoaching(idPedido) {
     .request()
     .input("IdPedido", sql.Int, idPedido)
     .query(
-      `UPDATE PEDIDO_COACHING SET estado = 'Rejeitado' WHERE id_pedido_coaching = @IdPedido AND estado = 'Pendente';`,
+      `UPDATE PEDIDO_COACHING 
+   SET estado = 'Rejeitado' 
+   WHERE id_pedido_coaching = @IdPedido 
+     AND estado IN ('Pendente', 'Pendente Professor', 'Pendente Coordenação');`,
     );
   return result.rowsAffected[0] > 0;
 }
@@ -877,6 +931,83 @@ async function getHistoricoGeralCoachings() {
 }
 
 /**
+ * @async
+ * @function getAlunoPorEmailEE
+ * @description Procura os educandos (ALUNO) associados a um Encarregado de Educação,
+ * identificado pelo seu email. A relação EE ↔ Aluno é resolvida através da
+ * tabela de junção ENCARREGADO_ALUNO.
+ * @param {string} emailEE - O email do Encarregado de Educação a pesquisar.
+ * @returns {Promise<Array<Object>>} Array com {id_aluno, nome_aluno, nome_ee, id_ee}.
+ * @throws {Error} Em caso de falha na query.
+ */
+async function getAlunoPorEmailEE(emailEE) {
+  try {
+    const pool = await poolPromise;
+    const emailNormalizado = String(emailEE || "")
+      .trim()
+      .toLowerCase();
+
+    if (!emailNormalizado) {
+      return [];
+    }
+
+    const result = await pool
+      .request()
+      .input("Email", sql.VarChar(255), emailNormalizado).query(`
+        SELECT 
+            a.id_aluno,
+            a.nome   AS nome_aluno,
+            u.nome   AS nome_ee,
+            u.id_utilizador AS id_ee
+        FROM UTILIZADOR u
+        JOIN ENCARREGADO_ALUNO ea ON ea.UTILIZADORid_utilizador = u.id_utilizador
+        JOIN ALUNO a              ON a.id_aluno = ea.ALUNOid_aluno
+        WHERE LOWER(LTRIM(RTRIM(u.email))) = @Email
+          AND u.ativo = 1
+        ORDER BY a.nome ASC;
+      `);
+    return result.recordset;
+  } catch (error) {
+    console.error("Erro no Modelo (getAlunoPorEmailEE):", error);
+    throw error;
+  }
+}
+
+async function getPedidosPendentesProfessor(idProfessor) {
+  const pool = await poolPromise;
+  const result = await pool.request().input("IdProf", sql.Int, idProfessor)
+    .query(`
+      SELECT pc.id_pedido_coaching, pc.data_aula_pretendida, pc.hora_inicio_pretendida,
+             pc.duracao_minutos, pc.formato_aula, pc.estado, pc.data_pedido,
+             m.nome AS modalidade, ee.nome AS nome_ee,
+             (SELECT STRING_AGG(a.nome, ', ') FROM PEDIDO_COACHING_PARTICIPANTE pcp JOIN ALUNO a ON pcp.ALUNOid_aluno = a.id_aluno WHERE pcp.PEDIDO_COACHINGid_pedido_coaching = pc.id_pedido_coaching) AS alunos
+      FROM PEDIDO_COACHING pc
+      JOIN MODALIDADE m ON pc.MODALIDADEid_modalidade = m.id_modalidade
+      JOIN UTILIZADOR ee ON pc.UTILIZADORid_utilizador = ee.id_utilizador
+      WHERE pc.UTILIZADORid_utilizador2 = @IdProf AND pc.estado IN ('Pendente', 'Pendente Professor', 'Pendente Coordenação')
+      ORDER BY pc.data_pedido ASC
+    `);
+  return result.recordset;
+}
+
+async function responderPedidoProfessor(idPedido, idProfessor, aceitar) {
+  const pool = await poolPromise;
+  const novoEstado = aceitar ? "Pendente Coordenação" : "Rejeitado Professor";
+  await pool
+    .request()
+    .input("IdPedido", sql.Int, idPedido)
+    .input("IdProf", sql.Int, idProfessor)
+    .input("Estado", sql.VarChar(50), novoEstado).query(`
+      UPDATE PEDIDO_COACHING
+      SET estado = @Estado
+      WHERE id_pedido_coaching = @IdPedido 
+        AND UTILIZADORid_utilizador2 = @IdProf 
+        AND estado IN ('Pendente', 'Pendente Professor')
+    `);
+  return novoEstado;
+}
+
+/**
  * @module coachingModel
  */
 module.exports = {
@@ -903,4 +1034,7 @@ module.exports = {
   coachingPertenceAEncarregado,
   coachingPertenceAProfessorAtivo,
   getHistoricoGeralCoachings,
+  getAlunoPorEmailEE,
+  getPedidosPendentesProfessor,
+  responderPedidoProfessor,
 };

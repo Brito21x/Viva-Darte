@@ -763,10 +763,13 @@ async function aprovarPedido(req, res, next) {
     const { idSala, idProfessor, valorFinal } = req.body;
 
     const pedido = await coachingModel.getPedidoCoachingPorId(idPedido);
-    if (!pedido || pedido.estado !== "Pendente")
+    const estadosAprovaveis = ["Pendente", "Pendente Coordenação"];
+    if (!pedido || !estadosAprovaveis.includes(pedido.estado))
       return res
         .status(409)
-        .json({ mensagem: "Pedido não pendente ou não encontrado." });
+        .json({
+          mensagem: "Pedido não está pronto para aprovação ou não encontrado.",
+        });
 
     let horaInicio = null;
     if (pedido.hora_inicio_pretendida) {
@@ -1227,6 +1230,61 @@ async function agendarDiretoAdmin(req, res, next) {
   }
 }
 
+async function procurarAlunoPorEmailEE(req, res, next) {
+  try {
+    const { email } = req.query;
+
+    if (!email) {
+      return res
+        .status(400)
+        .json({ mensagem: "O email é obrigatório para a pesquisa." });
+    }
+
+    const alunos = await coachingModel.getAlunoPorEmailEE(email);
+
+    if (alunos.length === 0) {
+      return res
+        .status(404)
+        .json({ mensagem: "Nenhum aluno encontrado para este email." });
+    }
+
+    return res.status(200).json(alunos);
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function listarPedidosParaProfessor(req, res, next) {
+  try {
+    const idUtilizador = req.utilizador?.id || req.utilizador?.id_utilizador;
+    const pedidos =
+      await coachingModel.getPedidosPendentesProfessor(idUtilizador);
+    return res.status(200).json(pedidos);
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function responderPedidoProfessor(req, res, next) {
+  try {
+    const idUtilizador = req.utilizador?.id || req.utilizador?.id_utilizador;
+    const idPedido = req.params.id;
+    const { aceitar } = req.body; // true = aceita, false = rejeita
+
+    const novoEstado = await coachingModel.responderPedidoProfessor(
+      idPedido,
+      idUtilizador,
+      aceitar,
+    );
+    return res.status(200).json({
+      mensagem: `Pedido marcado como ${novoEstado}`,
+      estado: novoEstado,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
 /**
  * @module coachingController
  */
@@ -1253,4 +1311,7 @@ module.exports = {
   concluirCoaching,
   listarHistorico,
   agendarDiretoAdmin,
+  procurarAlunoPorEmailEE,
+  listarPedidosParaProfessor,
+  responderPedidoProfessor,
 };

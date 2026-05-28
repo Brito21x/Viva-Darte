@@ -28,6 +28,12 @@ async function getCatalogoPecas() {
                    p.origem, p.localizacao, p.disponivel_para_emprestimo, p.disponivel_para_venda,
                    p.data_registo, cp.nome AS categoria, u.nome AS registado_por, f.foto AS foto_principal,
                    p.UTILIZADORid_utilizador,
+
+                  (SELECT COUNT(*) 
+                  FROM EMPRESTIMO e2 
+                  JOIN EMPRESTIMO_ITEM ei2 ON e2.id_emprestimo = ei2.[EMPRESIMO id_emprestimo] 
+                  WHERE ei2.PECAid_peca = p.id_peca AND e2.estado = 'Pendente') AS pedidos_pendentes,
+
                    active_emp.id_emprestimo AS active_id_emprestimo,
                    active_emp.data_inicio AS emprestimo_inicio,
                    active_emp.data_fim AS emprestimo_fim,
@@ -327,17 +333,21 @@ async function atualizarDadosCompletosPeca(idPeca, dados) {
     await transaction
       .request()
       .input("IdPeca", sql.Int, idPeca)
-      .input("Preco", sql.Decimal(10, 2), dados.preco)
-      .input("NomePeca", sql.VarChar(255), dados.nome)
-      .input("Condicao", sql.VarChar(50), dados.estado)
-      .input("Metodos", sql.VarChar(255), dados.metodosStr).query(`
-    UPDATE VENDA_PECA 
-    SET preco = @Preco, 
-        nome_peca = @NomePeca, 
-        condicao = @Condicao, 
-        metodos_aceites = @Metodos -- Apenas substitua, sem CASE WHEN
-    WHERE PECAid_peca = @IdPeca AND estado IN ('Disponível', 'Disponivel')
-  `);
+      .input("Nome", sql.VarChar(255), dados.nome)
+      .input("Descricao", sql.VarChar(255), dados.descricao)
+      .input("Tamanho", sql.VarChar(50), dados.tamanho)
+      .input("Estado", sql.VarChar(50), dados.estado)
+      .input("DispVenda", sql.Bit, dados.disponivelVenda ? 1 : 0)
+      .input("DispEmp", sql.Bit, dados.disponivelEmprestimo ? 1 : 0).query(`
+        UPDATE PECA 
+        SET nome = @Nome, 
+            descricao = @Descricao, 
+            tamanho = @Tamanho, 
+            estado = @Estado, 
+            disponivel_para_venda = @DispVenda, 
+            disponivel_para_emprestimo = @DispEmp
+        WHERE id_peca = @IdPeca;
+      `);
 
     if (dados.disponivelVenda && dados.preco > 0) {
       const vendaExiste = await transaction
@@ -980,6 +990,36 @@ async function atualizarEstadoReserva(idEmprestimo, novoEstado) {
   }
 }
 
+async function getMeusPedidosEmprestimo(idUtilizador) {
+  try {
+    const pool = await poolPromise;
+    const result = await pool.request().input("IdUser", sql.Int, idUtilizador)
+      .query(`
+        SELECT 
+          e.id_emprestimo, e.data_inicio, e.data_fim, e.estado, 
+          e.valor, e.metodo_pagamento, 
+          
+          e.estado_pagamento, 
+          e.data_pagamento, 
+          
+          e.data_devolucao, e.observacoes,
+          p.nome as peca_nome, p.id_peca,
+          u.nome as dono_peca,
+          (SELECT ISNULL(SUM(valor_penalizacao), 0) FROM PENALIZACAO_PECA WHERE EMPRESTIMOid_emprestimo = e.id_emprestimo) as total_multas
+        FROM EMPRESTIMO e
+        JOIN EMPRESTIMO_ITEM ei ON e.id_emprestimo = ei.[EMPRESIMO id_emprestimo]
+        JOIN PECA p ON ei.PECAid_peca = p.id_peca
+        JOIN UTILIZADOR u ON p.UTILIZADORid_utilizador = u.id_utilizador
+        WHERE e.UTILIZADORid_utilizador = @IdUser AND e.estado NOT IN ('Config Inicial', 'Disponível')
+        ORDER BY e.id_emprestimo DESC
+      `);
+    return result.recordset;
+  } catch (error) {
+    console.error("ERRO SQL NOS MEUS PEDIDOS:", error.message);
+    throw error;
+  }
+}
+
 /**
  * @module inventarioModel
  */
@@ -1002,4 +1042,5 @@ module.exports = {
   registarConclusaoVenda,
   getPedidosEmprestimoPeca,
   atualizarEstadoReserva,
+  getMeusPedidosEmprestimo,
 };

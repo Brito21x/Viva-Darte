@@ -36,6 +36,8 @@ router.get("/", inventarioController.getCatalogo);
  */
 router.get("/vendas", inventarioController.getPecasAVenda);
 
+router.get("/meus-pedidos", inventarioController.getMeusPedidosEmprestimo);
+
 /**
  * @route GET /api/inventario/:id
  * @description Obtém os detalhes completos de uma peça específica e a respetiva galeria de fotografias.

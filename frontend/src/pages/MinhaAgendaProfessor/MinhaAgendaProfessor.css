@@ -1464,3 +1464,275 @@
 .modal-overlay-high-z .modal-modern {
   z-index: 1000000;
 }
+
+/* ============================================================================
+   PEDIDO CARD — Card "Os Meus Pedidos" (vista do EE)
+   Layout vertical: badge em linha própria → título → descrição → detalhes.
+   Resolve a sobreposição badge/título mesmo com textos longos.
+   ============================================================================ */
+/* ============================================================================
+   PEDIDO CARD — Card "Os Meus Pedidos" (vista do EE)
+   Usa display:block para fluir naturalmente (sem o pai flex achatar conteúdo).
+   ============================================================================ */
+.pedido-card {
+  display: block;
+  padding: 14px 16px;
+  background: #fff;
+  border: 1px solid #ece7df;
+  border-left: 3px solid #ece7df;
+  border-radius: 10px;
+  margin-bottom: 12px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  width: 100%;
+  box-sizing: border-box;
+  /* Resistir a qualquer flex-shrink do pai (.dispo-list-hud) */
+  flex: 0 0 auto;
+  height: auto;
+  min-height: auto;
+}
+
+.pedido-card--convidado {
+  border-left-color: #b38b59;
+}
+
+/* Linha da badge — alinha à esquerda e dá margem inferior para o título */
+.pedido-card__badge-row {
+  display: block;
+  margin-bottom: 10px;
+}
+
+/* Badge da vista de pedidos — pill compacta alinhada à esquerda */
+.pedido-card .badge-simples {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  white-space: normal;
+  line-height: 1.25;
+  word-break: break-word;
+  /* compacta, NÃO ocupar toda a largura */
+  width: auto;
+}
+
+.pedido-card__badge-icon {
+  font-size: 0.85em;
+  line-height: 1;
+}
+
+.pedido-card__badge-label {
+  display: inline;
+}
+
+/* Título da modalidade + formato — bloco que SEMPRE aparece */
+.pedido-card__title-block {
+  display: block;
+  margin-bottom: 8px;
+}
+
+.pedido-card__title {
+  display: block;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #2a2724;
+  line-height: 1.3;
+  word-break: break-word;
+  margin-bottom: 2px;
+}
+
+.pedido-card__formato {
+  font-weight: 500;
+  color: #8a8480;
+  margin-left: 6px;
+}
+
+.pedido-card__datetime {
+  display: block;
+  font-size: 0.78rem;
+  color: #8a8480;
+}
+
+/* Descrição em itálico (etapa atual) */
+.pedido-card__descricao {
+  display: block;
+  font-size: 0.75rem;
+  color: #8a8480;
+  font-style: italic;
+  line-height: 1.4;
+  margin-bottom: 8px;
+}
+
+/* Aviso de convite */
+.pedido-card__convite {
+  display: inline-block;
+  font-size: 0.7rem;
+  color: #b38b59;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  background: #fdfaf5;
+  padding: 5px 10px;
+  border-radius: 4px;
+  max-width: 100%;
+  word-break: break-word;
+  margin-bottom: 8px;
+}
+
+/* Bloco de detalhes (participantes + professor) */
+.pedido-card__detalhes {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px 12px;
+  font-size: 0.82rem;
+  padding-top: 8px;
+  border-top: 1px dashed #ece7df;
+  margin-top: 4px;
+}
+
+.pedido-card__label {
+  color: #8a8480;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.pedido-card__valor {
+  color: #2a2724;
+  word-break: break-word;
+  min-width: 0;
+}
+
+/* ============================================================================
+   PAINEL "À ESPERA DA COORDENAÇÃO" — variantes de estado (vista Professor)
+   ============================================================================ */
+
+/* Cartão que precisa de DECISÃO do professor (Pendente Professor) */
+.aula-item-modern--needs-action {
+  border-left: 4px solid #c0392b;
+  background-color: #fff7f5;
+}
+
+/* Texto de chamada de atenção (acima dos botões Aceitar/Rejeitar) */
+.pending-action-text {
+  color: #c0392b;
+  font-weight: 600;
+  margin-top: 8px;
+  margin-bottom: 10px;
+  font-size: 0.85rem;
+}
+
+/* Botões Aceitar / Rejeitar lado a lado */
+.pending-action-buttons {
+  display: flex;
+  gap: 10px;
+}
+
+.pending-action-buttons > button {
+  flex: 1;
+  padding: 8px 10px;
+  font-size: 0.85rem;
+}
+
+/* Variante de outline a vermelho — para botão Rejeitar */
+.btn-outline--danger {
+  border-color: #e74c3c !important;
+  color: #e74c3c !important;
+}
+
+.btn-outline--danger:hover {
+  background-color: #e74c3c !important;
+  color: #fff !important;
+}
+
+/* Linha de meta-info (Participantes / Encarregado) */
+.aula-item-meta {
+  font-size: 0.78rem;
+  color: #5a5450;
+  margin-top: 3px;
+}
+
+.aula-item-meta strong {
+  color: #8a8480;
+  font-weight: 600;
+  margin-right: 4px;
+}
+
+/* ============================================================================
+   AULA-ITEM-MODERN — Versão melhorada do card no painel "À Espera da
+   Coordenação" (vista do Professor). Mantém compatibilidade com classes antigas
+   e adiciona variantes coerentes com o estilo dos "Meus Pedidos" do EE.
+   ============================================================================ */
+.aula-item-modern {
+  display: block;
+}
+
+.aula-item-badge-row {
+  display: block;
+  margin-bottom: 10px;
+}
+
+.aula-item-badge-icon {
+  font-size: 0.85em;
+  line-height: 1;
+  margin-right: 4px;
+}
+
+.aula-item-title-block {
+  display: block;
+  margin-bottom: 10px;
+}
+
+.aula-item-title {
+  display: block;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #2a2724;
+  line-height: 1.3;
+  word-break: break-word;
+  margin-bottom: 2px;
+}
+
+.aula-item-formato {
+  font-weight: 500;
+  color: #8a8480;
+  margin-left: 6px;
+}
+
+.aula-item-datetime {
+  display: block;
+  font-size: 0.78rem;
+  color: #8a8480;
+}
+
+.aula-item-detalhes {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px 12px;
+  font-size: 0.82rem;
+  padding-top: 8px;
+  border-top: 1px dashed #ece7df;
+  margin-top: 4px;
+  margin-bottom: 12px;
+}
+
+.aula-item-label {
+  color: #8a8480;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.aula-item-valor {
+  color: #2a2724;
+  word-break: break-word;
+  min-width: 0;
+}
+
+/* Garante que a badge dentro do aula-item-modern também é pill compacta */
+.aula-item-modern .badge-simples {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  white-space: normal;
+  line-height: 1.25;
+  word-break: break-word;
+  width: auto;
+}

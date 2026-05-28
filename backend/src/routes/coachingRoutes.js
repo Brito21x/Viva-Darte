@@ -18,10 +18,39 @@ const { autenticar, autorizar } = require("../middlewares/auth");
 // Impede imediatamente acessos anónimos.
 router.use(autenticar);
 
+/**
+ * @route GET /api/coaching/alunos/procurar
+ * @description Procura alunos através do email do Encarregado de Educação.
+ * @access Protegido (EE)
+ */
+router.get(
+  "/alunos/procurar",
+  autorizar("EE"),
+  coachingController.procurarAlunoPorEmailEE,
+);
+
 // ============================================================================
 // DISPONIBILIDADES (Exclusivo Professor)
 // ============================================================================
+/**
+ * @route GET /api/coaching/professor/pedidos-pendentes
+ * @description Obtém os pedidos de coaching a aguardar confirmação do professor.
+ */
+router.get(
+  "/professor/pedidos-pendentes",
+  autorizar("Professor"),
+  coachingController.listarPedidosParaProfessor,
+);
 
+/**
+ * @route PUT /api/coaching/professor/pedidos/:id/responder
+ * @description O professor aceita (passa para coordenação) ou rejeita um pedido de coaching.
+ */
+router.put(
+  "/professor/pedidos/:id/responder",
+  autorizar("Professor"),
+  coachingController.responderPedidoProfessor,
+);
 /**
  * @route GET /api/coaching/disponibilidades
  * @description Obtém a lista de horários de disponibilidade do professor autenticado.

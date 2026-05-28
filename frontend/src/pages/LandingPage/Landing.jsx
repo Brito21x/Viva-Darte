@@ -227,7 +227,7 @@ export default function Landing({
                         irParaMinhaAgendaProfessor?.();
                       }}
                     >
-                      Minha agenda
+                      Coaching
                     </a>
                   </li>
                   <li>
@@ -254,7 +254,7 @@ export default function Landing({
                         irParaMinhaAgendaEE?.();
                       }}
                     >
-                      Minha agenda
+                      Coaching
                     </a>
                   </li>
                   <li>

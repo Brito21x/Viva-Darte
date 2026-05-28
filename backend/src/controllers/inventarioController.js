@@ -748,10 +748,42 @@ async function alterarEstadoReserva(req, res, next) {
         .status(200)
         .json({ mensagem: "Estado atualizado com sucesso." });
     } else {
-      return res.status(404).json({ mensagem: "Reserva não encontrada." });
+      return res.status(404).json({ mensagem: "Pedido não encontrada." });
     }
   } catch (error) {
     next(error);
+  }
+}
+
+async function getMeusPedidosEmprestimo(req, res) {
+  try {
+    // 1. Vamos descobrir exatamente onde está o ID no teu sistema!
+    console.log("DADOS DO UTILIZADOR NO BACKEND:", req.utilizador, req.user);
+
+    // 2. Tenta apanhar o ID em todos os formatos possíveis
+    const idUtilizador =
+      req.utilizador?.id ||
+      req.utilizador?.id_utilizador ||
+      req.user?.id ||
+      req.user?.id_utilizador;
+
+    if (!idUtilizador) {
+      console.log("ERRO: O Backend não encontrou o ID do utilizador!");
+      return res.status(401).json({
+        mensagem: "Sessão inválida ou expirada. Inicia sessão novamente.",
+      });
+    }
+
+    // 3. Chamar a base de dados
+    const pedidos =
+      await inventarioModel.getMeusPedidosEmprestimo(idUtilizador);
+    return res.status(200).json(pedidos);
+  } catch (error) {
+    console.error("Erro no controlador ao ir buscar os meus pedidos:", error);
+    return res.status(500).json({
+      mensagem:
+        "Erro interno no servidor ao processar o histórico de requisições.",
+    });
   }
 }
 
@@ -774,4 +806,5 @@ module.exports = {
   registarConclusaoVenda,
   getPedidosEmprestimo,
   alterarEstadoReserva,
+  getMeusPedidosEmprestimo,
 };

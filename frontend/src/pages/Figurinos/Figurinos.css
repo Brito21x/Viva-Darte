@@ -1011,3 +1011,427 @@
   background: #fdf0ed;
   border-color: #e74c3c;
 }
+
+/* ==============================================================
+   FILTROS (BARRA DE PESQUISA E SELECTS)
+============================================================== */
+.filtros-bar {
+  display: flex;
+  gap: 15px;
+  margin-bottom: 25px;
+  flex-wrap: wrap;
+}
+.filtro-input {
+  flex: 1;
+  min-width: 200px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+}
+.filtro-select {
+  padding: 12px 16px;
+  border-radius: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  background: #fff;
+}
+
+/* ==============================================================
+   AS MINHAS REQUISIÇÕES
+============================================================== */
+.requisicoes-list {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  width: 100%;
+}
+.reserva-card-req {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+.req-info-col {
+  flex: 1;
+  min-width: 300px;
+}
+.req-titulo {
+  margin: 0 0 10px 0;
+  color: #2a2724;
+}
+.req-detail {
+  margin: 0 0 5px 0;
+  font-size: 0.9rem;
+}
+.req-detail-last {
+  margin: 0 0 15px 0;
+  font-size: 0.9rem;
+}
+.req-badges {
+  display: flex;
+  gap: 10px;
+}
+.badge-rejeitado {
+  background: rgba(231, 76, 60, 0.15);
+  color: #c0392b;
+}
+.req-gestao-col {
+  flex: 1;
+  min-width: 300px;
+  background: #f9f8f6;
+  padding: 15px;
+  border-radius: 8px;
+  border: 1px solid #e0dcd2;
+}
+.req-gestao-titulo {
+  margin: 0 0 10px 0;
+  font-size: 0.95rem;
+}
+.req-gestao-detail {
+  margin: 5px 0;
+  font-size: 0.85rem;
+}
+
+/* ==============================================================
+   ITEM CARD - EXTRAS
+============================================================== */
+.item-card-clickable {
+  cursor: pointer;
+}
+.preco-placeholder {
+  color: transparent;
+}
+.gerir-pedidos-wrapper {
+  position: relative;
+  display: inline-block;
+}
+.badge-pedidos-pendentes {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  background: #e74c3c;
+  color: white;
+  border-radius: 50%;
+  width: 22px;
+  height: 22px;
+  font-size: 0.8rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  border: 2px solid white;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+  z-index: 10;
+}
+
+/* ==============================================================
+   MODAL DETALHE DO ITEM
+============================================================== */
+.modal-overlay-detalhe {
+  z-index: 2005;
+  background: rgba(21, 19, 17, 0.92);
+}
+.nav-detalhe-btn {
+  position: absolute;
+  background: rgba(238, 234, 226, 0.9);
+  border: none;
+  border-radius: 50%;
+  width: 45px;
+  height: 45px;
+  font-size: 1.8rem;
+  cursor: pointer;
+  z-index: 2006;
+}
+.nav-detalhe-btn.left {
+  left: 20px;
+}
+.nav-detalhe-btn.right {
+  right: 20px;
+}
+.modal-content-detalhe {
+  max-width: 900px;
+  width: 90%;
+  max-height: 85vh;
+  padding: 0;
+  display: flex;
+  flex-direction: row;
+  overflow: hidden;
+  min-height: 500px;
+}
+.detalhe-imagem-col {
+  flex: 1.1;
+  display: flex;
+  flex-direction: column;
+  background-color: #dcd7ce;
+  border-right: 1px solid rgba(0, 0, 0, 0.05);
+}
+.detalhe-imagem-main {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.detalhe-imagem-img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  cursor: zoom-in;
+}
+.detalhe-thumbs {
+  display: flex;
+  gap: 12px;
+  padding: 15px;
+  background-color: rgba(0, 0, 0, 0.04);
+  overflow-x: auto;
+  justify-content: center;
+}
+.detalhe-thumb {
+  width: 65px;
+  height: 65px;
+  object-fit: cover;
+  cursor: pointer;
+  border-radius: 8px;
+  border: 2px solid transparent;
+  opacity: 0.6;
+}
+.detalhe-thumb.active {
+  border: 3px solid #ab855a;
+  opacity: 1;
+}
+.detalhe-info-col {
+  flex: 1;
+  padding: 40px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  overflow-y: auto;
+}
+.detalhe-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 25px;
+}
+.detalhe-badge {
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  background: #ab855a;
+  color: #fff;
+}
+.detalhe-badge.indisp {
+  background: #2a2724;
+}
+.btn-fechar-detalhe {
+  background: none;
+  border: none;
+  font-size: 1.8rem;
+  cursor: pointer;
+  color: #8a8480;
+}
+.detalhe-titulo {
+  font-size: 2.4rem;
+  color: #2a2724;
+  margin: 0 0 10px 0;
+  font-family: "Cormorant Garamond", serif;
+}
+.detalhe-tags {
+  display: flex;
+  gap: 15px;
+  margin-bottom: 30px;
+}
+.detalhe-tag-box {
+  background: #dfdbd2;
+  padding: 10px 15px;
+  border-radius: 8px;
+}
+.detalhe-tag-label {
+  font-size: 0.75rem;
+  color: #8a8480;
+  text-transform: uppercase;
+  font-weight: 700;
+  display: block;
+  margin: 0 0 4px 0;
+}
+.detalhe-tag-value {
+  font-size: 0.9rem;
+}
+.detalhe-descricao {
+  color: #5a5450;
+  line-height: 1.6;
+  margin-bottom: 30px;
+}
+.detalhe-fornecedor-wrap {
+  margin-bottom: 30px;
+}
+.detalhe-fornecedor-nome {
+  color: #b38b59;
+  font-weight: 600;
+  margin: 4px 0 15px 0;
+  font-size: 1.1rem;
+}
+.detalhe-preco-bar {
+  border-top: 1px solid #dcd7ce;
+  padding-top: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.detalhe-preco-valor {
+  font-size: 2.2rem;
+  font-weight: 800;
+  color: #2a2724;
+}
+.detalhe-preco-small {
+  font-size: 0.9rem;
+  color: #8a8480;
+}
+.detalhe-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 20px;
+  justify-content: flex-end;
+}
+
+/* ==============================================================
+   FORMS - UTILITÁRIOS
+============================================================== */
+.input-hidden {
+  display: none;
+}
+.modal-content-sm {
+  max-width: 400px;
+  padding: 35px;
+}
+.modal-content-md {
+  max-width: 450px;
+  padding: 35px;
+}
+.modal-content-lg {
+  max-width: 650px;
+  padding: 35px;
+}
+.modal-h2-tight {
+  margin-bottom: 10px;
+}
+.form-actions-row {
+  display: flex;
+  gap: 10px;
+  margin-top: 20px;
+}
+.btn-flex-1 {
+  flex: 1;
+}
+.btn-flex-15 {
+  flex: 1.5;
+}
+.btn-flex-2 {
+  flex: 2;
+}
+.form-group-datepicker {
+  z-index: 100;
+}
+.resumo-divider {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(0, 0, 0, 0.1);
+}
+.p-margem-zero {
+  margin: 0;
+}
+.p-margem-zero-bot {
+  margin: 0 0 5px 0;
+}
+
+/* ==============================================================
+   MODAL GERIR PEDIDOS
+============================================================== */
+.gerir-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 30px;
+}
+.gerir-titulo {
+  margin: 0 0 5px 0;
+  font-size: 1.6rem;
+  color: #2a2724;
+}
+.gerir-subtitulo {
+  font-size: 1.05rem;
+  color: #8a8480;
+  font-weight: 500;
+}
+.gerir-lista {
+  max-height: 60vh;
+  overflow-y: auto;
+  padding-right: 10px;
+}
+.mt-12 {
+  margin-top: 12px;
+}
+.detail-value-block {
+  display: block;
+  margin-top: 2px;
+}
+.gerir-form-wrap {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px dashed #e0dcd2;
+}
+.gerir-form-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 15px;
+}
+
+/* ==============================================================
+   EMPTY STATE (NENHUM PEDIDO)
+============================================================== */
+.empty-state-card {
+  padding: 40px 20px;
+  background: #f9f8f6;
+  border: 1px solid #e0dcd2;
+  border-radius: 8px;
+}
+.empty-state-titulo {
+  font-size: 1.1rem;
+  color: #2a2724;
+  font-weight: 600;
+}
+.empty-state-msg {
+  font-size: 0.9rem;
+  color: #8a8480;
+  margin: 8px 0 0 0;
+}
+
+/* ==============================================================
+   LIGHTBOX
+============================================================== */
+.lightbox-overlay {
+  z-index: 3000;
+  background: rgba(0, 0, 0, 0.95);
+}
+.lightbox-img {
+  max-width: 90%;
+  max-height: 90vh;
+  object-fit: contain;
+}
+
+/* ==============================================================
+   ALERT MODAL
+============================================================== */
+.modal-overlay-alert {
+  z-index: 9999;
+}
+
+/* ==============================================================
+   MODAL ADD/EDIT (z-index)
+============================================================== */
+.modal-overlay-form {
+  z-index: 2002;
+}
+.modal-overlay-action {
+  z-index: 2010;
+}

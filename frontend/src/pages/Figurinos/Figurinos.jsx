@@ -3,7 +3,6 @@ import "./Figurinos.css";
 import logoImg from "../../assets/logo.png";
 import { API_URL, getAuthToken } from "../../services/api";
 
-// Import do calendário
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 
@@ -18,12 +17,12 @@ export default function Figurinos({
   const [isLoading, setIsLoading] = useState(true);
   const [pedidosAtuais, setPedidosAtuais] = useState([]);
   const [reservaEmGestao, setReservaEmGestao] = useState(null);
+  const [minhasRequisicoes, setMinhasRequisicoes] = useState([]);
 
-  // Tabs e Filtros
-  const [activeTab, setActiveTab] = useState("marketplace"); // 'marketplace' ou 'meus'
+  const [activeTab, setActiveTab] = useState("marketplace");
   const [pesquisa, setPesquisa] = useState("");
   const [filtroEstado, setFiltroEstado] = useState("Todos");
-  const [filtroTipoMarket, setFiltroTipoMarket] = useState("Todos"); // 'Todos', 'Vendas', 'Emprestimos'
+  const [filtroTipoMarket, setFiltroTipoMarket] = useState("Todos");
   const [ordenacao, setOrdenacao] = useState("recentes");
 
   const [indicesImagens, setIndicesImagens] = useState({});
@@ -31,7 +30,6 @@ export default function Figurinos({
   const [isLightboxOpen, setIsLightboxOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Modais de Ação
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isDisponibilizarModalOpen, setIsDisponibilizarModalOpen] =
     useState(false);
@@ -42,7 +40,6 @@ export default function Figurinos({
     useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
-  // Forms States
   const [itemSelecionado, setItemSelecionado] = useState(null);
 
   const [novaPeca, setNovaPeca] = useState({
@@ -105,7 +102,11 @@ export default function Figurinos({
   const datasOcupadasTeste = React.useMemo(() => {
     let datas = [];
     pedidosAtuais.forEach((p) => {
-      if (p.estado === "Aprovado" || p.estado === "Em Curso") {
+      if (
+        p.estado === "Aprovado" ||
+        p.estado === "Em Curso" ||
+        p.estado === "Pendente"
+      ) {
         let atual = new Date(p.data_inicio);
         let fim = new Date(p.data_fim);
         while (atual <= fim) {
@@ -128,7 +129,6 @@ export default function Figurinos({
     });
     setIsSolicitarEmprestimoModalOpen(true);
 
-    // Vai buscar as reservas desta peça para bloquear no calendário
     try {
       const res = await fetch(`${API_INV}/pecas/${item.id_peca}/emprestimos`, {
         headers: { Authorization: `Bearer ${getToken()}` },
@@ -144,7 +144,6 @@ export default function Figurinos({
     setItemSelecionado(item);
     setIsGerirEmprestimoModalOpen(true);
 
-    // Vai buscar a lista de pedidos para gerir
     try {
       const res = await fetch(`${API_INV}/pecas/${item.id_peca}/emprestimos`, {
         headers: { Authorization: `Bearer ${getToken()}` },
@@ -190,7 +189,6 @@ export default function Figurinos({
     if (!peca || typeof peca !== "object")
       return { valor_dia: "0", metodos: ["MBWay"] };
 
-    // 1. Dar prioridade aos campos reais da Base de Dados (sempre atualizados após edições)
     if (peca.metodos_pagamento) {
       return {
         valor_dia: peca.valor_dia || "0",
@@ -201,7 +199,6 @@ export default function Figurinos({
       };
     }
 
-    // 2. Fallback (legado) para a string hardcoded no campo 'localizacao'
     if (
       typeof peca.localizacao === "string" &&
       peca.localizacao.includes("valor_dia:")
@@ -229,9 +226,10 @@ export default function Figurinos({
     if (showLoading) setIsLoading(true);
     try {
       const headers = { Authorization: `Bearer ${getToken()}` };
-      const [resPecas, resVendas] = await Promise.all([
+      const [resPecas, resVendas, resMeusPedidos] = await Promise.all([
         fetch(API_INV, { headers, cache: "no-store" }),
         fetch(`${API_INV}/vendas`, { headers, cache: "no-store" }),
+        fetch(`${API_INV}/meus-pedidos`, { headers, cache: "no-store" }),
       ]);
 
       let dPecas = resPecas.ok ? await resPecas.json() : [];
@@ -270,6 +268,10 @@ export default function Figurinos({
       });
 
       setVendasOriginais(dVendas);
+
+      if (resMeusPedidos.ok) {
+        setMinhasRequisicoes(await resMeusPedidos.json());
+      }
     } catch (e) {
       console.error(e);
     } finally {
@@ -286,9 +288,7 @@ export default function Figurinos({
 
   const buildMarketplaceItems = () => {
     let items = [];
-    // Emprestimos
     pecasOriginais.forEach((p) => {
-      // NÃO MOSTRAR AS MINHAS PRÓPRIAS PEÇAS NO MARKETPLACE COMUNITÁRIO
       if (p.UTILIZADORid_utilizador === userId) return;
 
       if (
@@ -315,13 +315,12 @@ export default function Figurinos({
           estado: "Disponível",
           comprador_display: p.requisitante || p.emprestado_a,
           rawPeca: p,
+          pedidos_pendentes: p.pedidos_pendentes || 0,
         });
       }
     });
 
-    // Vendas
     vendasOriginais.forEach((v) => {
-      // NÃO MOSTRAR AS MINHAS PRÓPRIAS VENDAS NO MARKETPLACE COMUNITÁRIO
       const pecaBase = pecasOriginais.find((p) => p.id_peca === v.id_peca);
       if (pecaBase && pecaBase.UTILIZADORid_utilizador === userId) return;
 
@@ -392,6 +391,7 @@ export default function Figurinos({
           vendaAtiva,
           emprestimoAtivo,
           rawPeca: p,
+          pedidos_pendentes: p.pedidos_pendentes || 0,
         };
       });
   };
@@ -426,7 +426,6 @@ export default function Figurinos({
       return (b.id_peca || 0) - (a.id_peca || 0);
     });
 
-  // Handlers de Imagens
   const proximaImagem = (e, uid, total) => {
     e.stopPropagation();
     setIndicesImagens((prev) => ({
@@ -488,7 +487,6 @@ export default function Figurinos({
       fotos: prev.fotos.filter((_, i) => i !== idx),
     }));
 
-  // Funções de API Principais
   const submitNovaPeca = async (e) => {
     e.preventDefault();
     if (!utilizador) return mostrarAlerta("Erro: Sessão inválida.");
@@ -601,7 +599,6 @@ export default function Figurinos({
     }
   };
 
-  // Abrir o modal de edição com os dados mapeados
   const abrirEdicao = (e, item) => {
     e.stopPropagation();
     let metodosPre = [];
@@ -639,7 +636,6 @@ export default function Figurinos({
     setIsEditModalOpen(true);
   };
 
-  // CORREÇÃO: ENVIO DO idUtilizador PARA EVITAR ERRO 500 NA BASE DE DADOS
   const handleGuardarEdicao = async (e) => {
     e.preventDefault();
     if (
@@ -686,10 +682,7 @@ export default function Figurinos({
         mostrarAlerta("Figurino editado com sucesso!");
         setIsEditModalOpen(false);
 
-        // FORÇAR ATUALIZAÇÃO VISUAL:
-        // 1. Limpar detalhes para forçar o fechamento do modal/view
         setItemDetalhe(null);
-        // 2. Recarregar dados do servidor
         await carregarDados(true);
       } else {
         const err = await res.json();
@@ -746,8 +739,8 @@ export default function Figurinos({
 
     setIsSubmitting(true);
     try {
-      const dInicioStr = formEmprestimo.dataInicio.toLocaleDateString("en-CA"); // Formata para YYYY-MM-DD
-      const dFimStr = formEmprestimo.dataFim.toLocaleDateString("en-CA"); // Formata para YYYY-MM-DD
+      const dInicioStr = formEmprestimo.dataInicio.toLocaleDateString("en-CA");
+      const dFimStr = formEmprestimo.dataFim.toLocaleDateString("en-CA");
 
       const res = await fetch(`${API_INV}/emprestimos`, {
         method: "POST",
@@ -800,9 +793,8 @@ export default function Figurinos({
       });
 
       if (res.ok) {
-        mostrarAlerta(`Reserva ${novoEstado.toLowerCase()} com sucesso!`);
+        mostrarAlerta(`Pedido ${novoEstado.toLowerCase()} com sucesso!`);
 
-        // Atualiza a lista dentro do modal instantaneamente
         const resRefresh = await fetch(
           `${API_INV}/pecas/${itemSelecionado.id_peca}/emprestimos`,
           {
@@ -811,10 +803,10 @@ export default function Figurinos({
         );
         if (resRefresh.ok) setPedidosAtuais(await resRefresh.json());
 
-        carregarDados(false); // Atualiza o catálogo por trás
+        carregarDados(false);
       } else {
         mostrarAlerta(
-          (await res.json()).mensagem || "Erro ao atualizar a reserva.",
+          (await res.json()).mensagem || "Erro ao atualizar o pedido.",
         );
       }
     } catch {
@@ -876,9 +868,8 @@ export default function Figurinos({
 
       if (res.ok) {
         mostrarAlerta("Ação registada com sucesso!");
-        setReservaEmGestao(null); // Fecha o formulário
+        setReservaEmGestao(null);
 
-        // Atualiza a lista de pedidos no modal
         const resRefresh = await fetch(
           `${API_INV}/pecas/${itemSelecionado.id_peca}/emprestimos`,
           { headers: { Authorization: `Bearer ${getToken()}` } },
@@ -896,7 +887,6 @@ export default function Figurinos({
     }
   };
 
-  // Keyboard navigation Lightbox / Detalhe
   useEffect(() => {
     const hk = (e) => {
       if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA")
@@ -968,7 +958,7 @@ export default function Figurinos({
                 else irParaMinhaAgendaEE?.();
               }}
             >
-              Minha agenda
+              Coaching{" "}
             </a>
           </li>
           <li>
@@ -1040,18 +1030,18 @@ export default function Figurinos({
               Os Meus Figurinos
             </button>
           )}
+          {utilizador && (
+            <button
+              className={`tab-btn ${activeTab === "requisicoes" ? "active" : ""}`}
+              onClick={() => setActiveTab("requisicoes")}
+            >
+              As Minhas Requisições
+            </button>
+          )}
         </div>
 
         {!isLoading && (
-          <div
-            style={{
-              display: "flex",
-              gap: "15px",
-              marginBottom: "25px",
-              flexWrap: "wrap",
-            }}
-          >
-            {/* ESTES FILTROS SÓ APARECEM NO MARKETPLACE */}
+          <div className="filtros-bar">
             {activeTab === "marketplace" && (
               <>
                 <input
@@ -1059,24 +1049,13 @@ export default function Figurinos({
                   placeholder="Pesquisar..."
                   value={pesquisa}
                   onChange={(e) => setPesquisa(e.target.value)}
-                  style={{
-                    flex: 1,
-                    minWidth: "200px",
-                    padding: "12px 16px",
-                    borderRadius: "8px",
-                    border: "1px solid rgba(0,0,0,0.12)",
-                  }}
+                  className="filtro-input"
                 />
 
                 <select
                   value={filtroTipoMarket}
                   onChange={(e) => setFiltroTipoMarket(e.target.value)}
-                  style={{
-                    padding: "12px 16px",
-                    borderRadius: "8px",
-                    border: "1px solid rgba(0,0,0,0.12)",
-                    background: "#fff",
-                  }}
+                  className="filtro-select"
                 >
                   <option value="Todos">Todas as Transações</option>
                   <option value="Vendas">Apenas Vendas</option>
@@ -1086,12 +1065,7 @@ export default function Figurinos({
                 <select
                   value={filtroEstado}
                   onChange={(e) => setFiltroEstado(e.target.value)}
-                  style={{
-                    padding: "12px 16px",
-                    borderRadius: "8px",
-                    border: "1px solid rgba(0,0,0,0.12)",
-                    background: "#fff",
-                  }}
+                  className="filtro-select"
                 >
                   <option value="Todos">Todos os Estados</option>
                   <option value="Novo">Novo</option>
@@ -1103,12 +1077,7 @@ export default function Figurinos({
                 <select
                   value={ordenacao}
                   onChange={(e) => setOrdenacao(e.target.value)}
-                  style={{
-                    padding: "12px 16px",
-                    borderRadius: "8px",
-                    border: "1px solid rgba(0,0,0,0.12)",
-                    background: "#fff",
-                  }}
+                  className="filtro-select"
                 >
                   <option value="recentes">Mais Recentes</option>
                   <option value="preco_asc">Preço: Mais Barato</option>
@@ -1119,214 +1088,315 @@ export default function Figurinos({
           </div>
         )}
 
-        <div className="items-grid">
-          {isLoading ? (
-            <div className="empty-state-container">A sincronizar...</div>
-          ) : itemsFiltrados.length === 0 ? (
-            <div className="empty-state-container">
-              Nenhum item encontrado nesta secção.
-            </div>
-          ) : (
-            itemsFiltrados.map((item) => {
-              const idxImg = indicesImagens[item.unique_id] || 0;
-              const tot = item.fotos?.length || 0;
-              const isIndisponivel =
-                item.estado === "Vendido" || item.estado === "Indisponível";
-              const eMeu = activeTab === "meus" || userId === item.vendedor_id;
+        {activeTab === "requisicoes" && !isLoading && (
+          <div className="requisicoes-list">
+            {minhasRequisicoes.length === 0 ? (
+              <div className="empty-state-container">
+                Ainda não solicitaste nenhum empréstimo.
+              </div>
+            ) : (
+              minhasRequisicoes.map((req) => {
+                const isRejeitado = req.estado === "Rejeitado";
+                const isAprovado =
+                  req.estado === "Aprovado" ||
+                  req.estado === "Em Curso" ||
+                  req.estado === "Concluído";
 
-              return (
-                <div
-                  key={item.unique_id}
-                  className={`item-card ${isIndisponivel ? "indisponivel" : ""}`}
-                  onClick={() => setItemDetalhe(item)}
-                  style={{ cursor: "pointer" }}
-                >
+                return (
                   <div
-                    className="item-image-container"
-                    style={
-                      tot > 0
-                        ? { backgroundImage: `url(${item.fotos[idxImg]})` }
-                        : { backgroundColor: "#dcd7ce" }
-                    }
+                    key={req.id_emprestimo}
+                    className="reserva-card reserva-card-req"
                   >
-                    {activeTab === "marketplace" ? (
-                      <>
-                        <span
-                          className={`tipo-badge ${item.source === "Venda" ? "venda" : "emprestimo"}`}
-                        >
-                          {item.source}
-                        </span>
-                        <span
-                          className={`status-badge ${isIndisponivel ? "vendido" : "disponivel"}`}
-                        >
-                          {isIndisponivel
-                            ? item.source === "Venda"
-                              ? "Vendido"
-                              : "Emprestado"
-                            : "Disponível"}
-                        </span>
-                      </>
-                    ) : (
-                      <span
-                        className={`status-badge ${item.estadoGlobal === "Guardado" ? "meu-guardado" : "disponivel"}`}
-                      >
-                        {item.estadoGlobal}
-                      </span>
-                    )}
+                    <div className="req-info-col">
+                      <h3 className="req-titulo">{req.peca_nome}</h3>
+                      <p className="req-detail">
+                        <strong>Fornecedor:</strong> {req.dono_peca}
+                      </p>
+                      <p className="req-detail-last">
+                        <strong>Período:</strong>{" "}
+                        {new Date(req.data_inicio).toLocaleDateString()} a{" "}
+                        {new Date(req.data_fim).toLocaleDateString()}
+                      </p>
 
-                    {tot > 1 && (
-                      <>
-                        <button
-                          className="img-nav-btn left"
-                          onClick={(e) =>
-                            imagemAnterior(e, item.unique_id, tot)
-                          }
+                      <div className="req-badges">
+                        <span
+                          className={`reserva-badge ${
+                            req.estado === "Pendente"
+                              ? "badge-pendente"
+                              : isAprovado
+                                ? "badge-aprovado"
+                                : ""
+                          } ${isRejeitado ? "badge-rejeitado" : ""}`}
                         >
-                          ‹
-                        </button>
-                        <button
-                          className="img-nav-btn right"
-                          onClick={(e) => proximaImagem(e, item.unique_id, tot)}
+                          Pedido {req.estado}
+                        </span>
+
+                        {isAprovado && (
+                          <span
+                            className={`reserva-badge ${req.estado_pagamento === "Pago" ? "badge-aprovado" : "badge-default"}`}
+                          >
+                            {req.estado_pagamento === "Pago"
+                              ? "Pagamento Recebido"
+                              : "Pagamento Pendente"}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="req-gestao-col">
+                      <h4 className="req-gestao-titulo">Detalhes da Gestão</h4>
+
+                      {!isRejeitado && (
+                        <p className="req-gestao-detail">
+                          <strong>Pagamento:</strong>{" "}
+                          {req.estado_pagamento === "Pago"
+                            ? `${parseFloat(req.valor || 0).toFixed(2)}€ pago a ${req.data_pagamento ? new Date(req.data_pagamento).toLocaleDateString() : "N/A"}`
+                            : "A aguardar pagamento"}
+                        </p>
+                      )}
+
+                      <p className="req-gestao-detail">
+                        <strong>Devolução:</strong>{" "}
+                        {req.data_devolucao
+                          ? `Registada a ${new Date(req.data_devolucao).toLocaleDateString()}`
+                          : "Ainda não devolvido"}
+                      </p>
+                      <p className="req-gestao-detail">
+                        <strong>Penalizações/Multas:</strong>{" "}
+                        {req.total_multas > 0
+                          ? `${req.total_multas.toFixed(2)}€ aplicados`
+                          : "Nenhuma"}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        )}
+
+        {activeTab !== "requisicoes" && (
+          <div className="items-grid">
+            {isLoading ? (
+              <div className="empty-state-container">A sincronizar...</div>
+            ) : itemsFiltrados.length === 0 ? (
+              <div className="empty-state-container">
+                Nenhum item encontrado nesta secção.
+              </div>
+            ) : (
+              itemsFiltrados.map((item) => {
+                const idxImg = indicesImagens[item.unique_id] || 0;
+                const tot = item.fotos?.length || 0;
+                const isIndisponivel =
+                  item.estado === "Vendido" || item.estado === "Indisponível";
+                const eMeu =
+                  activeTab === "meus" || userId === item.vendedor_id;
+
+                return (
+                  <div
+                    key={item.unique_id}
+                    className={`item-card item-card-clickable ${isIndisponivel ? "indisponivel" : ""}`}
+                    onClick={() => setItemDetalhe(item)}
+                  >
+                    <div
+                      className="item-image-container"
+                      style={
+                        tot > 0
+                          ? { backgroundImage: `url(${item.fotos[idxImg]})` }
+                          : { backgroundColor: "#dcd7ce" }
+                      }
+                    >
+                      {activeTab === "marketplace" ? (
+                        <>
+                          <span
+                            className={`tipo-badge ${item.source === "Venda" ? "venda" : "emprestimo"}`}
+                          >
+                            {item.source}
+                          </span>
+                          <span
+                            className={`status-badge ${isIndisponivel ? "vendido" : "disponivel"}`}
+                          >
+                            {isIndisponivel
+                              ? item.source === "Venda"
+                                ? "Vendido"
+                                : "Emprestado"
+                              : "Disponível"}
+                          </span>
+                        </>
+                      ) : (
+                        <span
+                          className={`status-badge ${item.estadoGlobal === "Guardado" ? "meu-guardado" : "disponivel"}`}
                         >
-                          ›
-                        </button>
-                        <div className="img-dots">
-                          {item.fotos.map((_, i) => (
-                            <span
-                              key={i}
-                              className={`dot ${i === idxImg ? "active" : ""}`}
-                            ></span>
+                          {item.estadoGlobal}
+                        </span>
+                      )}
+
+                      {tot > 1 && (
+                        <>
+                          <button
+                            className="img-nav-btn left"
+                            onClick={(e) =>
+                              imagemAnterior(e, item.unique_id, tot)
+                            }
+                          >
+                            ‹
+                          </button>
+                          <button
+                            className="img-nav-btn right"
+                            onClick={(e) =>
+                              proximaImagem(e, item.unique_id, tot)
+                            }
+                          >
+                            ›
+                          </button>
+                          <div className="img-dots">
+                            {item.fotos.map((_, i) => (
+                              <span
+                                key={i}
+                                className={`dot ${i === idxImg ? "active" : ""}`}
+                              ></span>
+                            ))}
+                          </div>
+                        </>
+                      )}
+
+                      {eMeu && activeTab === "meus" && (
+                        <div className="owner-actions">
+                          <button
+                            className="action-btn edit-btn"
+                            title="Editar Peça"
+                            onClick={(e) => abrirEdicao(e, item)}
+                          >
+                            ✎
+                          </button>
+                          <button
+                            className="action-btn delete-btn"
+                            title="Apagar"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setCustomAlert({
+                                show: true,
+                                message:
+                                  "Eliminar definitivamente este figurino do teu inventário?",
+                                type: "confirm",
+                                onConfirm: () => apagarPeca(item.id_peca),
+                              });
+                            }}
+                          >
+                            🗑️
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="item-content">
+                      <h3 className="item-nome">{item.nome}</h3>
+                      <div className="item-tags">
+                        <span>{item.condicao}</span>
+                        {item.tamanho && (
+                          <span className="tam-tag">Tam: {item.tamanho}</span>
+                        )}
+                      </div>
+                      <p className="item-descricao">{item.descricao}</p>
+
+                      {activeTab === "marketplace" && (
+                        <p className="item-owner">
+                          Por: {item.vendedorDisplay}
+                        </p>
+                      )}
+
+                      {item.metodos && item.metodos.length > 0 && (
+                        <div className="item-pagamentos">
+                          {item.metodos.map((m) => (
+                            <span key={m} className="tag-pagamento">
+                              {m}
+                            </span>
                           ))}
                         </div>
-                      </>
-                    )}
-
-                    {eMeu && activeTab === "meus" && (
-                      <div className="owner-actions">
-                        <button
-                          className="action-btn edit-btn"
-                          title="Editar Peça"
-                          onClick={(e) => abrirEdicao(e, item)}
-                        >
-                          ✎
-                        </button>
-                        <button
-                          className="action-btn delete-btn"
-                          title="Apagar"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setCustomAlert({
-                              show: true,
-                              message:
-                                "Eliminar definitivamente esta peça do teu inventário?",
-                              type: "confirm",
-                              onConfirm: () => apagarPeca(item.id_peca),
-                            });
-                          }}
-                        >
-                          🗑️
-                        </button>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="item-content">
-                    <h3 className="item-nome">{item.nome}</h3>
-                    <div className="item-tags">
-                      <span>{item.condicao}</span>
-                      {item.tamanho && (
-                        <span className="tam-tag">Tam: {item.tamanho}</span>
-                      )}
-                    </div>
-                    <p className="item-descricao">{item.descricao}</p>
-
-                    {activeTab === "marketplace" && (
-                      <p className="item-owner">Por: {item.vendedorDisplay}</p>
-                    )}
-
-                    {item.metodos && item.metodos.length > 0 && (
-                      <div className="item-pagamentos">
-                        {item.metodos.map((m) => (
-                          <span key={m} className="tag-pagamento">
-                            {m}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-
-                    <div className="item-footer">
-                      {item.precoDisplay && item.estadoGlobal !== "Guardado" ? (
-                        <span className="preco">
-                          {item.precoDisplay}€{" "}
-                          <small>{item.precoDisplayLabel}</small>
-                        </span>
-                      ) : (
-                        <span style={{ color: "transparent" }}>_</span>
                       )}
 
-                      {activeTab === "meus" ? (
-                        item.estadoGlobal === "Guardado" ? (
-                          <span className="texto-teu-item">
-                            Apenas Guardado
+                      <div className="item-footer">
+                        {item.precoDisplay &&
+                        item.estadoGlobal !== "Guardado" ? (
+                          <span className="preco">
+                            {item.precoDisplay}€{" "}
+                            <small>{item.precoDisplayLabel}</small>
                           </span>
-                        ) : item.estadoGlobal === "Para Empréstimo" ? (
-                          <button
-                            className="btn-dark btn-sm"
-                            onClick={(e) => abrirGerirEmprestimo(e, item)}
-                          >
-                            Gerir Reservas
-                          </button>
                         ) : (
-                          <span className="texto-teu-item">
-                            Visível no Marketplace
+                          <span className="preco-placeholder">_</span>
+                        )}
+
+                        {activeTab === "meus" ? (
+                          item.estadoGlobal === "Guardado" ? (
+                            <span className="texto-teu-item">
+                              Apenas Guardado
+                            </span>
+                          ) : item.estadoGlobal === "Para Empréstimo" ? (
+                            <div className="gerir-pedidos-wrapper">
+                              <button
+                                className="btn-dark"
+                                onClick={(e) => abrirGerirEmprestimo(e, item)}
+                              >
+                                Gerir Pedidos
+                              </button>
+
+                              {item.pedidos_pendentes > 0 && (
+                                <span className="badge-pedidos-pendentes">
+                                  {item.pedidos_pendentes}
+                                </span>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="texto-teu-item">
+                              Visível no Market
+                            </span>
+                          )
+                        ) : isIndisponivel ? (
+                          <span className="texto-indisponivel">
+                            {item.source === "Venda"
+                              ? `Vendido a ${item.comprador_display || ""}`
+                              : `Emprestado a ${item.comprador_display || ""}`}
                           </span>
-                        )
-                      ) : isIndisponivel ? (
-                        <span className="texto-indisponivel">
-                          {item.source === "Venda"
-                            ? `Vendido a ${item.comprador_display || ""}`
-                            : `Emprestado a ${item.comprador_display || ""}`}
-                        </span>
-                      ) : eMeu ? (
-                        <span className="texto-teu-item">O teu item</span>
-                      ) : (
-                        <button
-                          className="btn-outline btn-sm"
-                          disabled={!utilizador}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setItemSelecionado(item);
-                            if (item.source === "Venda") {
-                              setFormCompra({
-                                metodoPagamento: item.metodos[0] || "MBWay",
-                              });
-                              setIsCompraModalOpen(true);
-                            } else {
-                              setFormEmprestimo({
-                                ...formEmprestimo,
-                                dataInicio: null,
-                                dataFim: null,
-                                metodoPagamento: item.metodos[0] || "MBWay",
-                              });
-                              setIsSolicitarEmprestimoModalOpen(true);
-                            }
-                          }}
-                        >
-                          {item.source === "Venda"
-                            ? "Comprar Figurino"
-                            : "Solicitar Empréstimo"}{" "}
-                        </button>
-                      )}
+                        ) : eMeu ? (
+                          <span className="texto-teu-item">O teu item</span>
+                        ) : (
+                          <button
+                            className="btn-outline btn-sm"
+                            disabled={!utilizador}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setItemSelecionado(item);
+                              if (item.source === "Venda") {
+                                setFormCompra({
+                                  metodoPagamento: item.metodos[0] || "MBWay",
+                                });
+                                setIsCompraModalOpen(true);
+                              } else {
+                                setFormEmprestimo({
+                                  ...formEmprestimo,
+                                  dataInicio: null,
+                                  dataFim: null,
+                                  metodoPagamento: item.metodos[0] || "MBWay",
+                                });
+                                setIsSolicitarEmprestimoModalOpen(true);
+                              }
+                            }}
+                          >
+                            {item.source === "Venda"
+                              ? "Comprar Figurino"
+                              : "Solicitar Empréstimo"}{" "}
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
-              );
-            })
-          )}
-        </div>
+                );
+              })
+            )}
+          </div>
+        )}
       </div>
 
-      {/* --- HUD DE DETALHES --- */}
       {itemDetalhe &&
         (() => {
           const idx = indicesImagens[itemDetalhe.unique_id] || 0;
@@ -1347,48 +1417,25 @@ export default function Figurinos({
 
           return (
             <div
-              className="modal-overlay"
+              className="modal-overlay modal-overlay-detalhe"
               onClick={() => setItemDetalhe(null)}
-              style={{ zIndex: 2005, background: "rgba(21,19,17,0.92)" }}
             >
               {itemsFiltrados.length > 1 && (
                 <>
                   <button
+                    className="nav-detalhe-btn left"
                     onClick={(e) => {
                       e.stopPropagation();
                       nav(-1);
-                    }}
-                    style={{
-                      position: "absolute",
-                      left: "20px",
-                      background: "rgba(238,234,226,0.9)",
-                      border: "none",
-                      borderRadius: "50%",
-                      width: "45px",
-                      height: "45px",
-                      fontSize: "1.8rem",
-                      cursor: "pointer",
-                      zIndex: 2006,
                     }}
                   >
                     ‹
                   </button>
                   <button
+                    className="nav-detalhe-btn right"
                     onClick={(e) => {
                       e.stopPropagation();
                       nav(1);
-                    }}
-                    style={{
-                      position: "absolute",
-                      right: "20px",
-                      background: "rgba(238,234,226,0.9)",
-                      border: "none",
-                      borderRadius: "50%",
-                      width: "45px",
-                      height: "45px",
-                      fontSize: "1.8rem",
-                      cursor: "pointer",
-                      zIndex: 2006,
                     }}
                   >
                     ›
@@ -1396,47 +1443,16 @@ export default function Figurinos({
                 </>
               )}
               <div
-                className="modal-content"
+                className="modal-content modal-content-detalhe"
                 onClick={(e) => e.stopPropagation()}
-                style={{
-                  maxWidth: "900px",
-                  width: "90%",
-                  maxHeight: "85vh",
-                  padding: 0,
-                  display: "flex",
-                  flexDirection: "row",
-                  overflow: "hidden",
-                  minHeight: "500px",
-                }}
               >
-                <div
-                  style={{
-                    flex: 1.1,
-                    display: "flex",
-                    flexDirection: "column",
-                    backgroundColor: "#dcd7ce",
-                    borderRight: "1px solid rgba(0,0,0,0.05)",
-                  }}
-                >
-                  <div
-                    style={{
-                      flex: 1,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      padding: "20px",
-                    }}
-                  >
+                <div className="detalhe-imagem-col">
+                  <div className="detalhe-imagem-main">
                     {tot > 0 ? (
                       <img
                         src={itemDetalhe.fotos[idx]}
                         alt="Item"
-                        style={{
-                          maxWidth: "100%",
-                          maxHeight: "100%",
-                          objectFit: "contain",
-                          cursor: "zoom-in",
-                        }}
+                        className="detalhe-imagem-img"
                         onClick={() => setIsLightboxOpen(true)}
                       />
                     ) : (
@@ -1444,32 +1460,12 @@ export default function Figurinos({
                     )}
                   </div>
                   {tot > 1 && (
-                    <div
-                      style={{
-                        display: "flex",
-                        gap: "12px",
-                        padding: "15px",
-                        backgroundColor: "rgba(0,0,0,0.04)",
-                        overflowX: "auto",
-                        justifyContent: "center",
-                      }}
-                    >
+                    <div className="detalhe-thumbs">
                       {itemDetalhe.fotos.map((f, i) => (
                         <img
                           key={i}
                           src={f}
-                          style={{
-                            width: "65px",
-                            height: "65px",
-                            objectFit: "cover",
-                            cursor: "pointer",
-                            borderRadius: "8px",
-                            border:
-                              i === idx
-                                ? "3px solid #ab855a"
-                                : "2px solid transparent",
-                            opacity: i === idx ? 1 : 0.6,
-                          }}
+                          className={`detalhe-thumb ${i === idx ? "active" : ""}`}
                           onClick={() =>
                             setIndicesImagens((p) => ({
                               ...p,
@@ -1481,35 +1477,11 @@ export default function Figurinos({
                     </div>
                   )}
                 </div>
-                <div
-                  style={{
-                    flex: 1,
-                    padding: "40px",
-                    display: "flex",
-                    flexDirection: "column",
-                    justifyContent: "space-between",
-                    overflowY: "auto",
-                  }}
-                >
+                <div className="detalhe-info-col">
                   <div>
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        marginBottom: "25px",
-                      }}
-                    >
+                    <div className="detalhe-header">
                       <span
-                        style={{
-                          padding: "6px 14px",
-                          borderRadius: "20px",
-                          fontSize: "0.8rem",
-                          fontWeight: 700,
-                          textTransform: "uppercase",
-                          background: indisp ? "#2a2724" : "#ab855a",
-                          color: "#fff",
-                        }}
+                        className={`detalhe-badge ${indisp ? "indisp" : ""}`}
                       >
                         {activeTab === "meus"
                           ? itemDetalhe.estadoGlobal
@@ -1518,114 +1490,35 @@ export default function Figurinos({
                             : `Disponível para ${itemDetalhe.source}`}
                       </span>
                       <button
+                        className="btn-fechar-detalhe"
                         onClick={() => setItemDetalhe(null)}
-                        style={{
-                          background: "none",
-                          border: "none",
-                          fontSize: "1.8rem",
-                          cursor: "pointer",
-                          color: "#8a8480",
-                        }}
                       >
                         &times;
                       </button>
                     </div>
-                    <h2
-                      style={{
-                        fontSize: "2.4rem",
-                        color: "#2a2724",
-                        margin: "0 0 10px 0",
-                        fontFamily: "'Cormorant Garamond', serif",
-                      }}
-                    >
-                      {itemDetalhe.nome}
-                    </h2>
-                    <div
-                      style={{
-                        display: "flex",
-                        gap: "15px",
-                        marginBottom: "30px",
-                      }}
-                    >
-                      <div
-                        style={{
-                          background: "#dfdbd2",
-                          padding: "10px 15px",
-                          borderRadius: "8px",
-                        }}
-                      >
-                        <span
-                          style={{
-                            fontSize: "0.75rem",
-                            color: "#8a8480",
-                            textTransform: "uppercase",
-                            fontWeight: 700,
-                            display: "block",
-                            margin: "0 0 4px 0",
-                          }}
-                        >
-                          Estado
-                        </span>
-                        <strong style={{ fontSize: "0.9rem" }}>
+                    <h2 className="detalhe-titulo">{itemDetalhe.nome}</h2>
+                    <div className="detalhe-tags">
+                      <div className="detalhe-tag-box">
+                        <span className="detalhe-tag-label">Estado</span>
+                        <strong className="detalhe-tag-value">
                           {itemDetalhe.condicao}
                         </strong>
                       </div>
                       {itemDetalhe.tamanho && (
-                        <div
-                          style={{
-                            background: "#dfdbd2",
-                            padding: "10px 15px",
-                            borderRadius: "8px",
-                          }}
-                        >
-                          <span
-                            style={{
-                              fontSize: "0.75rem",
-                              color: "#8a8480",
-                              textTransform: "uppercase",
-                              fontWeight: 700,
-                              display: "block",
-                              margin: "0 0 4px 0",
-                            }}
-                          >
-                            Tamanho
-                          </span>
-                          <strong style={{ fontSize: "0.9rem" }}>
+                        <div className="detalhe-tag-box">
+                          <span className="detalhe-tag-label">Tamanho</span>
+                          <strong className="detalhe-tag-value">
                             {itemDetalhe.tamanho}
                           </strong>
                         </div>
                       )}
                     </div>
-                    <p
-                      style={{
-                        color: "#5a5450",
-                        lineHeight: "1.6",
-                        marginBottom: "30px",
-                      }}
-                    >
-                      {itemDetalhe.descricao}
-                    </p>
+                    <p className="detalhe-descricao">{itemDetalhe.descricao}</p>
 
                     {activeTab === "marketplace" && (
-                      <div style={{ marginBottom: "30px" }}>
-                        <span
-                          style={{
-                            fontSize: "0.75rem",
-                            color: "#8a8480",
-                            textTransform: "uppercase",
-                            fontWeight: 700,
-                          }}
-                        >
-                          Fornecido por
-                        </span>
-                        <p
-                          style={{
-                            color: "#b38b59",
-                            fontWeight: "600",
-                            margin: "4px 0 15px 0",
-                            fontSize: "1.1rem",
-                          }}
-                        >
+                      <div className="detalhe-fornecedor-wrap">
+                        <span className="detalhe-tag-label">Fornecido por</span>
+                        <p className="detalhe-fornecedor-nome">
                           {itemDetalhe.vendedorDisplay}
                         </p>
                       </div>
@@ -1633,37 +1526,12 @@ export default function Figurinos({
                   </div>
 
                   {itemDetalhe.precoDisplay && (
-                    <div
-                      style={{
-                        borderTop: "1px solid #dcd7ce",
-                        paddingTop: "30px",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                      }}
-                    >
+                    <div className="detalhe-preco-bar">
                       <div>
-                        <span
-                          style={{
-                            fontSize: "0.75rem",
-                            color: "#8a8480",
-                            textTransform: "uppercase",
-                            fontWeight: 700,
-                          }}
-                        >
-                          Preço
-                        </span>
-                        <div
-                          style={{
-                            fontSize: "2.2rem",
-                            fontWeight: "800",
-                            color: "#2a2724",
-                          }}
-                        >
+                        <span className="detalhe-tag-label">Preço</span>
+                        <div className="detalhe-preco-valor">
                           {itemDetalhe.precoDisplay}€
-                          <small
-                            style={{ fontSize: "0.9rem", color: "#8a8480" }}
-                          >
+                          <small className="detalhe-preco-small">
                             {itemDetalhe.precoDisplayLabel}
                           </small>
                         </div>
@@ -1672,17 +1540,9 @@ export default function Figurinos({
                   )}
                   {activeTab === "marketplace" &&
                     userId !== itemDetalhe.vendedor_id && (
-                      // Contentor simplificado que alinha os botões à direita, mantendo o seu tamanho natural
-                      <div
-                        style={{
-                          display: "flex",
-                          gap: "10px",
-                          marginTop: "20px",
-                          justifyContent: "flex-end",
-                        }}
-                      >
+                      <div className="detalhe-actions">
                         <button
-                          className="btn-dark" // Voltamos a usar apenas a classe CSS padrão, mantendo a lógica inteligente
+                          className="btn-dark"
                           onClick={(e) => {
                             e.stopPropagation();
                             setItemSelecionado(itemDetalhe);
@@ -1717,9 +1577,8 @@ export default function Figurinos({
           );
         })()}
 
-      {/* --- MODAIS DE FORMS --- */}
       {isAddModalOpen && (
-        <div className="modal-overlay" style={{ zIndex: 2002 }}>
+        <div className="modal-overlay modal-overlay-form">
           <div className="modal-content form-modal">
             <h2>Adicionar ao Inventário Digital</h2>
             <form onSubmit={submitNovaPeca}>
@@ -1869,7 +1728,7 @@ export default function Figurinos({
                       multiple
                       onChange={handleFotosUpload}
                       onClick={(e) => (e.target.value = null)}
-                      style={{ display: "none" }}
+                      className="input-hidden"
                     />
                   </label>
                 )}
@@ -1895,9 +1754,8 @@ export default function Figurinos({
         </div>
       )}
 
-      {/* --- MODAL EDITAR PEÇA --- */}
       {isEditModalOpen && (
-        <div className="modal-overlay" style={{ zIndex: 2002 }}>
+        <div className="modal-overlay modal-overlay-form">
           <div className="modal-content form-modal">
             <h2>Editar Peça</h2>
             <form onSubmit={handleGuardarEdicao}>
@@ -2047,14 +1905,10 @@ export default function Figurinos({
         </div>
       )}
 
-      {/* --- MODAL CONFIRMAR COMPRA --- */}
       {isCompraModalOpen && itemSelecionado && (
-        <div className="modal-overlay" style={{ zIndex: 2010 }}>
-          <div
-            className="modal-content"
-            style={{ maxWidth: "400px", padding: "35px" }}
-          >
-            <h2 style={{ marginBottom: "10px" }}>Confirmar Compra</h2>
+        <div className="modal-overlay modal-overlay-action">
+          <div className="modal-content modal-content-sm">
+            <h2 className="modal-h2-tight">Confirmar Compra</h2>
             <div className="resumo-compra">
               <p>
                 <strong>Total:</strong> {itemSelecionado.precoDisplay}€{" "}
@@ -2081,19 +1935,17 @@ export default function Figurinos({
                   ))}
                 </select>
               </div>
-              <div style={{ display: "flex", gap: "10px", marginTop: "20px" }}>
+              <div className="form-actions-row">
                 <button
                   type="button"
-                  className="btn-outline"
-                  style={{ flex: 1 }}
+                  className="btn-outline btn-flex-1"
                   onClick={() => setIsCompraModalOpen(false)}
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="btn-dark"
-                  style={{ flex: 1.5 }}
+                  className="btn-dark btn-flex-15"
                   disabled={isSubmitting}
                 >
                   Comprar
@@ -2104,11 +1956,9 @@ export default function Figurinos({
         </div>
       )}
 
-      {/* --- MODAL SOLICITAR EMPRÉSTIMO --- */}
       {isSolicitarEmprestimoModalOpen &&
         itemSelecionado &&
         (() => {
-          // Cálculo matemático de dias
           let diffDays = 0;
           if (formEmprestimo.dataInicio && formEmprestimo.dataFim) {
             const diffTime = Math.abs(
@@ -2119,37 +1969,26 @@ export default function Figurinos({
             diffDays = 1;
           }
 
-          // Cálculo do valor
           const precoPorDia = parseFloat(itemSelecionado.precoDisplay) || 0;
           const estimatedPrice = (precoPorDia * diffDays).toFixed(2);
 
           return (
-            <div className="modal-overlay" style={{ zIndex: 2010 }}>
-              <div
-                className="modal-content"
-                style={{ maxWidth: "450px", padding: "35px" }}
-              >
-                <h2 style={{ marginBottom: "10px" }}>Solicitar Empréstimo</h2>
+            <div className="modal-overlay modal-overlay-action">
+              <div className="modal-content modal-content-md">
+                <h2 className="modal-h2-tight">Solicitar Empréstimo</h2>
 
-                {/* Novo Cartão de Resumo Dinâmico */}
                 <div className="resumo-compra">
                   <p>
                     <strong>Preço Base:</strong> {itemSelecionado.precoDisplay}€{" "}
                     {itemSelecionado.precoDisplayLabel}
                   </p>
                   {diffDays > 0 && (
-                    <div
-                      style={{
-                        marginTop: "12px",
-                        paddingTop: "12px",
-                        borderTop: "1px solid rgba(0,0,0,0.1)",
-                      }}
-                    >
-                      <p style={{ margin: "0 0 5px 0" }}>
+                    <div className="resumo-divider">
+                      <p className="p-margem-zero-bot">
                         <strong>Dias Selecionados:</strong> {diffDays}{" "}
                         {diffDays === 1 ? "dia" : "dias"}
                       </p>
-                      <p style={{ margin: 0 }}>
+                      <p className="p-margem-zero">
                         <strong>Total Estimado:</strong> {estimatedPrice}€
                       </p>
                     </div>
@@ -2158,7 +1997,7 @@ export default function Figurinos({
 
                 <form onSubmit={confirmarEmprestimo}>
                   <div className="form-row">
-                    <div className="form-group" style={{ zIndex: 100 }}>
+                    <div className="form-group form-group-datepicker">
                       <label>Data de Início</label>
                       <DatePicker
                         selected={formEmprestimo.dataInicio}
@@ -2184,7 +2023,7 @@ export default function Figurinos({
                         required
                       />
                     </div>
-                    <div className="form-group" style={{ zIndex: 100 }}>
+                    <div className="form-group form-group-datepicker">
                       <label>Data de Fim</label>
                       <DatePicker
                         selected={formEmprestimo.dataFim}
@@ -2230,21 +2069,17 @@ export default function Figurinos({
                       ))}
                     </select>
                   </div>
-                  <div
-                    style={{ display: "flex", gap: "10px", marginTop: "20px" }}
-                  >
+                  <div className="form-actions-row">
                     <button
                       type="button"
-                      className="btn-outline"
-                      style={{ flex: 1 }}
+                      className="btn-outline btn-flex-1"
                       onClick={() => setIsSolicitarEmprestimoModalOpen(false)}
                     >
                       Cancelar
                     </button>
                     <button
                       type="submit"
-                      className="btn-dark"
-                      style={{ flex: 1.5 }}
+                      className="btn-dark btn-flex-15"
                       disabled={isSubmitting}
                     >
                       Confirmar Pedido
@@ -2256,63 +2091,25 @@ export default function Figurinos({
           );
         })()}
 
-      {/* --- NOVO MODAL GERIR PEDIDOS DE EMPRÉSTIMO --- */}
       {isGerirEmprestimoModalOpen && itemSelecionado && (
-        <div className="modal-overlay" style={{ zIndex: 2002 }}>
-          <div
-            className="modal-content form-modal"
-            style={{ maxWidth: "650px", padding: "35px" }}
-          >
-            {/* Header do Modal Limpo */}
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "flex-start",
-                marginBottom: "30px",
-              }}
-            >
+        <div className="modal-overlay modal-overlay-form">
+          <div className="modal-content form-modal modal-content-lg">
+            <div className="gerir-header">
               <div>
-                <h2
-                  style={{
-                    margin: "0 0 5px 0",
-                    fontSize: "1.6rem",
-                    color: "#2a2724",
-                  }}
-                >
-                  Gerir Reservas
-                </h2>
-                <span
-                  style={{
-                    fontSize: "1.05rem",
-                    color: "#8a8480",
-                    fontWeight: "500",
-                  }}
-                >
+                <h2 className="gerir-titulo">Gerir Pedidos</h2>
+                <span className="gerir-subtitulo">
                   Figurino: {itemSelecionado.nome}
                 </span>
               </div>
               <button
+                className="btn-fechar-detalhe"
                 onClick={() => setIsGerirEmprestimoModalOpen(false)}
-                style={{
-                  background: "none",
-                  border: "none",
-                  fontSize: "1.8rem",
-                  cursor: "pointer",
-                  color: "#8a8480",
-                }}
               >
                 &times;
               </button>
             </div>
 
-            <div
-              style={{
-                maxHeight: "60vh",
-                overflowY: "auto",
-                paddingRight: "10px",
-              }}
-            >
+            <div className="gerir-lista">
               {pedidosAtuais.length > 0 ? (
                 pedidosAtuais.map((pedido) => {
                   const isPendente = pedido.estado === "Pendente";
@@ -2320,7 +2117,6 @@ export default function Figurinos({
                     pedido.estado === "Aprovado" ||
                     pedido.estado === "Em Curso";
 
-                  // Cálculo de dias para a interface
                   const d1 = new Date(pedido.data_inicio);
                   const d2 = new Date(pedido.data_fim);
                   const diffTime = Math.abs(d2 - d1);
@@ -2343,7 +2139,6 @@ export default function Figurinos({
                       </div>
 
                       <div className="reserva-body">
-                        {/* Datas e dias */}
                         <div className="reserva-detail">
                           <div className="detail-text">
                             <span className="detail-label">
@@ -2357,28 +2152,18 @@ export default function Figurinos({
                           </div>
                         </div>
 
-                        {/* Informações de pagamento do requisitante */}
-                        <div
-                          className="reserva-detail"
-                          style={{ marginTop: "12px" }}
-                        >
+                        <div className="reserva-detail mt-12">
                           <div className="detail-text">
                             <span className="detail-label">
                               Informação de Pagamento
                             </span>
-                            <span
-                              className="detail-value"
-                              style={{ display: "block", marginTop: "2px" }}
-                            >
+                            <span className="detail-value detail-value-block">
                               Método selecionado:{" "}
                               <strong>
                                 {pedido.metodo_pagamento || "Não especificado"}
                               </strong>
                             </span>
-                            <span
-                              className="detail-value"
-                              style={{ display: "block", marginTop: "2px" }}
-                            >
+                            <span className="detail-value detail-value-block">
                               Total a cobrar:{" "}
                               <strong>
                                 {(
@@ -2392,7 +2177,6 @@ export default function Figurinos({
                         </div>
                       </div>
 
-                      {/* Botões só aparecem se estiver pendente */}
                       {isPendente && (
                         <div className="reserva-actions">
                           <button
@@ -2411,12 +2195,11 @@ export default function Figurinos({
                             }
                             disabled={isSubmitting}
                           >
-                            Aprovar Reserva
+                            Aprovar Pedido
                           </button>
                         </div>
                       )}
 
-                      {/* Botão para reservas Aprovadas / Em Curso */}
                       {isAprovado && reservaEmGestao !== pedido.id && (
                         <div className="reserva-actions">
                           <button
@@ -2429,20 +2212,13 @@ export default function Figurinos({
                               });
                             }}
                           >
-                            ⚙️ Gerir Empréstimo
+                            Gerir Empréstimo
                           </button>
                         </div>
                       )}
 
-                      {/* Formulário de Gestão Embutido para a Reserva Selecionada */}
                       {reservaEmGestao === pedido.id && (
-                        <div
-                          style={{
-                            marginTop: "20px",
-                            paddingTop: "20px",
-                            borderTop: "1px dashed #e0dcd2",
-                          }}
-                        >
+                        <div className="gerir-form-wrap">
                           <form onSubmit={submitGerirEmprestimo}>
                             <div className="form-group">
                               <label>Ação a Realizar</label>
@@ -2568,25 +2344,17 @@ export default function Figurinos({
                               </div>
                             )}
 
-                            <div
-                              style={{
-                                display: "flex",
-                                gap: "10px",
-                                marginTop: "15px",
-                              }}
-                            >
+                            <div className="gerir-form-actions">
                               <button
                                 type="button"
-                                className="btn-outline"
-                                style={{ flex: 1 }}
+                                className="btn-outline btn-flex-1"
                                 onClick={() => setReservaEmGestao(null)}
                               >
                                 Cancelar
                               </button>
                               <button
                                 type="submit"
-                                className="btn-dark"
-                                style={{ flex: 2 }}
+                                className="btn-dark btn-flex-2"
                                 disabled={isSubmitting}
                               >
                                 Submeter Ação
@@ -2599,31 +2367,11 @@ export default function Figurinos({
                   );
                 })
               ) : (
-                <div
-                  className="empty-state-container"
-                  style={{
-                    padding: "40px 20px",
-                    background: "#f9f8f6",
-                    border: "1px solid #e0dcd2",
-                    borderRadius: "8px",
-                  }}
-                >
-                  <div
-                    style={{
-                      fontSize: "1.1rem",
-                      color: "#2a2724",
-                      fontWeight: "600",
-                    }}
-                  >
-                    Nenhuma reserva encontrada
+                <div className="empty-state-container empty-state-card">
+                  <div className="empty-state-titulo">
+                    Nenhum pedido encontrada
                   </div>
-                  <p
-                    style={{
-                      fontSize: "0.9rem",
-                      color: "#8a8480",
-                      margin: "8px 0 0 0",
-                    }}
-                  >
+                  <p className="empty-state-msg">
                     Não existem pedidos de empréstimo ativos para esta peça.
                   </p>
                 </div>
@@ -2635,13 +2383,12 @@ export default function Figurinos({
 
       {isLightboxOpen && itemDetalhe && (
         <div
-          className="modal-overlay"
-          style={{ zIndex: 3000, background: "rgba(0,0,0,0.95)" }}
+          className="modal-overlay lightbox-overlay"
           onClick={() => setIsLightboxOpen(false)}
         >
           <img
             src={itemDetalhe.fotos[indicesImagens[itemDetalhe.unique_id] || 0]}
-            style={{ maxWidth: "90%", maxHeight: "90vh", objectFit: "contain" }}
+            className="lightbox-img"
             onClick={(e) => e.stopPropagation()}
           />
         </div>
@@ -2728,7 +2475,7 @@ export default function Figurinos({
       </footer>
 
       {customAlert.show && (
-        <div className="modal-overlay" style={{ zIndex: 9999 }}>
+        <div className="modal-overlay modal-overlay-alert">
           <div className="modal-content alert-box">
             <p className="alert-message">{customAlert.message}</p>
             <div className="alert-buttons">

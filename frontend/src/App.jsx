@@ -5,6 +5,7 @@ import {
   Route,
   useNavigate,
   useLocation,
+  Navigate,
 } from "react-router-dom";
 import Landing from "./pages/LandingPage/Landing";
 import Login from "./pages/Login-Registo/Login";
@@ -13,6 +14,22 @@ import RecoverPassword from "./pages/Login-Registo/RecoverPassword";
 import Figurinos from "./pages/Figurinos/Figurinos";
 import AdminDashboard from "./pages/AdminDashboard/AdminDashboard";
 import MinhaAgendaProfessor from "./pages/MinhaAgendaProfessor/MinhaAgendaProfessor";
+
+// ============================================================================
+// COMPONENTE DE PROTEÇÃO DE ROTAS
+// ============================================================================
+function ProtectedRoute({ children }) {
+  // Verifica se o utilizador tem sessão iniciada
+  const isAuth = localStorage.getItem("viva_user") !== null;
+
+  if (!isAuth) {
+    // Se não estiver logado, redireciona para o Login
+    return <Navigate to="/login" replace />;
+  }
+
+  // Se estiver logado, renderiza a página normalmente
+  return children;
+}
 
 function AppRoutes() {
   const navigate = useNavigate();
@@ -37,6 +54,9 @@ function AppRoutes() {
 
   return (
     <Routes>
+      {/* ========================================== */}
+      {/* ROTAS PÚBLICAS (Qualquer pessoa acede) */}
+      {/* ========================================== */}
       <Route
         path="/"
         element={
@@ -76,27 +96,34 @@ function AppRoutes() {
         }
       />
 
+      {/* ========================================== */}
+      {/* ROTAS PROTEGIDAS (Apenas com Login) */}
+      {/* ========================================== */}
       <Route
         path="/figurinos"
         element={
-          <Figurinos
-            irParaLanding={nav.landing}
-            irParaFigurinos={nav.figurinos}
-            irParaMinhaAgendaProfessor={nav.minha_agenda_professor}
-            irParaMinhaAgendaEE={nav.minha_agenda_ee}
-          />
+          <ProtectedRoute>
+            <Figurinos
+              irParaLanding={nav.landing}
+              irParaFigurinos={nav.figurinos}
+              irParaMinhaAgendaProfessor={nav.minha_agenda_professor}
+              irParaMinhaAgendaEE={nav.minha_agenda_ee}
+            />
+          </ProtectedRoute>
         }
       />
 
       <Route
         path="/coaching"
         element={
-          <MinhaAgendaProfessor
-            irParaLanding={nav.landing}
-            irParaFigurinos={nav.figurinos}
-            irParaMinhaAgendaProfessor={nav.minha_agenda_professor}
-            irParaMinhaAgendaEE={nav.minha_agenda_ee}
-          />
+          <ProtectedRoute>
+            <MinhaAgendaProfessor
+              irParaLanding={nav.landing}
+              irParaFigurinos={nav.figurinos}
+              irParaMinhaAgendaProfessor={nav.minha_agenda_professor}
+              irParaMinhaAgendaEE={nav.minha_agenda_ee}
+            />
+          </ProtectedRoute>
         }
       />
 

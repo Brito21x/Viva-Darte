@@ -23,15 +23,18 @@ app.use((req, res, next) => {
   next();
 });
 
+const allowedOrigins = [
+  "https://vivadarte.netlify.app",
+  "http://localhost:5173",
+  "http://localhost:3000",
+];
+
 const corsOptions = {
   origin(origin, callback) {
-    if (!origin) return callback(null, true);
+    // log para debug — vamos ver no terminal qual é a origin real
+    console.log("[CORS] origem recebida:", JSON.stringify(origin));
 
-    const allowedOrigins = [
-      "https://vivadarte.netlify.app",
-      "http://localhost:5173",
-      "http://localhost:3000",
-    ];
+    if (!origin) return callback(null, true);
 
     const isLocalhost = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(
       origin,
@@ -41,7 +44,9 @@ const corsOptions = {
       return callback(null, true);
     }
 
-    return callback(new Error("Origem não permitida pelo CORS: " + origin));
+    // NUNCA usar new Error(...) — provoca 500 sem headers CORS
+    console.warn("[CORS] origem NÃO permitida:", JSON.stringify(origin));
+    return callback(null, false);
   },
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
@@ -50,6 +55,7 @@ const corsOptions = {
     "Authorization",
     "ngrok-skip-browser-warning",
   ],
+  optionsSuccessStatus: 204,
 };
 
 app.use(cors(corsOptions));

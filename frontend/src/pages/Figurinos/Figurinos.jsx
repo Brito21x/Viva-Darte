@@ -131,7 +131,10 @@ export default function Figurinos({
 
     try {
       const res = await fetch(`${API_INV}/pecas/${item.id_peca}/emprestimos`, {
-        headers: { Authorization: `Bearer ${getToken()}` },
+        headers: {
+          Authorization: `Bearer ${getToken()}`,
+          "ngrok-skip-browser-warning": "true",
+        },
       });
       if (res.ok) setPedidosAtuais(await res.json());
     } catch (err) {
@@ -146,7 +149,10 @@ export default function Figurinos({
 
     try {
       const res = await fetch(`${API_INV}/pecas/${item.id_peca}/emprestimos`, {
-        headers: { Authorization: `Bearer ${getToken()}` },
+        headers: {
+          Authorization: `Bearer ${getToken()}`,
+          "ngrok-skip-browser-warning": "true",
+        },
       });
       if (res.ok) setPedidosAtuais(await res.json());
     } catch (err) {
@@ -225,7 +231,10 @@ export default function Figurinos({
   const carregarDados = async (showLoading = false) => {
     if (showLoading) setIsLoading(true);
     try {
-      const headers = { Authorization: `Bearer ${getToken()}` };
+      const headers = {
+        Authorization: `Bearer ${getToken()}`,
+        "ngrok-skip-browser-warning": "true",
+      };
       const [resPecas, resVendas, resMeusPedidos] = await Promise.all([
         fetch(API_INV, { headers, cache: "no-store" }),
         fetch(`${API_INV}/vendas`, { headers, cache: "no-store" }),
@@ -507,6 +516,7 @@ export default function Figurinos({
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${getToken()}`,
+          "ngrok-skip-browser-warning": "true",
         },
         body: JSON.stringify({
           nome: novaPeca.nome,
@@ -538,6 +548,7 @@ export default function Figurinos({
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${getToken()}`,
+            "ngrok-skip-browser-warning": "true",
           },
           body: JSON.stringify({
             idPeca: idPeca,
@@ -553,6 +564,7 @@ export default function Figurinos({
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${getToken()}`,
+            "ngrok-skip-browser-warning": "true",
           },
           body: JSON.stringify({
             estado: novaPeca.condicao,
@@ -588,7 +600,10 @@ export default function Figurinos({
     try {
       const res = await fetch(`${API_INV}/${idPeca}`, {
         method: "DELETE",
-        headers: { Authorization: `Bearer ${getToken()}` },
+        headers: {
+          Authorization: `Bearer ${getToken()}`,
+          "ngrok-skip-browser-warning": "true",
+        },
       });
       if (res.ok) {
         mostrarAlerta("Removido com sucesso!");
@@ -673,6 +688,7 @@ export default function Figurinos({
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${getToken()}`,
+            "ngrok-skip-browser-warning": "true",
           },
           body: JSON.stringify(payload),
         },
@@ -706,6 +722,7 @@ export default function Figurinos({
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${getToken()}`,
+            "ngrok-skip-browser-warning": "true",
           },
           body: JSON.stringify({
             idComprador: userId,
@@ -747,6 +764,7 @@ export default function Figurinos({
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${getToken()}`,
+          "ngrok-skip-browser-warning": "true",
         },
         body: JSON.stringify({
           dataInicio: dInicioStr,
@@ -788,6 +806,7 @@ export default function Figurinos({
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${getToken()}`,
+          "ngrok-skip-browser-warning": "true",
         },
         body: JSON.stringify({ status: novoEstado }),
       });
@@ -798,7 +817,10 @@ export default function Figurinos({
         const resRefresh = await fetch(
           `${API_INV}/pecas/${itemSelecionado.id_peca}/emprestimos`,
           {
-            headers: { Authorization: `Bearer ${getToken()}` },
+            headers: {
+              Authorization: `Bearer ${getToken()}`,
+              "ngrok-skip-browser-warning": "true",
+            },
           },
         );
         if (resRefresh.ok) setPedidosAtuais(await resRefresh.json());
@@ -862,6 +884,7 @@ export default function Figurinos({
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${getToken()}`,
+          "ngrok-skip-browser-warning": "true",
         },
         body: JSON.stringify(payload),
       });
@@ -872,7 +895,12 @@ export default function Figurinos({
 
         const resRefresh = await fetch(
           `${API_INV}/pecas/${itemSelecionado.id_peca}/emprestimos`,
-          { headers: { Authorization: `Bearer ${getToken()}` } },
+          {
+            headers: {
+              Authorization: `Bearer ${getToken()}`,
+              "ngrok-skip-browser-warning": "true",
+            },
+          },
         );
         if (resRefresh.ok) setPedidosAtuais(await resRefresh.json());
 

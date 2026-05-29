@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import "./AdminDashboard.css";
 import logoImg from "../../assets/logo.png";
 
-const API_URL = "https://salvaging-clumsily-skinhead.ngrok-free.dev";
+const API_URL = "https://zeppelin-squid-kick.ngrok-free.dev";
 
 function traduzErroCoaching(err, fallback) {
   const msg = String(err?.message || "").trim();
@@ -27,6 +27,7 @@ function apiFetch(path, token, opts = {}) {
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
+      "ngrok-skip-browser-warning": "true",
       ...(opts.headers || {}),
     },
     body: opts.body ? JSON.stringify(opts.body) : undefined,
@@ -548,6 +549,7 @@ export default function AdminDashboard({ irParaLanding }) {
       const pecasData = await fetch(`${API_URL}/api/inventario`, {
         headers: {
           Authorization: `Bearer ${token}`,
+          "ngrok-skip-browser-warning": "true",
           "Content-Type": "application/json",
         },
       }).then(async (r) => {
@@ -1301,6 +1303,7 @@ export default function AdminDashboard({ irParaLanding }) {
       const res = await fetch(`${API_URL}/api/faturacao?${params.toString()}`, {
         headers: {
           Authorization: `Bearer ${token}`,
+          "ngrok-skip-browser-warning": "true",
           "Content-Type": "application/json",
         },
       });
@@ -1448,6 +1451,7 @@ export default function AdminDashboard({ irParaLanding }) {
       const res = await fetch(`${API_URL}/api/auditoria?${params.toString()}`, {
         headers: {
           Authorization: `Bearer ${token}`,
+          "ngrok-skip-browser-warning": "true",
           "Content-Type": "application/json",
         },
       });

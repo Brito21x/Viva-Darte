@@ -43,7 +43,7 @@ export default function Login({
 
     try {
       const response = await fetch(
-        "https://zeppelin-squid-kick.ngrok-free.dev/api/auth/login",
+        "https://api-vivadarte.onrender.com/api/auth/login",
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },

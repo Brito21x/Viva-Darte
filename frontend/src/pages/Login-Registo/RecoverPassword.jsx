@@ -103,7 +103,7 @@ export default function RecoverPassword({ irParaLogin, irParaLanding }) {
 
     try {
       const response = await fetch(
-        "https://zeppelin-squid-kick.ngrok-free.dev/api/auth/redefinir-password",
+        "https://api-vivadarte.onrender.com/api/auth/redefinir-password",
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },

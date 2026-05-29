@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import "./AdminDashboard.css";
 import logoImg from "../../assets/logo.png";
 
-const API_URL = "https://zeppelin-squid-kick.ngrok-free.dev";
+const API_URL = "https://api-vivadarte.onrender.com";
 
 function traduzErroCoaching(err, fallback) {
   const msg = String(err?.message || "").trim();

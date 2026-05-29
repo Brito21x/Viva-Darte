@@ -1,6 +1,4 @@
-export const API_URL =
-  import.meta.env.VITE_API_URL ||
-  "https://salvaging-clumsily-skinhead.ngrok-free.dev";
+export const API_URL = import.meta.env.VITE_API_URL || "";
 
 export function getAuthToken() {
   return localStorage.getItem("viva_token");

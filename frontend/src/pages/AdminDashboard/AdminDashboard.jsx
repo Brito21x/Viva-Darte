@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import "./AdminDashboard.css";
 import logoImg from "../../assets/logo.png";
 
-const API_URL = "http://localhost:3000";
+const API_URL = "http://https://salvaging-clumsily-skinhead.ngrok-free.dev";
 
 function traduzErroCoaching(err, fallback) {
   const msg = String(err?.message || "").trim();

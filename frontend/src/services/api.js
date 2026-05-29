@@ -1,6 +1,5 @@
 export const API_URL =
-  import.meta.env.VITE_API_URL ||
-  "https://salvaging-clumsily-skinhead.ngrok-free.dev";
+  import.meta.env.VITE_API_URL || "https://zeppelin-squid-kick.ngrok-free.dev";
 
 export function getAuthToken() {
   return localStorage.getItem("viva_token");

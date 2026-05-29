@@ -74,7 +74,7 @@ export default function Registo({ irParaLogin, irParaLanding }) {
 
     try {
       const response = await fetch(
-        "https://salvaging-clumsily-skinhead.ngrok-free.dev/api/auth/register",
+        "https://zeppelin-squid-kick.ngrok-free.dev/api/auth/register",
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },

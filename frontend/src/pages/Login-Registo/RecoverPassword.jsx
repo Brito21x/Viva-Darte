@@ -50,7 +50,7 @@ export default function RecoverPassword({ irParaLogin, irParaLanding }) {
 
     try {
       const response = await fetch(
-        "https://salvaging-clumsily-skinhead.ngrok-free.dev/api/auth/recuperar-password",
+        "https://zeppelin-squid-kick.ngrok-free.dev/api/auth/recuperar-password",
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -103,7 +103,7 @@ export default function RecoverPassword({ irParaLogin, irParaLanding }) {
 
     try {
       const response = await fetch(
-        "https://salvaging-clumsily-skinhead.ngrok-free.dev/api/auth/redefinir-password",
+        "https://zeppelin-squid-kick.ngrok-free.dev/api/auth/redefinir-password",
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },

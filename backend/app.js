@@ -27,6 +27,7 @@ const allowedOrigins = [
   "https://vivadarte.netlify.app",
   "http://localhost:5173",
   "http://localhost:3000",
+  "https://vivadarte-production.up.railway.app",
 ];
 
 const corsOptions = {

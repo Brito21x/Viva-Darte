@@ -74,7 +74,7 @@ export default function Registo({ irParaLogin, irParaLanding }) {
 
     try {
       const response = await fetch(
-        "https://zeppelin-squid-kick.ngrok-free.dev/api/auth/register",
+        "https://api-vivadarte.onrender.com/api/auth/register",
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },

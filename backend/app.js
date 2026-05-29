@@ -16,37 +16,44 @@ const app = express();
 
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
-app.use(
-  cors({
-    origin(origin, callback) {
-      if (!origin) return callback(null, true);
 
-      // Lista dos seus sites permitidos
-      const allowedOrigins = [
-        "https://vivadarte.netlify.app", // O seu frontend no Netlify!
-        "http://localhost:5173", // Caso use Vite localmente
-        "http://localhost:3000",
-      ];
+// Defensivo contra a página de aviso do ngrok grátis
+app.use((req, res, next) => {
+  res.setHeader("ngrok-skip-browser-warning", "true");
+  next();
+});
 
-      // Verifica se a origem está na lista ou se é localhost
-      const isLocalhost = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(
-        origin,
-      );
+const corsOptions = {
+  origin(origin, callback) {
+    if (!origin) return callback(null, true);
 
-      if (allowedOrigins.includes(origin) || isLocalhost) {
-        return callback(null, true);
-      }
+    const allowedOrigins = [
+      "https://vivadarte.netlify.app",
+      "http://localhost:5173",
+      "http://localhost:3000",
+    ];
 
-      return callback(new Error("Origem não permitida pelo CORS"));
-    },
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: [
-      "Content-Type",
-      "Authorization",
-      "ngrok-skip-browser-warning",
-    ],
-  }),
-);
+    const isLocalhost = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(
+      origin,
+    );
+
+    if (allowedOrigins.includes(origin) || isLocalhost) {
+      return callback(null, true);
+    }
+
+    return callback(new Error("Origem não permitida pelo CORS: " + origin));
+  },
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: [
+    "Content-Type",
+    "Authorization",
+    "ngrok-skip-browser-warning",
+  ],
+};
+
+app.use(cors(corsOptions));
+app.options("*", cors(corsOptions));
 app.get("/api/health", async (req, res) => {
   try {
     await pool.request().query("SELECT 1 AS ok");

@@ -73,20 +73,23 @@ export default function Registo({ irParaLogin, irParaLanding }) {
     const telefoneLimpo = telefone.replace(/\s/g, "");
 
     try {
-      const response = await fetch("http://localhost:3000/api/auth/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          nome,
-          email,
-          telefone: telefoneLimpo,
-          password,
-          tipo,
-          nomeAluno,
-          dataNascimentoAluno,
-          captchaToken,
-        }),
-      });
+      const response = await fetch(
+        "https://salvaging-clumsily-skinhead.ngrok-free.dev/api/auth/register",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            nome,
+            email,
+            telefone: telefoneLimpo,
+            password,
+            tipo,
+            nomeAluno,
+            dataNascimentoAluno,
+            captchaToken,
+          }),
+        },
+      );
 
       const resultado = await response.json();
 

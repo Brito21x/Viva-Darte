@@ -15,6 +15,7 @@ const config = {
     instanceName: hasExplicitPort ? undefined : dbInstanceName || undefined,
     encrypt: true,
     trustServerCertificate: true,
+    requestTimeout: 60000,
   },
 };
 

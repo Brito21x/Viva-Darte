@@ -1435,3 +1435,304 @@
 .modal-overlay-action {
   z-index: 2010;
 }
+
+/* =============================================================================
+   HAMBURGER NAVBAR INTERNA — Mobile
+   Mesmo padrão da MinhaAgendaProfessor.
+   ============================================================================= */
+
+/* Botão hamburger — oculto em desktop */
+.hamburger-interna {
+  display: none;
+  flex-direction: column;
+  gap: 5px;
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 4px;
+  z-index: 1001;
+  flex-shrink: 0;
+}
+.hamburger-interna span {
+  display: block;
+  width: 26px;
+  height: 3px;
+  background-color: #2a2724;
+  transition: 0.3s ease;
+  border-radius: 2px;
+}
+/* Animação X quando aberto */
+.hamburger-interna.ativo span:nth-child(1) {
+  transform: translateY(8px) rotate(45deg);
+}
+.hamburger-interna.ativo span:nth-child(2) {
+  opacity: 0;
+}
+.hamburger-interna.ativo span:nth-child(3) {
+  transform: translateY(-8px) rotate(-45deg);
+}
+
+/* =============================================================================
+   RESPONSIVIDADE MOBILE
+   ============================================================================= */
+
+/* ── Mobile (≤ 768px) ── */
+@media (max-width: 768px) {
+  /* ── Navbar ── */
+  .navbar.interna {
+    height: 56px;
+    padding: 0 4%;
+    position: relative;
+    justify-content: flex-end !important;
+  }
+
+  /* Logo e texto da marca ocultados em mobile */
+  .navbar.interna .nav-brand {
+    display: none;
+  }
+
+  /* Hamburger absolutamente posicionado à esquerda */
+  .hamburger-interna {
+    display: flex;
+    position: absolute;
+    left: 16px;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 2;
+  }
+
+  /* Perfil à direita — única coisa no fluxo flex */
+  .nav-actions--fig {
+    position: absolute;
+    right: 16px;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 2;
+  }
+
+  /* Perfil compacto */
+  .navbar.interna .user-profile {
+    padding: 5px 5px 5px 12px;
+    gap: 8px;
+  }
+  .navbar.interna .welcome-text {
+    font-size: 0.82rem;
+  }
+
+  /* Nav-menu: oculto por defeito, dropdown quando .aberto */
+  .navbar.interna .nav-menu {
+    display: none;
+    position: absolute;
+    top: 56px;
+    left: 0;
+    width: 100%;
+    background-color: rgba(223, 219, 210, 0.98);
+    flex-direction: column;
+    align-items: stretch;
+    padding: 4px 0;
+    gap: 0;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
+    z-index: 999;
+    animation: menuSlideDown 0.2s ease forwards;
+  }
+  @keyframes menuSlideDown {
+    from {
+      opacity: 0;
+      transform: translateY(-8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  .navbar.interna .nav-menu.aberto {
+    display: flex;
+  }
+  .navbar.interna .nav-menu li {
+    width: 100%;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  }
+  .navbar.interna .nav-menu li:last-child {
+    border-bottom: none;
+  }
+  .navbar.interna .nav-menu a {
+    display: flex;
+    align-items: center;
+    padding: 14px 6%;
+    font-size: 0.95rem;
+  }
+  .navbar.interna .nav-separator {
+    display: none;
+  }
+
+  /* ── Conteúdo ── */
+  .content-wrapper {
+    padding: 24px 5%;
+  }
+
+  /* Header: título e botão em coluna */
+  .header-section {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 14px;
+  }
+  .page-title {
+    font-size: 1.6rem;
+  }
+  .btn-add-peca {
+    width: 100%;
+    justify-content: center;
+  }
+
+  /* Tabs: scroll horizontal */
+  .tabs-container {
+    gap: 0;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-bottom: 0;
+  }
+  .tabs-container::-webkit-scrollbar {
+    display: none;
+  }
+  .tab-btn {
+    white-space: nowrap;
+    font-size: 0.95rem;
+    padding: 10px 14px;
+    flex-shrink: 0;
+  }
+
+  /* Filtros em coluna */
+  .filtros-bar {
+    flex-direction: column;
+    gap: 10px;
+  }
+  .filtro-input,
+  .filtro-select {
+    width: 100%;
+    min-width: 0;
+  }
+
+  /* Grid de itens: 1 coluna */
+  .items-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  /* Requisições: coluna única */
+  .reserva-card-req {
+    flex-direction: column;
+    gap: 14px;
+  }
+  .req-info-col,
+  .req-gestao-col {
+    min-width: 0;
+    width: 100%;
+  }
+
+  /* Modal detalhe: coluna única (imagem em cima, info em baixo) */
+  .modal-content-detalhe {
+    flex-direction: column;
+    max-height: 95vh;
+    width: 96%;
+    min-height: 0;
+  }
+  .detalhe-imagem-col {
+    flex: none;
+    height: 240px;
+    border-right: none;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  }
+  .detalhe-info-col {
+    padding: 20px;
+    flex: 1;
+    overflow-y: auto;
+  }
+  .detalhe-titulo {
+    font-size: 1.6rem;
+  }
+  .detalhe-tags {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .detalhe-preco-bar {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .detalhe-actions {
+    flex-wrap: wrap;
+    justify-content: stretch;
+  }
+  .detalhe-actions .btn-dark,
+  .detalhe-actions .btn-outline {
+    flex: 1;
+    text-align: center;
+  }
+
+  /* Setas de navegação do detalhe — ocultas em mobile (swipe) */
+  .nav-detalhe-btn {
+    display: none;
+  }
+
+  /* Modais de formulário */
+  .modal-content,
+  .modal-content-sm,
+  .modal-content-md,
+  .modal-content-lg {
+    width: 96%;
+    max-width: 100%;
+    padding: 24px 16px;
+    max-height: 92vh;
+    overflow-y: auto;
+  }
+
+  /* Ações dos formulários em coluna */
+  .form-actions-row,
+  .gerir-form-actions,
+  .modal-actions,
+  .reserva-actions,
+  .alert-buttons {
+    flex-wrap: wrap;
+  }
+  .form-actions-row .btn-dark,
+  .form-actions-row .btn-outline,
+  .gerir-form-actions .btn-dark,
+  .gerir-form-actions .btn-outline {
+    flex: 1;
+    min-width: 120px;
+  }
+
+  /* Linhas de formulário em coluna */
+  .form-row {
+    flex-direction: column;
+    gap: 0;
+  }
+
+  /* Footer centrado */
+  .main-footer {
+    padding: 30px 5% 15px;
+  }
+  .footer-container {
+    text-align: center;
+  }
+  .footer-info li {
+    justify-content: center;
+  }
+  .social-icons-only {
+    justify-content: center;
+  }
+}
+
+/* ── Pequenos smartphones (≤ 480px) ── */
+@media (max-width: 480px) {
+  .items-grid {
+    grid-template-columns: 1fr;
+  }
+  .detalhe-imagem-col {
+    height: 200px;
+  }
+  .detalhe-titulo {
+    font-size: 1.4rem;
+  }
+}

@@ -135,12 +135,17 @@
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
   border: 1px solid rgba(0, 0, 0, 0.03);
 }
+/* Desktop: wrapper é transparente — não altera o layout */
+.calendar-mobile-scroll {
+  display: contents;
+}
 .calendar-days-sticky {
   display: grid;
   grid-template-columns: 80px repeat(7, 1fr);
   background: #fdfaf5;
   border-bottom: 1px solid #eee;
   z-index: 10;
+  /* sticky relativo ao .calendar-scrollable-area (o seu pai com overflow) */
   position: sticky;
   top: 0;
 }
@@ -1735,4 +1740,528 @@
   line-height: 1.25;
   word-break: break-word;
   width: auto;
+}
+
+/* =============================================================================
+   ESTILOS MIGRADOS DOS INLINE STYLES DO JSX
+   ============================================================================= */
+
+/* cursor: help no bloco de disponibilidade */
+.disponibilidade-block {
+  cursor: help;
+}
+
+/* .alert-badge com cor laranja (pedidos para responder) */
+.alert-badge--warning {
+  background-color: #e6a23c;
+  box-shadow: 0 4px 10px rgba(230, 162, 60, 0.25);
+}
+
+/* modern-form-grid com uma única coluna (modal de confirmação de execução) */
+.modern-form-grid--single {
+  grid-template-columns: 1fr;
+}
+
+/* Espaçamento extra na rodapé dos modais de confirmação */
+.modal-actions-footer--mt {
+  margin-top: 20px;
+}
+
+/* ── Secção de participantes no modal de pedido ── */
+
+/* Wrapper principal da secção de participantes */
+.participantes-section {
+  margin-top: 25px;
+}
+
+/* Label do título "Participantes da Aula" */
+.participantes-label {
+  font-size: 1.05rem !important;
+  color: #2a2724 !important;
+  margin-bottom: 15px;
+  display: block;
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+}
+
+/* Área dos educandos do EE */
+.educandos-wrapper {
+  margin-bottom: 25px;
+}
+
+/* Sub-título "Meus Educandos" */
+.educandos-titulo {
+  font-size: 0.8rem;
+  color: #8a8480;
+  display: block;
+  margin-bottom: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+/* Lista de pílulas de alunos selecionáveis */
+.alunos-pill-list {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* Pílula de aluno — estado não selecionado */
+.aluno-pill {
+  padding: 10px 18px;
+  border-radius: 25px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 600;
+  border: 1px solid #dcd7ce;
+  background-color: #fff;
+  color: #5a5450;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Pílula de aluno — estado selecionado */
+.aluno-pill--selecionado {
+  border: 2px solid #b38b59;
+  background-color: #fdfaf5;
+  color: #b38b59;
+  box-shadow: 0 3px 8px rgba(179, 139, 89, 0.15);
+}
+
+/* Caixa de convite de colegas (formatos em grupo) */
+.convite-colegas-box {
+  background: #fdfaf5;
+  padding: 20px;
+  border-radius: 12px;
+  border: 1px solid #e0dcd2;
+}
+
+/* Sub-título "Convidar Colegas" */
+.convite-titulo {
+  font-size: 0.8rem;
+  color: #8a8480;
+  display: block;
+  margin-bottom: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+/* Linha do input de email + botão de adicionar */
+.convite-email-row {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 15px;
+}
+
+/* Input de email dentro da linha de convite */
+.convite-input {
+  flex: 1;
+  padding: 12px 15px !important;
+  border-radius: 8px !important;
+}
+
+/* Botão "Adicionar" na linha de convite */
+.convite-btn {
+  padding: 0 24px !important;
+  border-radius: 8px !important;
+  flex-shrink: 0;
+}
+
+/* Lista de alunos externos já adicionados */
+.externos-list {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+/* Pílula de aluno externo (convidado por email) */
+.aluno-externo-pill {
+  padding: 10px 18px;
+  border-radius: 25px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  border: 2px solid #b38b59;
+  background-color: #fdfaf5;
+  color: #b38b59;
+  box-shadow: 0 3px 8px rgba(179, 139, 89, 0.15);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Texto do EE em tamanho reduzido dentro da pílula externa */
+.externo-ee {
+  opacity: 0.65;
+  font-weight: normal;
+  margin-left: 6px;
+}
+
+/* Botão de remover participante externo */
+.externo-remover {
+  background: none;
+  border: none;
+  color: #b38b59;
+  cursor: pointer;
+  font-weight: bold;
+  font-size: 1.1rem;
+  padding: 0;
+  line-height: 1;
+}
+
+/* ── Modal de alerta do sistema (alertaExcl) ── */
+
+/* Overlay de fundo do alerta — migrado do style inline */
+.modal-alerta-overlay {
+  z-index: 9999;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Caixa do alerta */
+.modal-alerta-box {
+  background: #fff;
+  padding: 30px;
+  border-radius: 12px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+  text-align: center;
+  max-width: 420px;
+  width: 90%;
+}
+
+/* Título do alerta */
+.modal-alerta-titulo {
+  margin: 0 0 15px 0;
+  color: #2a2724;
+  font-size: 1.3rem;
+}
+
+/* Mensagem do alerta */
+.modal-alerta-mensagem {
+  margin: 0 0 25px 0;
+  color: #5a5450;
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+/* Botão de confirmação do alerta */
+.modal-alerta-btn {
+  padding: 10px 30px !important;
+}
+
+/* =============================================================================
+   RESPONSIVIDADE MOBILE
+   ============================================================================= */
+
+/* ── Hamburger para a navbar interna (oculto em desktop) ── */
+.hamburger-interna {
+  display: none;
+  flex-direction: column;
+  gap: 5px;
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 4px;
+  z-index: 1001;
+  flex-shrink: 0;
+}
+
+.hamburger-interna span {
+  display: block;
+  width: 26px;
+  height: 3px;
+  background-color: var(--primary-dark);
+  transition: 0.3s ease;
+  border-radius: 2px;
+}
+
+/* Animação X quando o menu está aberto */
+.hamburger-interna.ativo span:nth-child(1) {
+  transform: translateY(8px) rotate(45deg);
+}
+.hamburger-interna.ativo span:nth-child(2) {
+  opacity: 0;
+}
+.hamburger-interna.ativo span:nth-child(3) {
+  transform: translateY(-8px) rotate(-45deg);
+}
+
+/* ── Navbar interna em mobile (≤ 768 px) ── */
+@media (max-width: 768px) {
+  .navbar.interna {
+    height: 56px;
+    padding: 0 16px !important;
+    position: relative;
+    display: flex !important;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  /* Oculta marca e menu do fluxo normal */
+  .navbar.interna .nav-brand,
+  .navbar.interna .nav-menu:not(.aberto) {
+    display: none;
+  }
+
+  /* Hamburger: força a ser o primeiro elemento (Esquerda) */
+  .hamburger-interna {
+    display: flex;
+    position: static;
+    transform: none;
+    order: 1;
+  }
+
+  /* Perfil: força a ser o segundo elemento e empurra para a Direita */
+  .navbar.interna .nav-actions {
+    position: absolute !important;
+    right: 0 !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    z-index: 2;
+  }
+
+  /* Perfil compacto (Mantém-se igual ao que já tens) */
+  .navbar.interna .user-profile {
+    flex-direction: row;
+    background: rgba(0, 0, 0, 0.04);
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    border-radius: 50px;
+    padding: 5px 5px 5px 12px;
+    gap: 8px;
+    width: auto;
+  }
+
+  .navbar.interna .welcome-text {
+    font-size: 0.82rem;
+  }
+
+  /* Menu dropdown */
+  .navbar.interna .nav-menu.aberto {
+    display: flex;
+    position: absolute;
+    top: 56px;
+    left: 0;
+    width: 100%;
+    background-color: rgba(223, 219, 210, 0.98);
+    flex-direction: column;
+    align-items: stretch;
+    padding: 4px 0;
+    gap: 0;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
+    z-index: 999;
+    animation: menuSlideDown 0.2s ease forwards;
+  }
+
+  @keyframes menuSlideDown {
+    from {
+      opacity: 0;
+      transform: translateY(-8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .navbar.interna .nav-menu li {
+    width: 100%;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  }
+
+  .navbar.interna .nav-menu li:last-child {
+    border-bottom: none;
+  }
+
+  .navbar.interna .nav-menu a {
+    display: flex;
+    align-items: center;
+    padding: 14px 6%;
+    font-size: 0.95rem;
+  }
+
+  .navbar.interna .nav-separator {
+    display: none;
+  }
+
+  /* Dashboard: coluna única */
+  .dashboard-wrapper {
+    grid-template-columns: 1fr;
+    padding: 12px 2%;
+    gap: 16px;
+  }
+
+  /* ── Calendário mobile ──
+     container: overflow:hidden contém o visual (borda arredondada, sombra).
+     O wrapper interior recebe overflow:auto para scroll x+y.
+     min-height:0 é obrigatório num filho flex para que o scroll funcione. */
+  .calendar-container {
+    height: auto;
+    min-height: 70vh;
+    max-height: 75vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Wrapper de scroll horizontal+vertical — cabeçalho e grelha juntos */
+  .calendar-mobile-scroll {
+    flex: 1;
+    min-height: 0;
+    overflow-x: auto;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Cabeçalho de dias perde o sticky em mobile (fica dentro do scroll) */
+  .calendar-days-sticky {
+    position: relative;
+    min-width: 700px;
+  }
+
+  /* Área scrollável perde o seu próprio scroll — o pai trata disso */
+  .calendar-scrollable-area {
+    overflow: visible;
+    flex: none;
+  }
+
+  .calendar-grid-body {
+    min-width: 700px;
+  }
+
+  /* Slots com altura adequada para toque */
+  :root {
+    --hour-height: 56px;
+  }
+
+  /* Barra de navegação de semanas */
+  .calendar-nav-bar {
+    padding: 8px 10px;
+    gap: 6px;
+    flex-shrink: 0;
+    border-bottom: 1px solid #eee;
+    margin-bottom: 0;
+  }
+
+  .calendar-nav-label {
+    font-size: 0.85rem;
+  }
+
+  .btn-today {
+    padding: 6px 10px;
+    font-size: 0.85rem;
+  }
+
+  /* Sidebar em coluna */
+  .sidebar {
+    position: static;
+    flex-direction: column;
+  }
+
+  .sidebar-card {
+    padding: 16px;
+  }
+
+  /* Modal a largura quase total */
+  .modal-modern {
+    padding: 20px 16px;
+    border-radius: 16px;
+    max-height: 95vh;
+  }
+
+  .modal-header h2 {
+    font-size: 1.3rem;
+  }
+
+  .prof-dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .dispo-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .resumo-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .resumo-filters {
+    width: 100%;
+  }
+
+  .filter-select {
+    flex: 1;
+  }
+
+  .convite-email-row {
+    flex-direction: column;
+  }
+
+  .convite-btn {
+    width: 100% !important;
+    padding: 12px !important;
+  }
+
+  .modal-actions-footer {
+    flex-direction: column-reverse;
+    gap: 8px;
+  }
+
+  .modal-actions-footer .btn-gold,
+  .modal-actions-footer .btn-dark {
+    width: 100%;
+    text-align: center;
+  }
+
+  .main-footer {
+    padding: 30px 5% 15px;
+  }
+
+  .footer-container {
+    text-align: center;
+  }
+
+  .footer-info li {
+    justify-content: center;
+  }
+
+  .social-icons-only {
+    justify-content: center;
+  }
+}
+
+/* ── Pequenos smartphones (≤ 480 px) ── */
+@media (max-width: 480px) {
+  .calendar-container {
+    min-height: 65vh;
+    max-height: 70vh;
+  }
+
+  .calendar-grid-body,
+  .calendar-days-sticky {
+    min-width: 620px;
+  }
+
+  .event-title {
+    font-size: 0.65rem;
+  }
+  .event-time {
+    font-size: 0.6rem;
+  }
+
+  .prof-stat-cards {
+    grid-template-columns: 1fr 1fr;
+  }
 }

@@ -6,12 +6,28 @@ import { API_URL, getAuthToken } from "../../services/api";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 
+/**
+ * Componente Marketplace de Figurinos da Viva D'arte.
+ *
+ * Responsabilidades:
+ * - Listar peças disponíveis para venda e empréstimo da comunidade
+ * - Gerir o inventário pessoal do utilizador (adicionar, editar, apagar)
+ * - Permitir compras e pedidos de empréstimo
+ * - Gerir pedidos de empréstimo recebidos (aprovar, rejeitar, devolução, multas)
+ * - Acompanhar as requisições feitas pelo utilizador
+ *
+ * @param {Function} irParaLanding              - Navega para a landing page
+ * @param {Function} irParaMinhaAgendaProfessor - Navega para agenda do professor
+ * @param {Function} irParaMinhaAgendaEE        - Navega para agenda do EE
+ */
 export default function Figurinos({
   irParaLanding,
   irParaMinhaAgendaProfessor,
   irParaMinhaAgendaEE,
 }) {
   const [utilizador, setUtilizador] = useState(null);
+  /** Controla a visibilidade do menu hamburger em mobile */
+  const [menuAberto, setMenuAberto] = useState(false);
   const [pecasOriginais, setPecasOriginais] = useState([]);
   const [vendasOriginais, setVendasOriginais] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -99,6 +115,10 @@ export default function Figurinos({
     onConfirm: null,
   });
 
+  /**
+   * Calcula as datas já ocupadas para um item, para bloquear no DatePicker.
+   * Inclui pedidos Aprovados, Em Curso e Pendentes.
+   */
   const datasOcupadasTeste = React.useMemo(() => {
     let datas = [];
     pedidosAtuais.forEach((p) => {
@@ -118,6 +138,10 @@ export default function Figurinos({
     return datas;
   }, [pedidosAtuais]);
 
+  /**
+   * Abre o modal de solicitação de empréstimo e carrega os pedidos
+   * existentes para mostrar datas ocupadas no calendário.
+   */
   const abrirSolicitarEmprestimo = async (e, item) => {
     e.stopPropagation();
     setItemSelecionado(item);
@@ -142,6 +166,10 @@ export default function Figurinos({
     }
   };
 
+  /**
+   * Abre o modal de gestão de pedidos de empréstimo (visão do dono da peça)
+   * e carrega a lista de pedidos atuais.
+   */
   const abrirGerirEmprestimo = async (e, item) => {
     e.stopPropagation();
     setItemSelecionado(item);
@@ -160,11 +188,15 @@ export default function Figurinos({
     }
   };
 
+  /** URL base da API de inventário */
   const API_INV = `${API_URL}/api/inventario`;
 
+  /** Obtém o token JWT do utilizador autenticado */
   const getToken = () => getAuthToken() || "";
+  /** ID do utilizador autenticado — usado para distinguir itens próprios */
   const userId = utilizador?.id_utilizador || utilizador?.id;
 
+  /** Mostra um alerta personalizado ao utilizador */
   const mostrarAlerta = (msg) =>
     setCustomAlert({
       show: true,
@@ -173,6 +205,7 @@ export default function Figurinos({
       onConfirm: null,
     });
 
+  /** Fecha o alerta/confirmação ativo */
   const fecharAlerta = () =>
     setCustomAlert({
       show: false,
@@ -181,6 +214,7 @@ export default function Figurinos({
       onConfirm: null,
     });
 
+  /** Termina a sessão do utilizador, limpa o localStorage e redireciona */
   const handleLogout = () => {
     localStorage.clear();
     setUtilizador(null);
@@ -191,6 +225,11 @@ export default function Figurinos({
     }
   };
 
+  /**
+   * Extrai valor_dia e métodos de pagamento de uma peça de empréstimo.
+   * Suporta dois formatos: campo metodos_pagamento direto ou campo
+   * localizacao serializado como "valor_dia:X;metodos:Y,Z".
+   */
   const parsearLocalizacao = (peca) => {
     if (!peca || typeof peca !== "object")
       return { valor_dia: "0", metodos: ["MBWay"] };
@@ -228,6 +267,12 @@ export default function Figurinos({
     return { valor_dia: "0", metodos: ["MBWay"] };
   };
 
+  /**
+   * Carrega peças, vendas e pedidos do utilizador da API.
+   * Para cada peça nova, carrega as fotos completas em segundo plano
+   * sem bloquear o render inicial.
+   * @param {boolean} showLoading - Se true, mostra spinner durante o carregamento
+   */
   const carregarDados = async (showLoading = false) => {
     if (showLoading) setIsLoading(true);
     try {
@@ -288,6 +333,7 @@ export default function Figurinos({
     }
   };
 
+  /** Inicialização: define o título da página, carrega o utilizador do localStorage e os dados da API */
   useEffect(() => {
     document.title = "Figurinos | Viva D'arte";
     const userGuardado = localStorage.getItem("viva_user");
@@ -295,6 +341,12 @@ export default function Figurinos({
     carregarDados(true);
   }, []);
 
+  /**
+   * Constrói a lista de itens para o tab Marketplace.
+   * Combina peças de empréstimo (da tabela inventário) com vendas
+   * (da tabela vendas), excluindo os próprios itens do utilizador.
+   * @returns {Array} Lista normalizada de items com campos comuns
+   */
   const buildMarketplaceItems = () => {
     let items = [];
     pecasOriginais.forEach((p) => {
@@ -359,6 +411,12 @@ export default function Figurinos({
     return items;
   };
 
+  /**
+   * Constrói a lista de itens para o tab "Os Meus Figurinos".
+   * Filtra apenas as peças que pertencem ao utilizador autenticado
+   * e enriquece com estado global (Guardado / À Venda / Para Empréstimo).
+   * @returns {Array} Lista de peças do utilizador com estado calculado
+   */
   const buildMeusItems = () => {
     if (!userId) return [];
     return pecasOriginais
@@ -405,9 +463,11 @@ export default function Figurinos({
       });
   };
 
+  /** Lista de items da tab ativa (marketplace ou meus) */
   const itemsAtuais =
     activeTab === "marketplace" ? buildMarketplaceItems() : buildMeusItems();
 
+  /** Items da tab ativa após aplicar pesquisa, filtros e ordenação */
   const itemsFiltrados = itemsAtuais
     .filter((i) =>
       (i.nome || "").toLowerCase().includes(pesquisa.toLowerCase()),
@@ -435,6 +495,7 @@ export default function Figurinos({
       return (b.id_peca || 0) - (a.id_peca || 0);
     });
 
+  /** Avança para a próxima foto do carrossel de um item */
   const proximaImagem = (e, uid, total) => {
     e.stopPropagation();
     setIndicesImagens((prev) => ({
@@ -442,6 +503,7 @@ export default function Figurinos({
       [uid]: ((prev[uid] || 0) + 1) % total,
     }));
   };
+  /** Recua para a foto anterior do carrossel de um item */
   const imagemAnterior = (e, uid, total) => {
     e.stopPropagation();
     setIndicesImagens((prev) => ({
@@ -450,6 +512,10 @@ export default function Figurinos({
     }));
   };
 
+  /**
+   * Processa o upload de fotos: redimensiona cada imagem para máx 800px
+   * e converte para JPEG com qualidade 0.7, reduzindo o tamanho de envio.
+   */
   const handleFotosUpload = async (e) => {
     const files = Array.from(e.target.files);
     if (!files.length) return;
@@ -490,12 +556,18 @@ export default function Figurinos({
     }
   };
 
+  /** Remove uma foto da lista de fotos do novo figurino pelo índice */
   const removerFoto = (idx) =>
     setNovaPeca((prev) => ({
       ...prev,
       fotos: prev.fotos.filter((_, i) => i !== idx),
     }));
 
+  /**
+   * Submete o formulário de nova peça.
+   * Cria a peça na API; se disponibilidade = Venda, cria também o registo
+   * de venda; se Emprestimo, atualiza a peça com disponivel_para_emprestimo.
+   */
   const submitNovaPeca = async (e) => {
     e.preventDefault();
     if (!utilizador) return mostrarAlerta("Erro: Sessão inválida.");
@@ -595,6 +667,10 @@ export default function Figurinos({
     }
   };
 
+  /**
+   * Apaga definitivamente uma peça do inventário do utilizador.
+   * Chamado após confirmação no alerta customizado.
+   */
   const apagarPeca = async (idPeca) => {
     fecharAlerta();
     try {
@@ -614,6 +690,10 @@ export default function Figurinos({
     }
   };
 
+  /**
+   * Prepara e abre o modal de edição de uma peça.
+   * Detecta automaticamente os métodos de pagamento e disponibilidade atuais.
+   */
   const abrirEdicao = (e, item) => {
     e.stopPropagation();
     let metodosPre = [];
@@ -651,6 +731,10 @@ export default function Figurinos({
     setIsEditModalOpen(true);
   };
 
+  /**
+   * Submete as alterações de edição de uma peça.
+   * Atualiza nome, tamanho, condição, preço, disponibilidade e métodos.
+   */
   const handleGuardarEdicao = async (e) => {
     e.preventDefault();
     if (
@@ -711,6 +795,10 @@ export default function Figurinos({
     }
   };
 
+  /**
+   * Confirma a compra de um figurino.
+   * Regista o comprador e o método de pagamento na API.
+   */
   const confirmarCompra = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -743,6 +831,10 @@ export default function Figurinos({
     }
   };
 
+  /**
+   * Submete o pedido de empréstimo com as datas e método de pagamento.
+   * Valida que as datas foram selecionadas e que fim > início.
+   */
   const confirmarEmprestimo = async (e) => {
     e.preventDefault();
     if (!formEmprestimo.dataInicio || !formEmprestimo.dataFim) {
@@ -798,6 +890,10 @@ export default function Figurinos({
     }
   };
 
+  /**
+   * Aprova ou rejeita um pedido de empréstimo pendente.
+   * Após a ação, recarrega a lista de pedidos para refletir o novo estado.
+   */
   const gerirEstadoReserva = async (idEmprestimo, novoEstado) => {
     setIsSubmitting(true);
     try {
@@ -838,6 +934,12 @@ export default function Figurinos({
     }
   };
 
+  /**
+   * Submete uma ação de gestão sobre um empréstimo aprovado:
+   * - Pagamento: regista o valor e método recebido
+   * - Devolução: regista a entrega da peça e a sua condição
+   * - Penalização: aplica uma multa por atraso ou dano
+   */
   const submitGerirEmprestimo = async (e) => {
     e.preventDefault();
     const idEmp = reservaEmGestao;
@@ -915,6 +1017,11 @@ export default function Figurinos({
     }
   };
 
+  /**
+   * Atalhos de teclado globais:
+   * - Setas esquerda/direita: navegar entre itens no detalhe ou lightbox
+   * - Escape: fechar detalhe ou lightbox
+   */
   useEffect(() => {
     const hk = (e) => {
       if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA")
@@ -955,17 +1062,26 @@ export default function Figurinos({
 
   return (
     <div className="figurinos-page">
+      {/* ================================================================
+          NAVBAR INTERNA
+          Versão autenticada da navbar. Em mobile oculta o logótipo e
+          apresenta hamburger (esquerda) + perfil (direita).
+          ================================================================ */}
       <nav className="navbar interna">
+        {/* Marca — oculta em mobile via CSS */}
         <div className="nav-brand" onClick={irParaLanding}>
           <img src={logoImg} alt="Logo" className="nav-logo-img" />
           <span>VIVA D'ARTE</span>
         </div>
-        <ul className="nav-menu">
+
+        {/* Links de navegação — dropdown em mobile */}
+        <ul className={`nav-menu${menuAberto ? " aberto" : ""}`}>
           <li>
             <a
               href="#"
               onClick={(e) => {
                 e.preventDefault();
+                setMenuAberto(false);
                 irParaLanding?.();
               }}
             >
@@ -978,6 +1094,7 @@ export default function Figurinos({
               href="#"
               onClick={(e) => {
                 e.preventDefault();
+                setMenuAberto(false);
                 const user = JSON.parse(
                   localStorage.getItem("viva_user") || "{}",
                 );
@@ -990,12 +1107,18 @@ export default function Figurinos({
             </a>
           </li>
           <li>
-            <a href="#" className="special-link active">
+            <a
+              href="#"
+              className="special-link active"
+              onClick={() => setMenuAberto(false)}
+            >
               Marketplace
             </a>
           </li>
         </ul>
-        <div className="nav-actions">
+
+        {/* Perfil — sempre visível à direita */}
+        <div className="nav-actions nav-actions--fig">
           {utilizador ? (
             <div className="user-profile">
               <span className="welcome-text">
@@ -1011,6 +1134,18 @@ export default function Figurinos({
             </button>
           )}
         </div>
+
+        {/* Botão hamburger — visível apenas em mobile */}
+        <button
+          className={`hamburger-interna${menuAberto ? " ativo" : ""}`}
+          onClick={() => setMenuAberto((prev) => !prev)}
+          aria-label="Abrir menu de navegação"
+          aria-expanded={menuAberto}
+        >
+          <span></span>
+          <span></span>
+          <span></span>
+        </button>
       </nav>
 
       <div className="content-wrapper">

@@ -16,6 +16,22 @@ import hipHop from "../../assets/hip-hop.jpg";
 import jazz from "../../assets/jazz.jpg";
 */
 
+/**
+ * Componente principal da página de landing da Viva D'arte.
+ *
+ * Responsabilidades:
+ * - Renderizar a navbar com navegação condicional (visitante / aluno / professor)
+ * - Gerir o estado de autenticação a partir do localStorage
+ * - Controlar o modo portal (vista do utilizador autenticado)
+ * - Apresentar as secções Hero, Sobre Nós, Modalidades e Professores
+ * - Gerir os carrosseis automáticos de modalidades e professores
+ *
+ * @param {Function} irParaLogin               - Navega para a página de login
+ * @param {Function} irParaRegisto             - Navega para a página de registo
+ * @param {Function} irParaFigurinos           - Navega para o marketplace de figurinos
+ * @param {Function} irParaMinhaAgendaProfessor - Navega para a agenda do professor
+ * @param {Function} irParaMinhaAgendaEE       - Navega para a agenda do encarregado de educação
+ */
 export default function Landing({
   irParaLogin,
   irParaRegisto,
@@ -23,12 +39,18 @@ export default function Landing({
   irParaMinhaAgendaProfessor,
   irParaMinhaAgendaEE,
 }) {
+  /* ─── Estado local ─────────────────────────────────────────────────────── */
   const [utilizador, setUtilizador] = useState(null);
   const [modoPortal, setModoPortal] = useState(false);
 
+  /** Controla a visibilidade do menu hamburger em mobile */
+  const [menuAberto, setMenuAberto] = useState(false);
+
+  /* ─── Referências para os carrosseis ───────────────────────────────────── */
   const modalidadesRef = useRef(null);
   const professoresRef = useRef(null);
 
+  /* ─── Efeito: inicialização — leitura do utilizador guardado ───────────── */
   useEffect(() => {
     const userGuardado = localStorage.getItem("viva_user");
     if (userGuardado) {
@@ -38,6 +60,7 @@ export default function Landing({
     document.title = "Viva D'arte | Escola de Dança";
   }, []);
 
+  /* ─── Handler: logout do utilizador ────────────────────────────────────── */
   const handleLogout = () => {
     localStorage.removeItem("viva_user");
     localStorage.removeItem("viva_token");
@@ -47,9 +70,14 @@ export default function Landing({
     window.location.reload();
   };
 
+  /**
+   * Navega para a secção inicial (#inicio) e desativa o modo portal.
+   * Utiliza scrollIntoView para uma transição suave.
+   */
   const handleIrParaInicio = (e) => {
     if (e) e.preventDefault();
     setModoPortal(false);
+    setMenuAberto(false);
 
     window.history.replaceState(null, "", window.location.pathname);
 
@@ -61,6 +89,14 @@ export default function Landing({
     }
   };
 
+  /**
+   * Avança ou recua o carrossel indicado pela referência.
+   *
+   * @param {React.RefObject} ref    - Referência ao elemento do carrossel
+   * @param {"esquerda"|"direita"} direcao - Sentido do scroll
+   * @param {"unico"|"multiplo"} tipo       - "unico" desloca uma largura completa;
+   *                                          "multiplo" desloca 420 px
+   */
   const scrollCarrossel = (ref, direcao, tipo) => {
     if (ref.current) {
       const scrollAmount = tipo === "unico" ? ref.current.clientWidth : 420;
@@ -71,6 +107,7 @@ export default function Landing({
     }
   };
 
+  /* ─── Efeito: auto-scroll do carrossel de Modalidades (6 s) ────────────── */
   useEffect(() => {
     const autoScroll = setInterval(() => {
       if (modalidadesRef.current) {
@@ -94,6 +131,7 @@ export default function Landing({
     return () => clearInterval(autoScroll);
   }, []);
 
+  /* ─── Efeito: auto-scroll do carrossel de Professores (6 s) ────────────── */
   useEffect(() => {
     const autoScroll = setInterval(() => {
       if (professoresRef.current) {
@@ -117,21 +155,29 @@ export default function Landing({
     return () => clearInterval(autoScroll);
   }, []);
 
+  /* ─── Render ────────────────────────────────────────────────────────────── */
   return (
     <div className="landing-container">
-      {/* --- NAVBAR --- */}
+      {/* ================================================================
+          NAVBAR
+          Sticky no topo; adapta os itens consoante o estado de autenticação.
+          Em mobile exibe um botão hamburger que expande o menu.
+          ================================================================ */}
       <nav className="navbar">
+        {/* Marca / logótipo */}
         <div className="nav-brand">
           <img src={logoImg} alt="Logo" className="nav-logo-img" />
           <span className="texto-viva-simples">
             {"VIVA D'ARTE".split("").map((letra, index) => (
+              /*
+               * Cada letra recebe um animationDelay dinâmico (baseado no índice)
+               * para criar o efeito de onda. O whiteSpace é definido via CSS
+               * na classe .letra-ritmo para preservar o espaço entre palavras.
+               */
               <span
                 key={index}
                 className="letra-ritmo"
-                style={{
-                  animationDelay: `${index * 0.1}s`,
-                  whiteSpace: "pre",
-                }}
+                style={{ animationDelay: `${index * 0.1}s` }}
               >
                 {letra}
               </span>
@@ -139,166 +185,169 @@ export default function Landing({
           </span>
         </div>
 
-        <ul className="nav-menu">
-          <li>
-            <a href="#inicio" onClick={handleIrParaInicio}>
-              Início
-            </a>
-          </li>
+        {/* Botão hamburger — visível apenas em mobile (≤ 768 px) */}
+        <button
+          className={`hamburger${menuAberto ? " ativo" : ""}`}
+          onClick={() => setMenuAberto((prev) => !prev)}
+          aria-label="Abrir menu de navegação"
+          aria-expanded={menuAberto}
+        >
+          <span></span>
+          <span></span>
+          <span></span>
+        </button>
 
-          {!utilizador ? (
-            <>
-              <li>
-                <a href="#sobre">Sobre Nós</a>
-              </li>
-              <li>
-                <a href="#modalidades">Modalidades</a>
-              </li>
-              <li>
-                <a href="#professores">Professores</a>
-              </li>
-            </>
-          ) : !modoPortal ? (
-            <>
-              <li>
-                <a href="#sobre">Sobre Nós</a>
-              </li>
-              <li>
-                <a href="#modalidades">Modalidades</a>
-              </li>
-              <li>
-                <a href="#professores">Professores</a>
-              </li>
+        {/* Wrapper do menu e ações — em mobile aparece como dropdown */}
+        <div className={`nav-content${menuAberto ? " aberto" : ""}`}>
+          {/* Lista de links de navegação — apenas links âncora, sem a pílula.
+              A pílula foi removida daqui para não descentrar o menu. */}
+          <ul className="nav-menu">
+            <li>
+              <a href="#inicio" onClick={handleIrParaInicio}>
+                Início
+              </a>
+            </li>
+            <li className="nav-separator">|</li>
 
-              <li className="nav-separator">|</li>
-              {isProfessorUtilizador(utilizador) ? (
-                <>
-                  <li
-                    className="student-menu-group"
-                    onClick={() => setModoPortal(true)}
-                  >
-                    <div
-                      className="student-menu-bg"
-                      style={{ cursor: "pointer", padding: "8px 20px" }}
-                    >
+            {/* Links públicos — visíveis quando sem utilizador OU sem modo portal */}
+            {(!utilizador || !modoPortal) && (
+              <>
+                <li>
+                  <a href="#sobre" onClick={() => setMenuAberto(false)}>
+                    Sobre Nós
+                  </a>
+                </li>
+                <li>
+                  <a href="#modalidades" onClick={() => setMenuAberto(false)}>
+                    Modalidades
+                  </a>
+                </li>
+                <li>
+                  <a href="#professores" onClick={() => setMenuAberto(false)}>
+                    Professores
+                  </a>
+                </li>
+              </>
+            )}
+
+            {/* Links do portal autenticado — visíveis apenas em modo portal */}
+            {utilizador && modoPortal && (
+              <>
+                {isProfessorUtilizador(utilizador) ? (
+                  <>
+                    <li>
                       <a
-                        href="#portal"
-                        className="student-link"
-                        onClick={(e) => e.preventDefault()}
+                        href="#minha-agenda-professor"
+                        className="special-link"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          setMenuAberto(false);
+                          irParaMinhaAgendaProfessor?.();
+                        }}
                       >
-                        Portal do Professor
+                        Coaching
                       </a>
-                    </div>
-                  </li>
-                </>
-              ) : (
-                <>
-                  <li
-                    className="student-menu-group"
-                    onClick={() => setModoPortal(true)}
-                  >
-                    <div
-                      className="student-menu-bg"
-                      style={{ cursor: "pointer", padding: "8px 20px" }}
-                    >
+                    </li>
+                    <li>
                       <a
-                        href="#portal"
-                        className="student-link"
-                        onClick={(e) => e.preventDefault()}
+                        href="#figurinos"
+                        className="special-link"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          setMenuAberto(false);
+                          irParaFigurinos();
+                        }}
                       >
-                        Portal do EE
+                        Marketplace
                       </a>
-                    </div>
-                  </li>
-                </>
-              )}
-            </>
-          ) : (
-            <>
-              <li className="nav-separator">|</li>
-              {isProfessorUtilizador(utilizador) ? (
-                <>
-                  <li>
-                    <a
-                      href="#minha-agenda-professor"
-                      className="special-link"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        irParaMinhaAgendaProfessor?.();
-                      }}
-                    >
-                      Coaching
-                    </a>
-                  </li>
-                  <li>
-                    <a
-                      href="#figurinos"
-                      className="special-link"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        irParaFigurinos();
-                      }}
-                    >
-                      Marketplace
-                    </a>
-                  </li>
-                </>
-              ) : (
-                <>
-                  <li>
-                    <a
-                      href="#minha-agenda-ee"
-                      className="special-link"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        irParaMinhaAgendaEE?.();
-                      }}
-                    >
-                      Coaching
-                    </a>
-                  </li>
-                  <li>
-                    <a
-                      href="#figurinos"
-                      className="special-link"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        irParaFigurinos();
-                      }}
-                    >
-                      Marketplace
-                    </a>
-                  </li>
-                </>
-              )}
-            </>
-          )}
-        </ul>
+                    </li>
+                  </>
+                ) : (
+                  <>
+                    <li>
+                      <a
+                        href="#minha-agenda-ee"
+                        className="special-link"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          setMenuAberto(false);
+                          irParaMinhaAgendaEE?.();
+                        }}
+                      >
+                        Coaching
+                      </a>
+                    </li>
+                    <li>
+                      <a
+                        href="#figurinos"
+                        className="special-link"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          setMenuAberto(false);
+                          irParaFigurinos();
+                        }}
+                      >
+                        Marketplace
+                      </a>
+                    </li>
+                  </>
+                )}
+              </>
+            )}
+          </ul>
 
-        <div className="nav-actions">
-          {utilizador ? (
-            <div className="user-profile">
-              <span className="welcome-text">
-                Olá, <strong>{utilizador.nome}</strong>
-              </span>
-              <button className="btn-logout" onClick={handleLogout}>
-                Sair
-              </button>
+          {/* Pílula de acesso ao portal — elemento direto do nav-content (fora do
+              nav-menu) para não afetar o centramento dos links âncora.
+              Visível apenas quando autenticado e ainda não em modo portal. */}
+          {utilizador && !modoPortal && (
+            <div
+              className="student-menu-bg"
+              onClick={() => {
+                setModoPortal(true);
+                setMenuAberto(false);
+              }}
+            >
+              <a
+                href="#portal"
+                className="student-link"
+                onClick={(e) => e.preventDefault()}
+              >
+                {isProfessorUtilizador(utilizador)
+                  ? "Portal do Professor"
+                  : "Portal do EE"}
+              </a>
             </div>
-          ) : (
-            <>
-              <button className="btn-text" onClick={irParaLogin}>
-                Iniciar Sessão
-              </button>
-              <button className="btn-dark" onClick={irParaRegisto}>
-                Criar Conta
-              </button>
-            </>
           )}
+
+          {/* Área de ações do utilizador (login / logout / criar conta) */}
+          <div className="nav-actions">
+            {utilizador ? (
+              <div className="user-profile">
+                <span className="welcome-text">
+                  Olá, <strong>{utilizador.nome}</strong>
+                </span>
+                <button className="btn-logout" onClick={handleLogout}>
+                  Sair
+                </button>
+              </div>
+            ) : (
+              <>
+                <button className="btn-text" onClick={irParaLogin}>
+                  Iniciar Sessão
+                </button>
+                <button className="btn-dark" onClick={irParaRegisto}>
+                  Criar Conta
+                </button>
+              </>
+            )}
+          </div>
         </div>
       </nav>
 
-      {/* 1. INÍCIO  */}
+      {/* ================================================================
+          1. SECÇÃO HERO — Início
+          Imagem de fundo com parallax e texto de boas-vindas.
+          ================================================================ */}
       <header id="inicio" className="hero">
         <div className="hero-content">
           <h1>
@@ -312,7 +361,10 @@ export default function Landing({
         </div>
       </header>
 
-      {/* 2. SOBRE NÓS */}
+      {/* ================================================================
+          2. SECÇÃO SOBRE NÓS
+          Texto institucional centrado.
+          ================================================================ */}
       <section id="sobre" className="section-container">
         <div className="sobre-layout">
           <h2>A Nossa Escola</h2>
@@ -332,7 +384,10 @@ export default function Landing({
         </div>
       </section>
 
-      {/* 3. MODALIDADES */}
+      {/* ================================================================
+          3. SECÇÃO MODALIDADES
+          Carrossel horizontal com auto-scroll a cada 6 segundos.
+          ================================================================ */}
       <section id="modalidades" className="section-container bg-light">
         <div className="section-header">
           <h2>Modalidades</h2>
@@ -440,7 +495,10 @@ export default function Landing({
         </div>
       </section>
 
-      {/* 4. PROFESSORES */}
+      {/* ================================================================
+          4. SECÇÃO PROFESSORES
+          Carrossel de item único com auto-scroll a cada 6 segundos.
+          ================================================================ */}
       <section id="professores" className="section-container">
         <div className="section-header">
           <h2>Os Nossos Professores</h2>
@@ -522,7 +580,10 @@ export default function Landing({
         </div>
       </section>
 
-      {/* --- FOOTER  --- */}
+      {/* ================================================================
+          FOOTER
+          Grelha de três colunas: Contacto, Links Rápidos, Redes Sociais.
+          ================================================================ */}
       <footer className="main-footer">
         <div className="footer-container">
           <div className="footer-column">

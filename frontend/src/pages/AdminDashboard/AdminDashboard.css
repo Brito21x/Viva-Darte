@@ -856,3 +856,106 @@
   text-align: center;
   font-style: italic;
 }
+
+/* =============================================================================
+   RESPONSIVIDADE MOBILE — adicionado sem alterar nenhum estilo existente
+   ============================================================================= */
+
+/* ── Tablet largo (≤ 1024px) ── */
+@media (max-width: 1024px) {
+  .admin-main {
+    padding: 24px 20px;
+  }
+}
+
+/* ── Mobile (≤ 768px) ── */
+@media (max-width: 768px) {
+  /* Sidebar: deixa de ser coluna lateral e passa a barra no topo */
+  .admin-root {
+    flex-direction: column;
+  }
+  .admin-sidebar {
+    width: 100%;
+    min-width: 0;
+    height: auto;
+    position: static;
+    flex-direction: column;
+  }
+  .sidebar-nav {
+    flex-direction: row;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .sidebar-nav::-webkit-scrollbar {
+    display: none;
+  }
+  .nav-item {
+    white-space: nowrap;
+  }
+
+  /* Área de conteúdo */
+  .admin-main {
+    padding: 16px;
+  }
+
+  /* Stats: 2 colunas em vez de auto-fit */
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  /* Formulários: colunas em linha passam a coluna única */
+  .form-group-row {
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  /* ── Tabelas: scroll horizontal em TODAS as tabelas ──
+     Técnica: wrapper <div> já existente recebe overflow-x.
+     Para cobrir todos os casos, aplicamos a qualquer div/section
+     que seja pai direto de uma .admin-table. Como não podemos
+     selecionar "pai de" em CSS puro, usamos a abordagem mais
+     segura: tornar a própria tabela um bloco scrollável com
+     display:block. Esta abordagem é amplamente suportada e não
+     quebra a renderização das células. */
+  .admin-table {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Modais: largura quase total */
+  .admin-modal-content {
+    width: 96%;
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+  .admin-modal-content--lg {
+    max-width: 96%;
+  }
+
+  /* Ações do modal: botões em coluna */
+  .modal-actions {
+    flex-direction: column-reverse;
+    gap: 8px;
+  }
+  .modal-actions .btn-cancel,
+  .modal-actions .btn-submit {
+    width: 100%;
+  }
+
+  /* Grelha de modalidades em coluna única */
+  .modalities-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── Pequenos smartphones (≤ 480px) ── */
+@media (max-width: 480px) {
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+  .admin-login-box {
+    padding: 24px 16px;
+  }
+}

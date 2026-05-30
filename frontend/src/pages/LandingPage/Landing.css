@@ -1,12 +1,18 @@
+/* =============================================================================
+   RESET & GLOBALS
+   Garante um box model consistente e scroll suave em toda a página.
+   ============================================================================= */
 * {
   box-sizing: border-box;
 }
 
 html {
   scroll-behavior: smooth;
-  scroll-padding-top: 100px;
+  /* Compensa a altura da navbar sticky ao navegar por âncoras */
+  scroll-padding-top: 80px;
 }
 
+/* Variáveis de design — paleta e sombras globais */
 :root {
   --bg-creme: #dfdbd2;
   --bg-section: #e0dcd2;
@@ -23,6 +29,7 @@ body {
   overflow-x: hidden;
 }
 
+/* Wrapper raiz do componente Landing */
 .landing-container {
   font-family: "Inter", sans-serif;
   color: var(--text-main);
@@ -30,7 +37,10 @@ body {
   line-height: 1.6;
 }
 
-/* --- NAVBAR --- */
+/* =============================================================================
+   NAVBAR
+   Barra de navegação sticky com blur de fundo.
+   ============================================================================= */
 .navbar {
   display: flex;
   justify-content: space-between;
@@ -46,10 +56,12 @@ body {
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
 }
 
+/* ── Marca / Logótipo ── */
 .nav-brand {
   display: flex;
   align-items: center;
   gap: 15px;
+  /* Mantém o logótipo acima do overlay mobile */
   z-index: 1001;
 }
 
@@ -71,14 +83,18 @@ body {
   letter-spacing: -0.5px;
 }
 
+/* ── Wrapper de menu + ações (torna-se dropdown em mobile) ── */
 .nav-content {
   display: flex;
   flex: 1;
-  justify-content: flex-end;
   align-items: center;
+  /* O nav-menu fica centrado via position absolute na navbar;
+     o nav-actions vai para a direita com margin-left: auto */
+  justify-content: flex-end;
   gap: 30px;
 }
 
+/* ── Lista de links — centrada na navbar com position absolute ── */
 .nav-menu {
   display: flex;
   list-style: none;
@@ -86,6 +102,11 @@ body {
   margin: 0;
   padding: 0;
   align-items: center;
+  /* Centra o menu em relação à navbar (que tem position: sticky),
+     independente da largura do logótipo ou dos botões de ação */
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
 }
 
 .nav-menu a {
@@ -104,6 +125,7 @@ body {
   transform: translateY(-2px);
 }
 
+/* Separador visual entre grupos de links */
 .nav-separator {
   color: var(--accent-gold);
   opacity: 0.4;
@@ -112,6 +134,7 @@ body {
   margin: 0 5px;
 }
 
+/* ── Botão de acesso ao portal (pílula) ── */
 .student-menu-group {
   display: flex;
   align-items: center;
@@ -121,7 +144,9 @@ body {
   display: flex;
   align-items: center;
   background-color: var(--bg-section);
+  /* padding e cursor migrados dos inline styles do JSX */
   padding: 8px 20px;
+  cursor: pointer;
   border-radius: 50px;
   border: 1px solid rgba(171, 133, 90, 0.4);
   box-shadow: 0 4px 15px rgba(42, 39, 36, 0.08);
@@ -145,12 +170,14 @@ body {
   color: var(--accent-gold);
 }
 
+/* ── Área de ações (login / logout) ── */
 .nav-actions {
   display: flex;
   align-items: center;
   gap: 15px;
 }
 
+/* Cápsula de perfil do utilizador autenticado */
 .user-profile {
   display: flex;
   align-items: center;
@@ -165,6 +192,7 @@ body {
   font-size: 0.9rem;
 }
 
+/* Botão de logout */
 .btn-logout {
   background-color: var(--primary-dark);
   color: #fff;
@@ -181,6 +209,7 @@ body {
   transform: scale(1.05);
 }
 
+/* Botão de texto simples (Iniciar Sessão) */
 .btn-text {
   background: none;
   border: none;
@@ -194,6 +223,7 @@ body {
   color: var(--accent-gold);
 }
 
+/* Botão primário escuro (Criar Conta) */
 .btn-dark {
   background-color: var(--primary-dark);
   color: #fff;
@@ -212,15 +242,21 @@ body {
   transform: translateY(-2px);
 }
 
+/* ── Botão Hamburger (oculto em desktop) ── */
 .hamburger {
   display: none;
   flex-direction: column;
   gap: 5px;
   cursor: pointer;
+  background: none;
+  border: none;
+  padding: 4px;
+  /* Mantém-se acima do dropdown mobile */
   z-index: 1001;
 }
 
 .hamburger span {
+  display: block;
   width: 30px;
   height: 3px;
   background-color: var(--primary-dark);
@@ -228,7 +264,23 @@ body {
   border-radius: 2px;
 }
 
-/* --- ANIMAÇÕES TEXTO VIVA SIMPLES --- */
+/* Animação X quando o menu está aberto */
+.hamburger.ativo span:nth-child(1) {
+  transform: translateY(8px) rotate(45deg);
+}
+.hamburger.ativo span:nth-child(2) {
+  opacity: 0;
+}
+.hamburger.ativo span:nth-child(3) {
+  transform: translateY(-8px) rotate(-45deg);
+}
+
+/* =============================================================================
+   ANIMAÇÕES DO LOGO — VIVA D'ARTE
+   Cada letra flutua com um atraso diferente (definido via style inline no JSX).
+   ============================================================================= */
+
+/* Wrapper inline-flex para as letras animadas */
 .texto-viva-simples {
   display: inline-flex;
   font-weight: 900;
@@ -237,15 +289,20 @@ body {
   letter-spacing: -0.5px;
 }
 
+/* Cada letra é um span; o animationDelay é injetado inline no JSX */
 .letra-ritmo {
   animation: balancoSuave 2.5s ease-in-out infinite;
+  /* Preserva os espaços entre palavras (migrado dos inline styles do JSX) */
+  white-space: pre;
 }
 
+/* Muda a cor de todas as letras ao fazer hover no wrapper */
 .texto-viva-simples:hover .letra-ritmo {
   color: #b38b59;
   transition: color 0.3s ease;
 }
 
+/* Animação de flutuação suave */
 @keyframes balancoSuave {
   0%,
   100% {
@@ -256,6 +313,7 @@ body {
   }
 }
 
+/* Animação de entrada de baixo para cima */
 @keyframes fadeInUp {
   from {
     opacity: 0;
@@ -267,7 +325,9 @@ body {
   }
 }
 
-/* --- HERO SECTION --- */
+/* =============================================================================
+   HERO — Secção de entrada
+   ============================================================================= */
 .hero {
   height: 85vh;
   min-height: 600px;
@@ -283,6 +343,7 @@ body {
   text-align: center;
 }
 
+/* Conteúdo centrado com animação de entrada */
 .hero-content {
   max-width: 850px;
   padding: 0 20px;
@@ -305,21 +366,28 @@ body {
   opacity: 0.9;
 }
 
+/* Destaque em dourado no título principal */
 .text-highlight {
   color: var(--accent-gold);
   position: relative;
   display: inline-block;
 }
 
-/* --- SECÇÕES GERAIS --- */
+/* =============================================================================
+   SECÇÕES GERAIS
+   ============================================================================= */
+
+/* Padding padrão de todas as secções de conteúdo */
 .section-container {
   padding: 80px 10%;
 }
 
+/* Fundo alternado para a secção de Modalidades */
 .bg-light {
   background-color: var(--bg-section);
 }
 
+/* Cabeçalho centrado de secção */
 .section-header {
   text-align: center;
   margin-bottom: 50px;
@@ -338,6 +406,7 @@ body {
   opacity: 0.8;
 }
 
+/* Layout da secção Sobre Nós */
 .sobre-layout {
   max-width: 800px;
   margin: 0 auto;
@@ -358,7 +427,11 @@ body {
   opacity: 0.9;
 }
 
-/* --- CARROSSEL --- */
+/* =============================================================================
+   CARROSSEL — Wrapper e controlos
+   ============================================================================= */
+
+/* Contentor relativo para posicionar os botões de seta */
 .carousel-wrapper {
   position: relative;
   display: flex;
@@ -367,6 +440,7 @@ body {
   margin: 0 auto;
 }
 
+/* Faixa horizontal com scroll oculto e snap */
 .carousel-container {
   display: flex;
   gap: 30px;
@@ -377,6 +451,7 @@ body {
   width: 100%;
 }
 
+/* Botões de navegação do carrossel */
 .carousel-btn {
   position: absolute;
   top: 50%;
@@ -405,12 +480,15 @@ body {
 .carousel-btn.left {
   left: -20px;
 }
-
 .carousel-btn.right {
   right: -20px;
 }
 
-/* --- CARTÕES MODALIDADES --- */
+/* =============================================================================
+   CARTÕES DE MODALIDADES
+   ============================================================================= */
+
+/* Cartão horizontal com imagem à esquerda e texto à direita */
 .modalidade-card {
   display: flex;
   background-color: var(--white);
@@ -422,6 +500,7 @@ body {
   scroll-snap-align: center;
 }
 
+/* Coluna de imagem */
 .modalidade-left {
   flex: 1.1;
   background-color: #d1ccbf;
@@ -434,6 +513,7 @@ body {
   min-height: 0;
 }
 
+/* Imagem de capa a preencher todo o container */
 .imagem-modalidade {
   position: absolute;
   top: 0;
@@ -445,10 +525,12 @@ body {
   transition: transform 0.6s ease;
 }
 
+/* Efeito de zoom suave ao fazer hover no cartão */
 .modalidade-card:hover .imagem-modalidade {
   transform: scale(1.08);
 }
 
+/* Emoji de placeholder (quando não há imagem) */
 .emoji-gigante {
   font-size: 5rem;
   transition: transform 0.4s ease;
@@ -458,6 +540,7 @@ body {
   transform: scale(1.1) rotate(-5deg);
 }
 
+/* Coluna de texto */
 .modalidade-right {
   flex: 1;
   padding: 30px 25px;
@@ -484,7 +567,11 @@ body {
   opacity: 0.85;
 }
 
-/* --- CARTÕES PROFESSORES --- */
+/* =============================================================================
+   CARTÕES DE PROFESSORES
+   ============================================================================= */
+
+/* Cartão horizontal de professor */
 .horizontal-card {
   display: flex;
   background-color: var(--white);
@@ -498,6 +585,7 @@ body {
   scroll-snap-align: center;
 }
 
+/* No carrossel de item único, o cartão ocupa a largura total */
 .carousel-container.single-item .horizontal-card {
   flex: 0 0 100%;
   scroll-snap-align: start;
@@ -508,6 +596,7 @@ body {
   box-shadow: var(--shadow-soft);
 }
 
+/* Coluna de avatar do professor */
 .card-left {
   width: 250px;
   min-width: 250px;
@@ -531,6 +620,7 @@ body {
   transform: scale(1.08);
 }
 
+/* Coluna de texto do professor */
 .card-right {
   padding: 30px 40px;
   display: flex;
@@ -562,13 +652,16 @@ body {
   opacity: 0.85;
 }
 
-/* --- FOOTER --- */
+/* =============================================================================
+   FOOTER
+   ============================================================================= */
 .main-footer {
   background-color: var(--primary-dark);
   color: #c4c0b5;
   padding: 40px 10% 15px;
 }
 
+/* Grelha de três colunas do footer */
 .footer-container {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -585,6 +678,7 @@ body {
   letter-spacing: 1.5px;
 }
 
+/* Lista de informações de contacto */
 .footer-info {
   list-style: none;
   padding: 0;
@@ -600,6 +694,7 @@ body {
   opacity: 0.8;
 }
 
+/* Lista de links rápidos */
 .footer-links {
   list-style: none;
   padding: 0;
@@ -625,6 +720,7 @@ body {
   transform: translateX(5px);
 }
 
+/* Ícones das redes sociais */
 .social-icons-only {
   display: flex;
   gap: 15px;
@@ -645,6 +741,7 @@ body {
   transform: translateY(-4px) scale(1.1);
 }
 
+/* Rodapé inferior com linha decorativa */
 .footer-bottom {
   text-align: center;
   padding-top: 10px;
@@ -668,10 +765,11 @@ body {
   letter-spacing: 0.5px;
 }
 
-/* =========================================
-   RESPONSIVIDADE E MEDIA QUERIES
-   ========================================= */
+/* =============================================================================
+   RESPONSIVIDADE — MEDIA QUERIES
+   ============================================================================= */
 
+/* ── Tablet / Desktop largo: dois cartões de modalidade visíveis ── */
 @media (min-width: 768px) {
   .modalidade-card {
     flex: 0 0 calc(50% - 15px);
@@ -679,17 +777,22 @@ body {
   }
 }
 
+/* ── Tablet / Landscape (≤ 1024 px) ── */
 @media (max-width: 1024px) {
   .section-container {
     padding: 60px 5%;
   }
+
   .hero h1 {
     font-size: 3.5rem;
   }
+
   .horizontal-card {
     height: auto;
     min-height: 220px;
   }
+
+  /* Aproxima os botões do carrossel das margens */
   .carousel-btn.left {
     left: 5px;
   }
@@ -698,35 +801,62 @@ body {
   }
 }
 
+/* ── Mobile (≤ 768 px) ── */
 @media (max-width: 768px) {
+  /* Navbar compacta — logo e texto não podem crescer para fora */
+  .navbar {
+    height: 64px;
+    padding: 0 4%;
+    gap: 0;
+  }
+
+  /* nav-brand não cresce — ocupa só o espaço necessário */
+  .nav-brand {
+    flex-shrink: 1;
+    min-width: 0;
+    gap: 10px;
+  }
+
+  /* Logo pequeno */
+  .nav-logo-img {
+    height: 44px;
+    flex-shrink: 0;
+  }
+
+  /* Texto da marca — não transborda */
+  .texto-viva-simples {
+    font-size: 1.1rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* Hamburger — não encolhe nunca, separado do brand por margin-left auto */
   .hamburger {
     display: flex;
+    flex-shrink: 0;
+    margin-left: auto;
   }
 
-  .hamburger.ativo span:nth-child(1) {
-    transform: translateY(8px) rotate(45deg);
-  }
-  .hamburger.ativo span:nth-child(2) {
-    opacity: 0;
-  }
-  .hamburger.ativo span:nth-child(3) {
-    transform: translateY(-8px) rotate(-45deg);
-  }
-
+  /* nav-content escondido por defeito — dropdown abaixo da navbar */
   .nav-content {
     position: absolute;
-    top: 80px;
+    top: 64px;
     left: 0;
     width: 100%;
     background-color: var(--bg-creme);
     flex-direction: column;
-    padding: 30px 5%;
-    gap: 20px;
-    box-shadow: 0 10px 15px rgba(0, 0, 0, 0.1);
+    align-items: stretch;
+    padding: 0;
+    gap: 0;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
     opacity: 0;
     visibility: hidden;
-    transform: translateY(-20px);
-    transition: all 0.3s ease;
+    transform: translateY(-8px);
+    transition:
+      opacity 0.2s ease,
+      transform 0.2s ease,
+      visibility 0.2s;
   }
 
   .nav-content.aberto {
@@ -735,35 +865,127 @@ body {
     transform: translateY(0);
   }
 
+  /* Menu vertical — cancela position absolute de desktop */
   .nav-menu {
+    position: static;
+    transform: none;
     flex-direction: column;
     width: 100%;
-    text-align: center;
+    text-align: left;
+    gap: 0;
+    padding: 4px 0;
   }
 
+  .nav-menu li {
+    width: 100%;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  }
+
+  .nav-menu li:last-child {
+    border-bottom: none;
+  }
+
+  /* Links do menu — compactos, padding uniforme */
+  .nav-menu li a,
+  .nav-menu li .special-link {
+    display: flex;
+    align-items: center;
+    padding: 14px 6%;
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: var(--text-main);
+    text-decoration: none;
+    border-bottom: none;
+  }
+
+  .nav-menu li a:hover {
+    background-color: rgba(0, 0, 0, 0.03);
+    color: var(--accent-gold);
+    transform: none;
+  }
+
+  /* Separador visual entre secções do menu */
+  .nav-menu-divider {
+    height: 1px;
+    background-color: rgba(0, 0, 0, 0.08);
+    margin: 4px 6%;
+  }
+
+  /* Pílula do portal em mobile — linha dourada simples */
+  .student-menu-bg {
+    background: none;
+    border: none;
+    box-shadow: none;
+    border-radius: 0;
+    padding: 0;
+    width: 100%;
+    cursor: pointer;
+    border-top: 1px solid rgba(0, 0, 0, 0.07);
+  }
+
+  .student-menu-bg:hover {
+    background-color: rgba(179, 139, 89, 0.06);
+    transform: none;
+  }
+
+  .student-menu-bg .student-link {
+    display: flex;
+    align-items: center;
+    padding: 14px 6%;
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--accent-gold);
+    width: 100%;
+  }
+
+  /* Separador visual em mobile — oculto */
   .nav-separator {
     display: none;
   }
 
+  /* Área de ações — separada do menu por linha */
   .nav-actions {
     flex-direction: column;
     width: 100%;
+    margin-left: 0;
+    align-items: stretch;
+    padding: 12px 6%;
+    gap: 8px;
+    border-top: 1px solid rgba(0, 0, 0, 0.07);
   }
 
+  /* Botões de autenticação a largura toda */
+  .btn-dark,
+  .btn-text {
+    width: 100%;
+    text-align: center;
+    padding: 12px;
+  }
+
+  /* Perfil do utilizador em linha, com destaque */
   .user-profile {
-    flex-direction: column;
-    background: none;
-    border: none;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    background: rgba(0, 0, 0, 0.04);
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    border-radius: 12px;
+    padding: 10px 14px;
+    width: 100%;
   }
-
+  /* Hero: altura automática com padding generoso */
   .hero {
     height: auto;
-    padding: 120px 5% 80px;
+    padding: 96px 5% 80px;
+    /* Desativa o parallax em mobile (melhora performance) */
+    background-attachment: scroll;
   }
+
   .hero h1 {
     font-size: 2.8rem;
     letter-spacing: -1px;
   }
+
   .hero p {
     font-size: 1.05rem;
   }
@@ -772,84 +994,92 @@ body {
   .sobre-layout h2 {
     font-size: 2rem;
   }
+
   .sobre-texto p {
     font-size: 1rem;
   }
 
+  /* Carrossel: scroll nativo por swipe em mobile */
   .carousel-wrapper {
     width: 100%;
     padding: 0;
   }
+
   .carousel-container {
     overflow-x: auto;
     padding: 10px 5%;
     scroll-padding-left: 5%;
+    /* Suaviza o scroll com momentum em iOS */
+    -webkit-overflow-scrolling: touch;
   }
+
+  /* Oculta botões de seta (substituídos pelo swipe) */
   .carousel-btn {
     display: none;
   }
 
+  /* Cartão de modalidade em coluna (imagem em cima, texto em baixo) */
   .modalidade-card {
     flex: 0 0 90%;
     flex-direction: column;
     height: auto;
   }
+
   .modalidade-left {
     width: 100%;
     height: 200px;
     flex: none;
   }
+
   .modalidade-right {
     padding: 25px 20px;
     text-align: center;
   }
 
+  /* Cartão de professor em coluna */
   .horizontal-card {
     flex: 0 0 90%;
     flex-direction: column;
     height: auto;
   }
+
   .card-left {
     width: 100%;
     height: 250px;
     min-width: 0;
   }
+
   .card-right {
     padding: 25px 20px;
     text-align: center;
   }
 
+  /* Footer centrado em mobile */
   .footer-container {
     text-align: center;
   }
+
   .footer-info li {
     justify-content: center;
   }
+
   .social-icons-only {
     justify-content: center;
   }
 }
 
+/* ── Pequenos smartphones (≤ 480 px) ── */
 @media (max-width: 480px) {
   .hero h1 {
     font-size: 2.2rem;
   }
-  .nav-menu {
-    flex-direction: column;
-    align-items: center;
-    gap: 10px;
+
+  /* Logo ainda mais compacto em ecrãs muito pequenos */
+  .nav-logo-img {
+    height: 40px;
   }
-  .user-profile {
-    flex-direction: column;
-    text-align: center;
-    border-radius: 15px;
-    padding: 10px;
-  }
-  .btn-text {
-    margin-right: 0;
-  }
-  .nav-actions {
-    flex-direction: column;
-    align-items: center;
+
+  .texto-viva-simples {
+    font-size: 1.1rem;
   }
 }

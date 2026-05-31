@@ -1,3 +1,20 @@
+/**
+ * @file Login.jsx
+ * @description Página de início de sessão da Viva D'arte.
+ *
+ * Fluxo:
+ * - O utilizador seleciona o perfil (EE ou Professor)
+ * - Introduz email e palavra-passe
+ * - Após 3 tentativas falhadas surge o reCAPTCHA
+ * - Em caso de sucesso, guarda o utilizador/token no localStorage
+ *   e navega para a landing page
+ *
+ * @param {Function} irParaRegisto              - Navega para a página de registo
+ * @param {Function} irParaLanding              - Navega para a landing page
+ * @param {Function} irParaRecuperar            - Navega para recuperação de password
+ * @param {Function} irParaMinhaAgendaProfessor - Navega para agenda do professor
+ * @param {Function} irParaMinhaAgendaEE        - Navega para agenda do EE
+ */
 import React, { useState, useEffect, useRef } from "react";
 import "./LoginRegisto.css";
 import ReCAPTCHA from "react-google-recaptcha";
@@ -23,14 +40,21 @@ export default function Login({
     document.title = "Iniciar Sessão | Viva D'arte";
   }, []);
 
+  /** Mostra o alerta personalizado com uma mensagem */
   const mostrarAlerta = (msg) => {
     setCustomAlert({ show: true, message: msg });
   };
 
+  /** Fecha o alerta personalizado */
   const fecharAlerta = () => {
     setCustomAlert({ show: false, message: "" });
   };
 
+  /**
+   * Submete o formulário de login.
+   * Bloqueia se ≥3 tentativas falhadas e o reCAPTCHA não foi resolvido.
+   * Em sucesso guarda utilizador e token no localStorage.
+   */
   const lidarComLogin = async (e) => {
     e.preventDefault();
 
@@ -73,6 +97,7 @@ export default function Login({
     }
   };
 
+  /** Callback do reCAPTCHA — guarda o token gerado */
   const onCaptchaChange = (token) => {
     setCaptchaToken(token);
   };
@@ -131,7 +156,7 @@ export default function Login({
               />
             </div>
 
-            <div className="input-container" style={{ marginBottom: "5px" }}>
+            <div className="input-container input-container--tight">
               <label>Palavra-passe</label>
               <input
                 type="password"
@@ -155,16 +180,7 @@ export default function Login({
             </div>
 
             {tentativasFalhadas >= 3 && (
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "center",
-                  marginBottom: "15px",
-                  marginTop: "15px",
-                  transform: "scale(0.90)",
-                  transformOrigin: "center",
-                }}
-              >
+              <div className="captcha-wrapper">
                 <ReCAPTCHA
                   ref={recaptchaRef}
                   sitekey="6LesTOIsAAAAACw0jFqhrje-SuCVR_HNRo3WhD2e"
@@ -194,15 +210,12 @@ export default function Login({
       </div>
 
       {customAlert.show && (
-        <div className="modal-overlay" style={{ zIndex: 9999 }}>
-          <div
-            className="modal-content alert-box"
-            style={{ maxWidth: "400px" }}
-          >
-            <p className="alert-message" style={{ marginBottom: "30px" }}>
+        <div className="modal-overlay modal-overlay--alert">
+          <div className="modal-content alert-box alert-box--sm">
+            <p className="alert-message alert-message--spaced">
               {customAlert.message}
             </p>
-            <div style={{ display: "flex", justifyContent: "center" }}>
+            <div className="alert-actions">
               <button className="btn-dark" onClick={fecharAlerta}>
                 OK
               </button>

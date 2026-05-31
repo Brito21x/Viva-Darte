@@ -345,6 +345,7 @@ export default function MinhaAgendaProfessor({
   irParaFigurinos,
   irParaMinhaAgendaProfessor,
   irParaMinhaAgendaEE,
+  irParaAgenda,
   modo = "professor",
 }) {
   /* ─── Estado: dados do utilizador e agenda ─────────────────────────────── */
@@ -1338,6 +1339,17 @@ export default function MinhaAgendaProfessor({
             </a>
           </li>
           <li className="nav-separator">|</li>
+          <li>
+            <a
+              href="#agenda_semana"
+              onClick={(e) => {
+                e.preventDefault();
+                irParaAgenda?.();
+              }}
+            >
+              Agenda
+            </a>
+          </li>
           <li>
             <a
               href="#agenda"

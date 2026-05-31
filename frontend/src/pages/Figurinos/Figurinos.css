@@ -1630,47 +1630,83 @@
     width: 100%;
   }
 
-  /* Modal detalhe: coluna única (imagem em cima, info em baixo) */
+  /* Modal detalhe: coluna única (imagem em cima, info em baixo).
+     O modal ocupa quase o ecrã inteiro e faz scroll internamente. */
   .modal-content-detalhe {
     flex-direction: column;
-    max-height: 95vh;
+    /* Ocupa o máximo do ecrã disponível */
+    height: 92vh;
+    max-height: 92vh;
     width: 96%;
     min-height: 0;
+    /* overflow hidden no container — cada coluna faz o seu próprio scroll */
+    overflow: hidden;
   }
   .detalhe-imagem-col {
-    flex: none;
-    height: 240px;
+    /* Altura fixa para a imagem — não cresce nem encolhe */
+    flex: 0 0 260px;
+    height: 260px;
     border-right: none;
     border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+    overflow: hidden;
+  }
+  /* Em mobile a imagem preenche toda a coluna sem cortar o conteúdo */
+  .detalhe-imagem-main {
+    padding: 0;
+    height: 100%;
+  }
+  .detalhe-imagem-img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    background: #dcd7ce;
   }
   .detalhe-info-col {
-    padding: 20px;
-    flex: 1;
+    /* Ocupa o espaço restante e faz scroll se necessário */
+    flex: 1 1 0;
+    min-height: 0;
+    padding: 16px 20px 20px;
     overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
   }
   .detalhe-titulo {
-    font-size: 1.6rem;
+    font-size: 1.4rem;
+    margin-bottom: 6px;
   }
   .detalhe-tags {
     flex-wrap: wrap;
-    gap: 10px;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+  .detalhe-descricao {
+    margin-bottom: 16px;
+  }
+  .detalhe-fornecedor-wrap {
+    margin-bottom: 16px;
   }
   .detalhe-preco-bar {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 12px;
+    flex-direction: row;
+    align-items: center;
+    padding-top: 16px;
+  }
+  .detalhe-preco-valor {
+    font-size: 1.6rem;
   }
   .detalhe-actions {
     flex-wrap: wrap;
     justify-content: stretch;
+    margin-top: 12px;
   }
   .detalhe-actions .btn-dark,
   .detalhe-actions .btn-outline {
     flex: 1;
     text-align: center;
   }
+  .detalhe-header {
+    margin-bottom: 12px;
+  }
 
-  /* Setas de navegação do detalhe — ocultas em mobile (swipe) */
+  /* Setas de navegação do detalhe — ocultas em mobile */
   .nav-detalhe-btn {
     display: none;
   }
@@ -1730,9 +1766,10 @@
     grid-template-columns: 1fr;
   }
   .detalhe-imagem-col {
-    height: 200px;
+    flex: 0 0 180px;
+    height: 180px;
   }
   .detalhe-titulo {
-    font-size: 1.4rem;
+    font-size: 1.2rem;
   }
 }

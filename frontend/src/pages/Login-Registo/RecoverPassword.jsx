@@ -1,3 +1,14 @@
+/**
+ * @file RecoverPassword.jsx
+ * @description Página de recuperação de palavra-passe (3 etapas).
+ *
+ * Etapa 1 — Email + reCAPTCHA: solicita o envio de token
+ * Etapa 2 — Token: o utilizador insere o código recebido no email
+ * Etapa 3 — Nova password: define a nova palavra-passe e submete
+ *
+ * @param {Function} irParaLogin   - Navega para a página de login
+ * @param {Function} irParaLanding - Navega para a landing page
+ */
 import React, { useState, useEffect, useRef } from "react";
 import "./LoginRegisto.css";
 import ReCAPTCHA from "react-google-recaptcha";
@@ -25,10 +36,12 @@ export default function RecoverPassword({ irParaLogin, irParaLanding }) {
     document.title = "Recuperar Password | Viva D'arte";
   }, []);
 
+  /** Mostra o alerta personalizado; se redirect=true, redireciona para login ao fechar */
   const mostrarAlerta = (msg, redirect = false) => {
     setCustomAlert({ show: true, message: msg, redirectOnClose: redirect });
   };
 
+  /** Fecha o alerta e redireciona para login se a flag redirectOnClose estiver ativa */
   const fecharAlerta = () => {
     if (customAlert.redirectOnClose) {
       irParaLogin();
@@ -36,10 +49,15 @@ export default function RecoverPassword({ irParaLogin, irParaLanding }) {
     setCustomAlert({ show: false, message: "", redirectOnClose: false });
   };
 
+  /** Callback do reCAPTCHA — guarda o token gerado */
   const onCaptchaChange = (token) => {
     setCaptchaToken(token);
   };
 
+  /**
+   * Etapa 1 — Envia o email para a API e obtém o token de recuperação.
+   * Exige reCAPTCHA válido antes de submeter.
+   */
   const lidarComEmail = async (e) => {
     e.preventDefault();
 
@@ -50,7 +68,7 @@ export default function RecoverPassword({ irParaLogin, irParaLanding }) {
 
     try {
       const response = await fetch(
-        "https://zeppelin-squid-kick.ngrok-free.dev/api/auth/recuperar-password",
+        "https://api-vivadarte.onrender.com/api/auth/recuperar-password",
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -78,6 +96,10 @@ export default function RecoverPassword({ irParaLogin, irParaLanding }) {
     }
   };
 
+  /**
+   * Etapa 2 — Valida o token introduzido pelo utilizador
+   * contra o token devolvido pela API na etapa anterior.
+   */
   const lidarComToken = (e) => {
     e.preventDefault();
 
@@ -90,6 +112,10 @@ export default function RecoverPassword({ irParaLogin, irParaLanding }) {
     }
   };
 
+  /**
+   * Etapa 3 — Valida a nova password (≥8 chars + símbolo especial)
+   * e submete a alteração à API.
+   */
   const confirmarAlteracao = async (e) => {
     e.preventDefault();
 
@@ -169,16 +195,7 @@ export default function RecoverPassword({ irParaLogin, irParaLanding }) {
                 />
               </div>
 
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "center",
-                  marginBottom: "15px",
-                  marginTop: "15px",
-                  transform: "scale(0.90)",
-                  transformOrigin: "center",
-                }}
-              >
+              <div className="captcha-wrapper">
                 <ReCAPTCHA
                   ref={recaptchaRef}
                   sitekey="6LesTOIsAAAAACw0jFqhrje-SuCVR_HNRo3WhD2e"
@@ -243,15 +260,12 @@ export default function RecoverPassword({ irParaLogin, irParaLanding }) {
       </div>
 
       {customAlert.show && (
-        <div className="modal-overlay" style={{ zIndex: 9999 }}>
-          <div
-            className="modal-content alert-box"
-            style={{ maxWidth: "400px" }}
-          >
-            <p className="alert-message" style={{ marginBottom: "30px" }}>
+        <div className="modal-overlay modal-overlay--alert">
+          <div className="modal-content alert-box alert-box--sm">
+            <p className="alert-message alert-message--spaced">
               {customAlert.message}
             </p>
-            <div style={{ display: "flex", justifyContent: "center" }}>
+            <div className="alert-actions">
               <button className="btn-dark" onClick={fecharAlerta}>
                 OK
               </button>

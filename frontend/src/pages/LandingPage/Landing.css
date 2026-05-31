@@ -88,10 +88,9 @@ body {
   display: flex;
   flex: 1;
   align-items: center;
-  /* O nav-menu fica centrado via position absolute na navbar;
-     o nav-actions vai para a direita com margin-left: auto */
-  justify-content: flex-end;
-  gap: 30px;
+  justify-content: flex-end; /* Empurra as ações para a direita; o nav-menu centra via absolute */
+  margin-left: 50px; /* Cria um espaço fixo e elegante em relação ao logótipo */
+  gap: 15px;
 }
 
 /* ── Lista de links — centrada na navbar com position absolute ── */
@@ -99,13 +98,12 @@ body {
   display: flex;
   list-style: none;
   gap: 2rem;
-  margin: 0;
   padding: 0;
+  margin: 0;
   align-items: center;
-  /* Centra o menu em relação à navbar (que tem position: sticky),
-     independente da largura do logótipo ou dos botões de ação */
+  /* Centrado na navbar com offset para compensar o peso do nav-brand à esquerda */
   position: absolute;
-  left: 50%;
+  left: 55%;
   transform: translateX(-50%);
 }
 
@@ -138,6 +136,13 @@ body {
 .student-menu-group {
   display: flex;
   align-items: center;
+}
+
+/* Li wrapper da pílula — sem padding extra, alinhado com os outros itens do menu */
+.nav-portal-pill {
+  display: flex;
+  align-items: center;
+  list-style: none;
 }
 
 .student-menu-bg {
@@ -912,6 +917,11 @@ body {
   }
 
   /* Pílula do portal em mobile — linha dourada simples */
+  .nav-portal-pill {
+    width: 100%;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  }
+
   .student-menu-bg {
     background: none;
     border: none;

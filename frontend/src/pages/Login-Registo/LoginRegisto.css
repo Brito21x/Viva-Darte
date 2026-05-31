@@ -280,3 +280,188 @@
 .form-box form {
   margin-top: 20px;
 }
+
+/* =============================================================================
+   CLASSES MIGRADAS DOS INLINE STYLES
+   ============================================================================= */
+
+/* ── Login — input com margem inferior reduzida (campo palavra-passe) ── */
+.input-container--tight {
+  margin-bottom: 5px;
+}
+
+/* ── reCAPTCHA wrapper — centrado e escalonado para 90% ── */
+.captcha-wrapper {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 15px;
+  margin-top: 15px;
+  transform: scale(0.9);
+  transform-origin: center;
+}
+
+/* Variante com margem inferior reduzida (Registo) */
+.captcha-wrapper--tight {
+  margin-bottom: 5px;
+  margin-top: 0;
+}
+
+/* ── Alert modal — z-index elevado ── */
+.modal-overlay--alert {
+  z-index: 9999;
+}
+
+/* ── Alert box com largura máxima ── */
+.alert-box--sm {
+  max-width: 400px;
+}
+
+/* ── Mensagem de alerta com espaço inferior ── */
+.alert-message--spaced {
+  margin-bottom: 30px;
+}
+
+/* ── Linha de botões do alerta centrada ── */
+.alert-actions {
+  display: flex;
+  justify-content: center;
+}
+
+/* ── Registo — linha de campos educando + data em flex ── */
+.input-row {
+  display: flex;
+  gap: 15px;
+  margin-bottom: 15px;
+}
+
+/* Campo nome do educando (flex maior) */
+.input-container--flex2 {
+  flex: 2;
+  margin-bottom: 0;
+}
+
+/* Campo data de nascimento (flex menor) */
+.input-container--flex1 {
+  flex: 1;
+  margin-bottom: 0;
+}
+
+/* ── Wrapper do input de telefone ── */
+.input-tel-wrapper {
+  display: flex;
+  align-items: center;
+  border-bottom: 2px solid rgba(42, 39, 36, 0.15);
+  transition: all 0.3s ease;
+}
+
+.input-tel-wrapper:focus-within {
+  border-bottom-color: var(--accent-gold);
+}
+
+/* Remove a borda do input dentro do wrapper de telefone */
+.input-with-prefix {
+  flex: 1;
+  border-bottom: none !important;
+  padding-left: 0;
+  background: transparent;
+  border: none;
+  padding: 12px 0;
+  font-size: 1rem;
+  color: var(--text-main);
+  outline: none;
+}
+
+/* ── Prefixo do telefone (+351 + bandeira) ── */
+.tel-prefix-inner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-right: 12px;
+}
+
+/* Bandeira no prefixo de telefone */
+.tel-flag {
+  width: 20px;
+  height: auto;
+}
+
+/* =============================================================================
+   RESPONSIVIDADE MOBILE
+   ============================================================================= */
+
+/* ── Mobile (≤ 768px) ── */
+@media (max-width: 768px) {
+  /* Esconde o lado esquerdo (imagem + texto) — já existe a 850px,
+     reforçamos aqui com ajustes adicionais */
+  .left-side {
+    display: none;
+  }
+
+  /* O lado direito ocupa o ecrã inteiro */
+  .right-side {
+    flex: 1;
+    padding: 24px 20px;
+    align-items: flex-start;
+    padding-top: 70px;
+  }
+
+  /* Form box a largura total */
+  .form-box {
+    max-width: 100%;
+  }
+
+  /* Título mais pequeno */
+  .form-header h2 {
+    font-size: 1.8rem;
+  }
+
+  /* Botão voltar ajustado para mobile (está sobre o right-side) */
+  .voltar-landing {
+    left: 16px;
+    top: 16px;
+    background: rgba(42, 39, 36, 0.08);
+    border-color: rgba(42, 39, 36, 0.15);
+  }
+
+  .seta-voltar {
+    color: var(--primary-dark);
+  }
+
+  /* reCAPTCHA — escala ligeiramente menor em ecrãs muito estreitos */
+  .captcha-wrapper {
+    transform: scale(0.82);
+  }
+  .captcha-wrapper--tight {
+    transform: scale(0.82);
+  }
+
+  /* Linha nome-aluno + data em coluna */
+  .input-row {
+    flex-direction: column;
+    gap: 0;
+    margin-bottom: 0;
+  }
+  .input-container--flex2,
+  .input-container--flex1 {
+    flex: none;
+    margin-bottom: 20px;
+  }
+}
+
+/* ── Pequenos smartphones (≤ 400px) ── */
+@media (max-width: 400px) {
+  .right-side {
+    padding: 16px 14px;
+    padding-top: 64px;
+  }
+
+  .form-header h2 {
+    font-size: 1.5rem;
+  }
+
+  .captcha-wrapper,
+  .captcha-wrapper--tight {
+    transform: scale(0.72);
+    transform-origin: left center;
+  }
+}

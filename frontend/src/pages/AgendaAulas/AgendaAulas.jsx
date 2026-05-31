@@ -502,10 +502,17 @@ export default function AgendaAulas({
 
           {!isProfessor && (
             <div className="sidebar-card info-card">
-              <h3>Informação</h3>
+              <h3>Informação Coaching</h3>
               <p>
-                Para requisitar o seu coaching, por favor clique no quadrado do
-                horário pretendido na agenda.
+                Aqui podes consultar o horário semanal das tuas aulas. Para
+                pedires uma sessão de coaching, vai ao separador{" "}
+                <strong
+                  onClick={irParaMinhaAgendaProfessor}
+                  style={{ cursor: "pointer" }}
+                >
+                  Coaching
+                </strong>{" "}
+                no menu em cima.
               </p>
             </div>
           )}

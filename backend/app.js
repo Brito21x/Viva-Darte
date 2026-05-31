@@ -11,6 +11,7 @@ const coachingRoutes = require("./src/routes/coachingRoutes");
 const inventarioRoutes = require("./src/routes/inventarioRoutes");
 const faturacaoRoutes = require("./src/routes/faturacaoRoutes");
 const auditoriaRoutes = require("./src/routes/auditoriaRoutes");
+const agendaRoutes = require("./src/routes/agendaRoutes");
 
 const app = express();
 
@@ -86,6 +87,7 @@ app.use("/api/coaching", coachingRoutes);
 app.use("/api/inventario", inventarioRoutes);
 app.use("/api", faturacaoRoutes);
 app.use("/api/auditoria", auditoriaRoutes);
+app.use("/api/agenda", agendaRoutes);
 
 app.use(errorHandler);
 

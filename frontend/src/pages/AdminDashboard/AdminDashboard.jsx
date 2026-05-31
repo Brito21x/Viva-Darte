@@ -1,4 +1,17 @@
 import React, { useState, useEffect, useRef } from "react";
+import {
+  LayoutDashboard,
+  Users,
+  Package,
+  CalendarDays,
+  Dumbbell,
+  BookOpen,
+  Banknote,
+  Clock,
+  LockKeyhole,
+  Receipt,
+  Activity,
+} from "lucide-react";
 import "./AdminDashboard.css";
 import logoImg from "../../assets/logo.png";
 
@@ -267,6 +280,153 @@ export default function AdminDashboard({ irParaLanding }) {
   const [utilizador, setUtilizador] = useState(null);
   const [token, setToken] = useState("");
   const [activeTab, setActiveTab] = useState("overview");
+  const [modalMods, setModalMods] = useState({
+    isOpen: false,
+    userId: null,
+    selectedIds: [],
+  });
+
+  // =================================================================
+  // ESTADOS E FUNÇÕES: AGENDA DE AULAS REGULARES
+  // =================================================================
+  const [horariosEscola, setHorariosEscola] = useState([]);
+  const [horariosLoading, setHorariosLoading] = useState(false);
+  const [filtroModalidadeHorario, setFiltroModalidadeHorario] = useState("");
+  const [modalHorario, setModalHorario] = useState({
+    isOpen: false,
+    mode: "create",
+    data: {
+      id_horario: null,
+      dia_semana: 1,
+      hora_inicio: "",
+      hora_fim: "",
+      id_modalidade: "",
+      id_professor: "",
+      id_sala: "",
+      id_ano_letivo: "",
+    },
+  });
+
+  const DIAS_SEMANA_NOME = {
+    1: "Segunda-feira",
+    2: "Terça-feira",
+    3: "Quarta-feira",
+    4: "Quinta-feira",
+    5: "Sexta-feira",
+    6: "Sábado",
+    7: "Domingo",
+  };
+
+  async function carregarHorariosEscola() {
+    setHorariosLoading(true);
+    try {
+      const data = await apiFetch("/api/escola/horarios", token);
+      setHorariosEscola(Array.isArray(data) ? data : []);
+    } catch (err) {
+      mostrarMsg("Erro ao carregar horários da escola.", "erro");
+    } finally {
+      setHorariosLoading(false);
+    }
+  }
+
+  function abrirModalCriarHorario() {
+    setModalHorario({
+      isOpen: true,
+      mode: "create",
+      data: {
+        id_horario: null,
+        dia_semana: 1,
+        hora_inicio: "",
+        hora_fim: "",
+        id_modalidade: "",
+        id_professor: "",
+        id_sala: "",
+      },
+    });
+  }
+
+  function abrirModalEditarHorario(h) {
+    setModalHorario({
+      isOpen: true,
+      mode: "edit",
+      data: {
+        id_horario: h.id_horario || h.id,
+        dia_semana: h.dia_semana || 1,
+        hora_inicio: formatarHoraSqlTime(h.hora_inicio) || "",
+        hora_fim: formatarHoraSqlTime(h.hora_fim) || "",
+        id_modalidade: h.id_modalidade || "",
+        id_professor: h.id_professor || "",
+        id_sala: h.id_sala || "",
+      },
+    });
+  }
+
+  async function submeterModalHorario(e) {
+    e.preventDefault();
+    const d = modalHorario.data;
+
+    const payload = {
+      dia_semana: parseInt(d.dia_semana, 10),
+      hora_inicio: d.hora_inicio,
+      hora_fim: d.hora_fim,
+      idModalidade: parseInt(d.id_modalidade, 10),
+      idProfessor: parseInt(d.id_professor, 10),
+      idSala: parseInt(d.id_sala, 10),
+    };
+
+    const endpoint =
+      modalHorario.mode === "create"
+        ? "/api/escola/horarios"
+        : `/api/escola/horarios/${d.id_horario}`;
+    const method = modalHorario.mode === "create" ? "POST" : "PUT";
+
+    try {
+      const res = await fetch(`${API_URL}${endpoint}`, {
+        method,
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+      const result = await res.json().catch(() => ({}));
+      if (res.ok) {
+        mostrarMsg(
+          `Horário ${modalHorario.mode === "create" ? "criado" : "atualizado"} com sucesso!`,
+          "ok",
+        );
+        setModalHorario({ isOpen: false, data: {} });
+        carregarHorariosEscola();
+      } else {
+        mostrarMsg(result.mensagem || "Erro ao guardar horário.", "erro");
+      }
+    } catch (err) {
+      mostrarMsg("Erro de comunicação com o servidor.", "erro");
+    }
+  }
+
+  async function handleEliminarHorario(id) {
+    if (
+      !window.confirm(
+        "Tens a certeza que queres eliminar permanentemente este horário da grelha?",
+      )
+    )
+      return;
+    try {
+      const res = await fetch(`${API_URL}/api/escola/horarios/${id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        mostrarMsg("Horário eliminado com sucesso.", "ok");
+        carregarHorariosEscola();
+      } else {
+        mostrarMsg("Erro ao eliminar horário.", "erro");
+      }
+    } catch (err) {
+      mostrarMsg("Erro de comunicação com o servidor.", "erro");
+    }
+  }
 
   const [utilizadores, setUtilizadores] = useState([]);
   const [allModalidades, setAllModalidades] = useState([]);
@@ -436,11 +596,6 @@ export default function AdminDashboard({ irParaLanding }) {
     isOpen: false,
     mode: "create",
     data: {},
-  });
-  const [modalMods, setModalMods] = useState({
-    isOpen: false,
-    userId: null,
-    selectedIds: [],
   });
 
   useEffect(() => {
@@ -659,6 +814,7 @@ export default function AdminDashboard({ irParaLanding }) {
         tipo: tipoRecomendado,
         nomeAluno: "",
         dataNascimentoAluno: "",
+        modalidadesAlunoIds: [],
       },
     });
   }
@@ -671,6 +827,17 @@ export default function AdminDashboard({ irParaLanding }) {
       u.perfis?.toLowerCase().includes("coord")
     )
       tipoBase = "ADMIN";
+
+    // NOVO: Extrair as modalidades atuais do aluno e mapear para IDs
+    const mods = u.modalidadesAluno || u.modalidades || "";
+    const uModsArray =
+      typeof mods === "string" && mods.trim() !== ""
+        ? mods.split(",").map((m) => m.trim())
+        : [];
+
+    const selectedModIds = allModalidades
+      .filter((m) => uModsArray.includes(m.nome))
+      .map((m) => m.id_modalidade);
 
     setModalUser({
       isOpen: true,
@@ -686,6 +853,7 @@ export default function AdminDashboard({ irParaLanding }) {
         dataNascimentoAluno: u.dataNascimentoAluno
           ? formatDataApi(u.dataNascimentoAluno)
           : "",
+        modalidadesAlunoIds: selectedModIds, // NOVO: Preenche as checkboxes
       },
     });
   }
@@ -1057,7 +1225,6 @@ export default function AdminDashboard({ irParaLanding }) {
       idModalidade: nextMod,
     });
   };
-
   const renderTabelaUtilizadores = (listaUtilizadores, tipoTabela) => (
     <table className="admin-table">
       <thead>
@@ -1068,7 +1235,7 @@ export default function AdminDashboard({ irParaLanding }) {
           <th>Telefone</th>
           {tipoTabela === "PENDENTES" && <th>Educando / Modalidades</th>}
           {tipoTabela === "PROF" && <th>Modalidades</th>}
-          {tipoTabela === "EE" && <th>Educando</th>}
+          {tipoTabela === "EE" && <th>Educando / Modalidades</th>} {/* NOVO */}
           <th>Estado</th>
           <th>Criação</th>
           <th className="text-center">Ações</th>
@@ -1107,7 +1274,23 @@ export default function AdminDashboard({ irParaLanding }) {
                   )}
                 </td>
               )}
-              {tipoTabela === "EE" && <td>{u.nomeAluno || "—"}</td>}
+              {tipoTabela === "EE" && (
+                <td>
+                  <strong>{u.nomeAluno || "—"}</strong>
+                  {/* NOVO: Mostra as modalidades na tabela */}
+                  <div
+                    style={{
+                      fontSize: "0.78rem",
+                      color: "#888",
+                      marginTop: "2px",
+                    }}
+                  >
+                    {u.modalidadesAluno || u.modalidades || (
+                      <span style={{ opacity: 0.5 }}>Nenhuma</span>
+                    )}
+                  </div>
+                </td>
+              )}
 
               <td>
                 <span
@@ -1217,7 +1400,17 @@ export default function AdminDashboard({ irParaLanding }) {
         </td>
       ) : (
         <td className="text-center">
-          <span style={{ color: "#888", fontSize: "0.85rem" }}>🔒 Fechado</span>
+          <span style={{ color: "#888", fontSize: "0.85rem" }}>
+            <LockKeyhole
+              size={12}
+              style={{
+                display: "inline",
+                marginRight: 4,
+                verticalAlign: "middle",
+              }}
+            />{" "}
+            Fechado
+          </span>
         </td>
       )}
     </tr>
@@ -1227,6 +1420,7 @@ export default function AdminDashboard({ irParaLanding }) {
     if (!token || !isAuthorized) return;
     if (activeTab === "inventario") carregarInventario();
     if (activeTab === "historico_geral") carregarHistoricoGeral();
+    if (activeTab === "agenda_escola") carregarHorariosEscola();
 
     if (activeTab === "faturacao") {
       if (faturacaoFiltro.subTab === "precos") {
@@ -1283,13 +1477,26 @@ export default function AdminDashboard({ irParaLanding }) {
   }
 
   const tabs = [
-    { id: "overview", label: "🏠 Visão Geral" },
-    { id: "utilizadores", label: "👥 Utilizadores" },
-    { id: "inventario", label: "📦 Inventário" },
-    { id: "coaching", label: "🗓️ Pedidos Coaching" },
-    { id: "historico_coaching", label: "📚 Histórico de Coachings" },
-    { id: "faturacao", label: "💶 Faturação" },
-    { id: "historico_geral", label: "🕓 Histórico" },
+    {
+      id: "overview",
+      icon: <LayoutDashboard size={16} />,
+      label: "Visão Geral",
+    },
+    { id: "utilizadores", icon: <Users size={16} />, label: "Utilizadores" },
+    { id: "inventario", icon: <Package size={16} />, label: "Inventário" },
+    {
+      id: "agenda_escola",
+      icon: <CalendarDays size={16} />,
+      label: "Agenda de Aulas",
+    },
+    { id: "coaching", icon: <Dumbbell size={16} />, label: "Pedidos Coaching" },
+    {
+      id: "historico_coaching",
+      icon: <BookOpen size={16} />,
+      label: "Histórico de Coachings",
+    },
+    { id: "faturacao", icon: <Receipt size={16} />, label: "Faturação" },
+    { id: "historico_geral", icon: <Clock size={16} />, label: "Histórico" },
   ];
 
   async function carregarFaturas() {
@@ -1796,6 +2003,17 @@ export default function AdminDashboard({ irParaLanding }) {
               className={`nav-item ${activeTab === t.id ? "nav-item--active" : ""}`}
               onClick={() => setActiveTab(t.id)}
             >
+              {t.icon && (
+                <span
+                  style={{
+                    marginRight: "8px",
+                    display: "inline-flex",
+                    verticalAlign: "middle",
+                  }}
+                >
+                  {t.icon}
+                </span>
+              )}
               {t.label}
               {t.id === "utilizadores" && pendentes.length > 0 && (
                 <span className="sidebar-badge sidebar-badge--red">
@@ -1834,14 +2052,14 @@ export default function AdminDashboard({ irParaLanding }) {
 
             <div className="stats-grid">
               <StatCard
-                icon="👥"
+                icon={<Users size={22} />}
                 label="Total Utilizadores"
                 value={utilizadores.length}
                 accent="blue"
                 onClick={() => setActiveTab("utilizadores")}
               />
               <StatCard
-                icon="⏳"
+                icon={<Clock size={22} />}
                 label="Por Aprovar"
                 value={pendentes.length}
                 accent="orange"
@@ -1850,7 +2068,7 @@ export default function AdminDashboard({ irParaLanding }) {
             </div>
             <div className="stats-grid" style={{ marginTop: "20px" }}>
               <StatCard
-                icon="🗓️"
+                icon={<CalendarDays size={22} />}
                 label="Pedidos Coaching"
                 value={pedidosPendentes.length}
                 accent="teal"
@@ -1859,7 +2077,7 @@ export default function AdminDashboard({ irParaLanding }) {
             </div>
             <div className="stats-grid" style={{ marginTop: "20px" }}>
               <StatCard
-                icon="📦"
+                icon={<Package size={22} />}
                 label="Peças em Stock"
                 value={inventario.length}
                 accent="teal"
@@ -1871,7 +2089,17 @@ export default function AdminDashboard({ irParaLanding }) {
 
         {activeTab === "utilizadores" && (
           <div className="tab-content">
-            <h1 className="page-title">👥 Gestão de Utilizadores</h1>
+            <h1 className="page-title">
+              <Users
+                size={22}
+                style={{
+                  display: "inline",
+                  marginRight: 8,
+                  verticalAlign: "middle",
+                }}
+              />{" "}
+              Gestão de Utilizadores
+            </h1>
             <Section
               title={`Pendentes (${pendentes.length})`}
               defaultOpen={true}
@@ -1931,10 +2159,209 @@ export default function AdminDashboard({ irParaLanding }) {
             </Section>
           </div>
         )}
+        {/* TAB: AGENDA DE AULAS REGULARES */}
+        {activeTab === "agenda_escola" && (
+          <div className="tab-content">
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: "20px",
+                flexWrap: "wrap",
+                gap: "12px",
+              }}
+            >
+              <div>
+                <h1 className="page-title" style={{ margin: 0 }}>
+                  <CalendarDays
+                    size={22}
+                    style={{
+                      display: "inline",
+                      marginRight: 8,
+                      verticalAlign: "middle",
+                    }}
+                  />
+                  Agenda de Aulas
+                </h1>
+                <p className="page-subtitle">
+                  Gestão dos horários regulares da escola (Turmas fixas)
+                </p>
+              </div>
+              <button className="btn-submit" onClick={abrirModalCriarHorario}>
+                + Adicionar Horário
+              </button>
+            </div>
+
+            <Section
+              title={`Horários Registados (${horariosEscola.length})`}
+              defaultOpen={true}
+            >
+              {/* Filtro por modalidade */}
+              <div
+                style={{
+                  padding: "12px 0 16px 0",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "12px",
+                }}
+              >
+                <label
+                  style={{
+                    fontSize: "0.85rem",
+                    fontWeight: "600",
+                    color: "#555",
+                  }}
+                >
+                  Filtrar por modalidade:
+                </label>
+                <select
+                  value={filtroModalidadeHorario}
+                  onChange={(e) => setFiltroModalidadeHorario(e.target.value)}
+                  style={{
+                    padding: "6px 12px",
+                    borderRadius: "6px",
+                    border: "1px solid #ddd",
+                    fontSize: "0.85rem",
+                    minWidth: "180px",
+                  }}
+                >
+                  <option value="">Todas as modalidades</option>
+                  {Array.from(
+                    new Set(
+                      horariosEscola.map((h) => h.modalidade).filter(Boolean),
+                    ),
+                  )
+                    .sort()
+                    .map((m) => (
+                      <option key={m} value={m}>
+                        {m}
+                      </option>
+                    ))}
+                </select>
+                {filtroModalidadeHorario && (
+                  <button
+                    onClick={() => setFiltroModalidadeHorario("")}
+                    style={{
+                      fontSize: "0.78rem",
+                      color: "#b38b59",
+                      background: "none",
+                      border: "none",
+                      cursor: "pointer",
+                      textDecoration: "underline",
+                    }}
+                  >
+                    Limpar filtro
+                  </button>
+                )}
+              </div>
+              {horariosLoading ? (
+                <div
+                  style={{
+                    padding: "40px",
+                    textAlign: "center",
+                    color: "#888",
+                  }}
+                >
+                  A carregar a grelha de horários...
+                </div>
+              ) : (
+                <div
+                  style={{
+                    background: "#fff",
+                    borderRadius: "10px",
+                    overflow: "hidden",
+                    border: "1px solid #eee",
+                  }}
+                >
+                  <table className="admin-table" style={{ margin: 0 }}>
+                    <thead>
+                      <tr>
+                        <th>Dia da Semana</th>
+                        <th>Horário</th>
+                        <th>Modalidade</th>
+                        <th>Professor</th>
+                        <th>Sala</th>
+                        <th className="text-center">Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {horariosEscola
+                        .filter(
+                          (h) =>
+                            !filtroModalidadeHorario ||
+                            h.modalidade === filtroModalidadeHorario,
+                        )
+                        .map((h) => (
+                          <tr key={h.id_horario}>
+                            <td>
+                              <strong>
+                                {DIAS_SEMANA_NOME[h.dia_semana] || h.dia_semana}
+                              </strong>
+                            </td>
+                            <td>
+                              <span
+                                className="badge"
+                                style={{ background: "#f0f0f0", color: "#555" }}
+                              >
+                                {formatarHoraSqlTime(h.hora_inicio)} -{" "}
+                                {formatarHoraSqlTime(h.hora_fim)}
+                              </span>
+                            </td>
+                            <td>
+                              <strong>
+                                {h.modalidade || h.nome_modalidade || "—"}
+                              </strong>
+                            </td>
+                            <td>{h.professor || h.nome_professor || "—"}</td>
+                            <td>{h.sala || h.nome_sala || "—"}</td>
+                            <td className="text-center whitespace-nowrap">
+                              <button
+                                className="btn-sm btn-sm--primary mr-8"
+                                onClick={() => abrirModalEditarHorario(h)}
+                              >
+                                Editar
+                              </button>
+                              <button
+                                className="btn-sm btn-sm--danger"
+                                onClick={() =>
+                                  handleEliminarHorario(h.id_horario)
+                                }
+                              >
+                                Apagar
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      {horariosEscola.length === 0 && (
+                        <tr>
+                          <td colSpan="6" className="text-center empty-row">
+                            Nenhum horário regular definido. Clique em "+
+                            Adicionar Horário" para começar.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </Section>
+          </div>
+        )}
 
         {activeTab === "coaching" && (
           <div className="tab-content">
-            <h1 className="page-title">🗓️ Pedidos de Coaching</h1>
+            <h1 className="page-title">
+              <Dumbbell
+                size={22}
+                style={{
+                  display: "inline",
+                  marginRight: 8,
+                  verticalAlign: "middle",
+                }}
+              />{" "}
+              Pedidos de Coaching
+            </h1>
             <p className="page-subtitle">
               Gestão de pedidos a aguardar aprovação da coordenação
             </p>
@@ -2024,7 +2451,17 @@ export default function AdminDashboard({ irParaLanding }) {
 
         {activeTab === "historico_coaching" && (
           <div className="tab-content">
-            <h1 className="page-title">📚 Histórico de Coachings</h1>
+            <h1 className="page-title">
+              <BookOpen
+                size={22}
+                style={{
+                  display: "inline",
+                  marginRight: 8,
+                  verticalAlign: "middle",
+                }}
+              />{" "}
+              Histórico de Coachings
+            </h1>
             <p className="page-subtitle">
               Acompanhamento detalhado de aulas agendadas, realizadas ou
               canceladas.
@@ -2133,6 +2570,14 @@ export default function AdminDashboard({ irParaLanding }) {
             >
               <div>
                 <h1 className="page-title" style={{ margin: 0 }}>
+                  <Receipt
+                    size={22}
+                    style={{
+                      display: "inline",
+                      marginRight: 8,
+                      verticalAlign: "middle",
+                    }}
+                  />
                   Faturação
                 </h1>
                 <p className="page-subtitle">
@@ -2561,6 +3006,14 @@ export default function AdminDashboard({ irParaLanding }) {
                                         fontSize: "0.85rem",
                                       }}
                                     >
+                                      <LockKeyhole
+                                        size={12}
+                                        style={{
+                                          display: "inline",
+                                          marginRight: 4,
+                                          verticalAlign: "middle",
+                                        }}
+                                      />{" "}
                                       Fechado
                                     </span>
                                   )}
@@ -2789,6 +3242,14 @@ export default function AdminDashboard({ irParaLanding }) {
           <div className="tab-content">
             <div style={{ marginBottom: "20px" }}>
               <h1 className="page-title" style={{ margin: 0 }}>
+                <Activity
+                  size={22}
+                  style={{
+                    display: "inline",
+                    marginRight: 8,
+                    verticalAlign: "middle",
+                  }}
+                />
                 Histórico de Atividade
               </h1>
               <p
@@ -3081,7 +3542,15 @@ export default function AdminDashboard({ irParaLanding }) {
                   >
                     <div>
                       <h1 className="page-title" style={{ margin: 0 }}>
-                        📦 Gestão de Inventário
+                        <Package
+                          size={22}
+                          style={{
+                            display: "inline",
+                            marginRight: 8,
+                            verticalAlign: "middle",
+                          }}
+                        />{" "}
+                        Gestão de Inventário
                       </h1>
                       <p
                         style={{
@@ -4095,41 +4564,90 @@ export default function AdminDashboard({ irParaLanding }) {
             </h2>
             <form className="admin-form" onSubmit={submeterModal}>
               {modalUser.data.tipo === "EE" && (
-                <div className="form-group-row">
-                  <div className="field form-col-2">
-                    <label>Nome do Educando (Aluno)</label>
-                    <input
-                      type="text"
-                      placeholder="Nome do aluno"
-                      value={modalUser.data.nomeAluno || ""}
-                      onChange={(e) =>
-                        setModalUser({
-                          ...modalUser,
-                          data: {
-                            ...modalUser.data,
-                            nomeAluno: e.target.value,
-                          },
-                        })
-                      }
-                    />
+                <>
+                  <div className="form-group-row">
+                    <div className="field form-col-2">
+                      <label>Nome do Educando (Aluno)</label>
+                      <input
+                        type="text"
+                        placeholder="Nome do aluno"
+                        value={modalUser.data.nomeAluno || ""}
+                        onChange={(e) =>
+                          setModalUser({
+                            ...modalUser,
+                            data: {
+                              ...modalUser.data,
+                              nomeAluno: e.target.value,
+                            },
+                          })
+                        }
+                      />
+                    </div>
+                    <div className="field form-col-1">
+                      <label>Data Nasc.</label>
+                      <input
+                        type="date"
+                        value={modalUser.data.dataNascimentoAluno || ""}
+                        onChange={(e) =>
+                          setModalUser({
+                            ...modalUser,
+                            data: {
+                              ...modalUser.data,
+                              dataNascimentoAluno: e.target.value,
+                            },
+                          })
+                        }
+                      />
+                    </div>
                   </div>
-                  <div className="field form-col-1">
-                    <label>Data Nasc.</label>
-                    <input
-                      type="date"
-                      value={modalUser.data.dataNascimentoAluno || ""}
-                      onChange={(e) =>
-                        setModalUser({
-                          ...modalUser,
-                          data: {
-                            ...modalUser.data,
-                            dataNascimentoAluno: e.target.value,
-                          },
-                        })
-                      }
-                    />
+
+                  {/* NOVO: Checkboxes com as modalidades do Aluno */}
+                  <div className="field">
+                    <label>Modalidades do Aluno</label>
+                    <div
+                      className="modalities-grid"
+                      style={{ marginTop: "6px", marginBottom: "10px" }}
+                    >
+                      {allModalidades.map((m) => (
+                        <label
+                          key={m.id_modalidade}
+                          className="check-label-styled"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={(
+                              modalUser.data.modalidadesAlunoIds || []
+                            ).includes(m.id_modalidade)}
+                            onChange={(e) => {
+                              const ids = e.target.checked
+                                ? [
+                                    ...(modalUser.data.modalidadesAlunoIds ||
+                                      []),
+                                    m.id_modalidade,
+                                  ]
+                                : (
+                                    modalUser.data.modalidadesAlunoIds || []
+                                  ).filter((id) => id !== m.id_modalidade);
+                              setModalUser({
+                                ...modalUser,
+                                data: {
+                                  ...modalUser.data,
+                                  modalidadesAlunoIds: ids,
+                                },
+                              });
+                            }}
+                          />
+                          <span>{m.nome}</span>
+                        </label>
+                      ))}
+                      {allModalidades.length === 0 && (
+                        <span className="empty-modalities">
+                          Nenhuma modalidade registada no sistema.
+                        </span>
+                      )}
+                    </div>
                   </div>
-                </div>
+                </>
               )}
               <div className="field">
                 <label>Nome Completo (Encarregado/Prof)</label>
@@ -5155,7 +5673,170 @@ export default function AdminDashboard({ irParaLanding }) {
           </div>
         </div>
       )}
+      {/* --- MODAL: CRIAR / EDITAR HORÁRIO --- */}
+      {modalHorario.isOpen && (
+        <div className="admin-modal-overlay">
+          <div className="admin-modal-content">
+            <h2 className="admin-modal-title">
+              {modalHorario.mode === "create"
+                ? "Criar Novo Horário"
+                : "Editar Horário"}
+            </h2>
+            <form className="admin-form" onSubmit={submeterModalHorario}>
+              <div className="form-group-row">
+                <div className="field form-col-1">
+                  <label>Dia da Semana *</label>
+                  <select
+                    required
+                    value={modalHorario.data.dia_semana}
+                    onChange={(e) =>
+                      setModalHorario({
+                        ...modalHorario,
+                        data: {
+                          ...modalHorario.data,
+                          dia_semana: e.target.value,
+                        },
+                      })
+                    }
+                  >
+                    <option value={1}>Segunda-feira</option>
+                    <option value={2}>Terça-feira</option>
+                    <option value={3}>Quarta-feira</option>
+                    <option value={4}>Quinta-feira</option>
+                    <option value={5}>Sexta-feira</option>
+                    <option value={6}>Sábado</option>
+                    <option value={7}>Domingo</option>
+                  </select>
+                </div>
+              </div>
 
+              <div className="form-group-row">
+                <div className="field form-col-1">
+                  <label>Hora Início *</label>
+                  <input
+                    type="time"
+                    required
+                    value={modalHorario.data.hora_inicio}
+                    onChange={(e) =>
+                      setModalHorario({
+                        ...modalHorario,
+                        data: {
+                          ...modalHorario.data,
+                          hora_inicio: e.target.value,
+                        },
+                      })
+                    }
+                  />
+                </div>
+                <div className="field form-col-1">
+                  <label>Hora Fim *</label>
+                  <input
+                    type="time"
+                    required
+                    value={modalHorario.data.hora_fim}
+                    onChange={(e) =>
+                      setModalHorario({
+                        ...modalHorario,
+                        data: {
+                          ...modalHorario.data,
+                          hora_fim: e.target.value,
+                        },
+                      })
+                    }
+                  />
+                </div>
+              </div>
+
+              <div className="field">
+                <label>Modalidade *</label>
+                <select
+                  required
+                  value={modalHorario.data.id_modalidade}
+                  onChange={(e) =>
+                    setModalHorario({
+                      ...modalHorario,
+                      data: {
+                        ...modalHorario.data,
+                        id_modalidade: e.target.value,
+                      },
+                    })
+                  }
+                >
+                  <option value="">-- Selecione a Modalidade --</option>
+                  {allModalidades.map((m) => (
+                    <option key={m.id_modalidade} value={m.id_modalidade}>
+                      {m.nome}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="form-group-row">
+                <div className="field form-col-1">
+                  <label>Professor *</label>
+                  <select
+                    required
+                    value={modalHorario.data.id_professor}
+                    onChange={(e) =>
+                      setModalHorario({
+                        ...modalHorario,
+                        data: {
+                          ...modalHorario.data,
+                          id_professor: e.target.value,
+                        },
+                      })
+                    }
+                  >
+                    <option value="">-- Selecione o Professor --</option>
+                    {profs.map((p) => (
+                      <option key={p.id_utilizador} value={p.id_utilizador}>
+                        {p.nome}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="field form-col-1">
+                  <label>Sala *</label>
+                  <select
+                    required
+                    value={modalHorario.data.id_sala}
+                    onChange={(e) =>
+                      setModalHorario({
+                        ...modalHorario,
+                        data: { ...modalHorario.data, id_sala: e.target.value },
+                      })
+                    }
+                  >
+                    <option value="">-- Selecione a Sala --</option>
+                    {salas.map((s) => (
+                      <option key={s.id_sala} value={s.id_sala}>
+                        {s.nome} (Max: {s.capacidade_maxima})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="modal-actions">
+                <button
+                  type="button"
+                  className="btn-cancel"
+                  onClick={() =>
+                    setModalHorario({ isOpen: false, mode: "create", data: {} })
+                  }
+                >
+                  Cancelar
+                </button>
+                <button type="submit" className="btn-submit">
+                  Guardar Horário
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* A LINHA DAS MENSAGENS E OS FECHOS FINAIS TÊM DE FICAR AQUI NO FIM DE TUDO! */}
       {msg && <div className={`toast toast--${msg.tipo}`}>{msg.texto}</div>}
     </div>
   );

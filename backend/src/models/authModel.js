@@ -104,7 +104,21 @@ async function listarTodosUtilizadores() {
                     JOIN ALUNO a ON ea.ALUNOid_aluno = a.id_aluno
                     WHERE ea.UTILIZADORid_utilizador = u.id_utilizador
                     ORDER BY a.id_aluno DESC
-                ) AS dataNascimentoAluno
+                ) AS dataNascimentoAluno,
+                
+                -- NOVO: Procura as modalidades (disciplinas) em que o educando está inscrito
+                (
+                    SELECT STRING_AGG(m.nome, ', ')
+                    FROM ALUNO_MODALIDADE am
+                    JOIN MODALIDADE m ON am.MODALIDADEid_modalidade = m.id_modalidade
+                    WHERE am.ALUNOid_aluno = (
+                        SELECT TOP 1 ea2.ALUNOid_aluno 
+                        FROM ENCARREGADO_ALUNO ea2 
+                        WHERE ea2.UTILIZADORid_utilizador = u.id_utilizador 
+                        ORDER BY ea2.ALUNOid_aluno DESC
+                    )
+                ) AS modalidadesAluno
+
             FROM UTILIZADOR u
             ORDER BY u.id_utilizador ASC;
         `;
@@ -265,6 +279,7 @@ async function atualizarUtilizadorCompleto(
     idsModalidades,
     nomeAluno,
     dataNascimentoAluno,
+    modalidadesAlunoIds, // NOVO
   },
 ) {
   const pool = await poolPromise;
@@ -340,7 +355,10 @@ async function atualizarUtilizadorCompleto(
           "SELECT ALUNOid_aluno FROM ENCARREGADO_ALUNO WHERE UTILIZADORid_utilizador = @IdUtilizador",
         );
 
+      let idAlunoTratado = null;
+
       if (checkAluno.recordset.length > 0) {
+        idAlunoTratado = checkAluno.recordset[0].ALUNOid_aluno;
         await transaction
           .request()
           .input("IdUtilizador", sql.Int, id)
@@ -348,9 +366,7 @@ async function atualizarUtilizadorCompleto(
           .input("DataNasc", sql.Date, dataNascTratada).query(`
             UPDATE ALUNO 
             SET nome = @NomeAluno, data_nascimento = @DataNasc 
-            WHERE id_aluno IN (
-                SELECT ALUNOid_aluno FROM ENCARREGADO_ALUNO WHERE UTILIZADORid_utilizador = @IdUtilizador
-            )
+            WHERE id_aluno = ${idAlunoTratado}
           `);
       } else {
         const insertResult = await transaction
@@ -362,15 +378,33 @@ async function atualizarUtilizadorCompleto(
             VALUES (@NomeAluno, @DataNasc, 1, GETDATE());
           `);
 
-        const novoAlunoId = insertResult.recordset[0].id_aluno;
+        idAlunoTratado = insertResult.recordset[0].id_aluno;
 
         await transaction
           .request()
           .input("IdUtilizador", sql.Int, id)
-          .input("IdAlunoNovo", sql.Int, novoAlunoId).query(`
+          .input("IdAlunoNovo", sql.Int, idAlunoTratado).query(`
             INSERT INTO ENCARREGADO_ALUNO (UTILIZADORid_utilizador, ALUNOid_aluno)
             VALUES (@IdUtilizador, @IdAlunoNovo);
           `);
+      }
+
+      // NOVO: Atualiza a tabela ALUNO_MODALIDADE (inscrições do educando)
+      if (idAlunoTratado && Array.isArray(modalidadesAlunoIds)) {
+        await transaction
+          .request()
+          .input("IdA", sql.Int, idAlunoTratado)
+          .query("DELETE FROM ALUNO_MODALIDADE WHERE ALUNOid_aluno = @IdA");
+
+        for (const idMod of modalidadesAlunoIds) {
+          await transaction
+            .request()
+            .input("IdA", sql.Int, idAlunoTratado)
+            .input("IdM", sql.Int, idMod)
+            .query(
+              "INSERT INTO ALUNO_MODALIDADE (ALUNOid_aluno, MODALIDADEid_modalidade) VALUES (@IdA, @IdM)",
+            );
+        }
       }
     }
 

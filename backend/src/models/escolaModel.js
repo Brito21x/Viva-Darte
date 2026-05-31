@@ -390,7 +390,74 @@ async function getHorariosPorAnoLetivo(idAnoLetivo = null) {
     throw error;
   }
 }
+async function getHorarios() {
+  const pool = await poolPromise;
+  const result = await pool.request().query(`
+    SELECT 
+      h.id_horario, 
+      h.dia_semana, 
+      CONVERT(VARCHAR(5), h.hora_inicio, 108) AS hora_inicio, 
+      CONVERT(VARCHAR(5), h.hora_fim, 108) AS hora_fim,
+      h.MODALIDADEid_modalidade,
+      h.UTILIZADORid_utilizador,
+      h.SALAid_sala,
+      m.nome AS modalidade,
+      u.nome AS professor,
+      s.nome AS sala
+    FROM HORARIO h
+    LEFT JOIN MODALIDADE m ON h.MODALIDADEid_modalidade = m.id_modalidade
+    LEFT JOIN UTILIZADOR u ON h.UTILIZADORid_utilizador = u.id_utilizador
+    LEFT JOIN SALA s ON h.SALAid_sala = s.id_sala
+    WHERE h.ativo = 1
+    ORDER BY h.dia_semana ASC, h.hora_inicio ASC
+  `);
+  return result.recordset;
+}
 
+async function criarHorario(dados) {
+  const pool = await poolPromise;
+  await pool
+    .request()
+    .input("Dia", sql.Int, dados.dia_semana)
+    .input("Inicio", sql.VarChar, dados.hora_inicio)
+    .input("Fim", sql.VarChar, dados.hora_fim)
+    .input("IdMod", sql.Int, dados.idModalidade)
+    .input("IdProf", sql.Int, dados.idProfessor)
+    .input("IdSala", sql.Int, dados.idSala).query(`
+      INSERT INTO HORARIO (dia_semana, hora_inicio, hora_fim, MODALIDADEid_modalidade, UTILIZADORid_utilizador, SALAid_sala, ativo)
+      VALUES (@Dia, @Inicio, @Fim, @IdMod, @IdProf, @IdSala, 1)
+    `);
+  return true;
+}
+
+async function atualizarHorario(id, dados) {
+  const pool = await poolPromise;
+  await pool
+    .request()
+    .input("Id", sql.Int, id)
+    .input("Dia", sql.Int, dados.dia_semana)
+    .input("Inicio", sql.VarChar, dados.hora_inicio)
+    .input("Fim", sql.VarChar, dados.hora_fim)
+    .input("IdMod", sql.Int, dados.idModalidade)
+    .input("IdProf", sql.Int, dados.idProfessor)
+    .input("IdSala", sql.Int, dados.idSala).query(`
+      UPDATE HORARIO 
+      SET dia_semana = @Dia, hora_inicio = @Inicio, hora_fim = @Fim, 
+          MODALIDADEid_modalidade = @IdMod, UTILIZADORid_utilizador = @IdProf, 
+          SALAid_sala = @IdSala
+      WHERE id_horario = @Id
+    `);
+  return true;
+}
+
+async function apagarHorario(id) {
+  const pool = await poolPromise;
+  await pool
+    .request()
+    .input("Id", sql.Int, id)
+    .query(`DELETE FROM HORARIO WHERE id_horario = @Id`);
+  return true;
+}
 /**
  * @module escolaModel
  */
@@ -406,4 +473,8 @@ module.exports = {
   associarProfessorModalidade,
   removerProfessorModalidade,
   getHorariosPorAnoLetivo,
+  getHorarios,
+  criarHorario,
+  atualizarHorario,
+  apagarHorario,
 };

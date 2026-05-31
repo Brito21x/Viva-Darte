@@ -472,6 +472,7 @@ async function editarUtilizador(req, res, next) {
       idsModalidades,
       nomeAluno,
       dataNascimentoAluno,
+      modalidadesAlunoIds, // NOVO: Captura as modalidades do aluno enviadas pelo frontend
     } = req.body;
 
     if (!nome) {
@@ -497,6 +498,7 @@ async function editarUtilizador(req, res, next) {
       idsModalidades,
       nomeAluno,
       dataNascimentoAluno,
+      modalidadesAlunoIds, // NOVO: Passa para o Model
     });
 
     if (!ok) {
@@ -714,6 +716,7 @@ async function editarUtilizadorCompleto(req, res, next) {
       idsModalidades,
       nomeAluno,
       dataNascimentoAluno,
+      modalidadesAlunoIds, // NOVO
     } = req.body;
 
     if (!nome || !email) {
@@ -740,6 +743,7 @@ async function editarUtilizadorCompleto(req, res, next) {
       idsModalidades,
       nomeAluno,
       dataNascimentoAluno,
+      modalidadesAlunoIds, // NOVO
     });
 
     return res.status(200).json({ mensagem: "Dados atualizados com sucesso!" });

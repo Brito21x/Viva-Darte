@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import "./Landing.css";
 import logoImg from "../../assets/logo.png";
 import { isProfessorUtilizador } from "../../utils/perfilUtilizador";
@@ -198,10 +199,10 @@ export default function Landing({
           <span></span>
         </button>
 
-        {/* Wrapper do menu e ações — em mobile aparece como dropdown */}
-        <div className={`nav-content${menuAberto ? " aberto" : ""}`}>
-          {/* Lista de links de navegação — apenas links âncora, sem a pílula.
-              A pílula foi removida daqui para não descentrar o menu. */}
+        {/* Desktop: nav-content normal dentro da navbar */}
+        <div
+          className={`nav-content nav-content-desktop${menuAberto ? " aberto" : ""}`}
+        >
           <ul className="nav-menu">
             <li>
               <a href="#inicio" onClick={handleIrParaInicio}>
@@ -209,8 +210,6 @@ export default function Landing({
               </a>
             </li>
             <li className="nav-separator">|</li>
-
-            {/* Links públicos — visíveis quando sem utilizador OU sem modo portal */}
             {(!utilizador || !modoPortal) && (
               <>
                 <li>
@@ -230,8 +229,6 @@ export default function Landing({
                 </li>
               </>
             )}
-
-            {/* Links do portal autenticado — visíveis apenas em modo portal */}
             {utilizador && modoPortal && (
               <>
                 {isProfessorUtilizador(utilizador) ? (
@@ -319,8 +316,6 @@ export default function Landing({
                 )}
               </>
             )}
-            {/* Pílula de acesso ao portal — dentro do nav-menu para ser centrada
-                junto com os restantes links via position absolute. */}
             {utilizador && !modoPortal && (
               <li className="nav-portal-pill">
                 <div
@@ -343,8 +338,6 @@ export default function Landing({
               </li>
             )}
           </ul>
-
-          {/* Área de ações do utilizador (login / logout / criar conta) */}
           <div className="nav-actions">
             {utilizador ? (
               <div className="user-profile">
@@ -368,6 +361,171 @@ export default function Landing({
           </div>
         </div>
       </nav>
+
+      {/* Mobile: nav-content via portal no document.body —
+          escapa completamente qualquer overflow:hidden nos containers pai */}
+      {createPortal(
+        <div
+          className={`nav-content nav-content-mobile${menuAberto ? " aberto" : ""}`}
+        >
+          <ul className="nav-menu">
+            <li>
+              <a href="#inicio" onClick={handleIrParaInicio}>
+                Início
+              </a>
+            </li>
+            {(!utilizador || !modoPortal) && (
+              <>
+                <li>
+                  <a href="#sobre" onClick={() => setMenuAberto(false)}>
+                    Sobre Nós
+                  </a>
+                </li>
+                <li>
+                  <a href="#modalidades" onClick={() => setMenuAberto(false)}>
+                    Modalidades
+                  </a>
+                </li>
+                <li>
+                  <a href="#professores" onClick={() => setMenuAberto(false)}>
+                    Professores
+                  </a>
+                </li>
+              </>
+            )}
+            {utilizador && modoPortal && (
+              <>
+                {isProfessorUtilizador(utilizador) ? (
+                  <>
+                    <li>
+                      <a
+                        href="#agenda"
+                        className="special-link"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          irParaAgenda();
+                        }}
+                      >
+                        Agenda
+                      </a>
+                    </li>
+                    <li>
+                      <a
+                        href="#minha-agenda-professor"
+                        className="special-link"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          setMenuAberto(false);
+                          irParaMinhaAgendaProfessor?.();
+                        }}
+                      >
+                        Coaching
+                      </a>
+                    </li>
+                    <li>
+                      <a
+                        href="#figurinos"
+                        className="special-link"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          setMenuAberto(false);
+                          irParaFigurinos();
+                        }}
+                      >
+                        Marketplace
+                      </a>
+                    </li>
+                  </>
+                ) : (
+                  <>
+                    <li>
+                      <a
+                        href="#agenda"
+                        className="special-link"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          irParaAgenda();
+                        }}
+                      >
+                        Agenda
+                      </a>
+                    </li>
+                    <li>
+                      <a
+                        href="#minha-agenda-ee"
+                        className="special-link"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          setMenuAberto(false);
+                          irParaMinhaAgendaEE?.();
+                        }}
+                      >
+                        Coaching
+                      </a>
+                    </li>
+                    <li>
+                      <a
+                        href="#figurinos"
+                        className="special-link"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          setMenuAberto(false);
+                          irParaFigurinos();
+                        }}
+                      >
+                        Marketplace
+                      </a>
+                    </li>
+                  </>
+                )}
+              </>
+            )}
+            {utilizador && !modoPortal && (
+              <li className="nav-portal-pill">
+                <div
+                  className="student-menu-bg"
+                  onClick={() => {
+                    setModoPortal(true);
+                    setMenuAberto(false);
+                  }}
+                >
+                  <a
+                    href="#portal"
+                    className="student-link"
+                    onClick={(e) => e.preventDefault()}
+                  >
+                    {isProfessorUtilizador(utilizador)
+                      ? "Portal do Professor"
+                      : "Portal do EE"}
+                  </a>
+                </div>
+              </li>
+            )}
+          </ul>
+          <div className="nav-actions">
+            {utilizador ? (
+              <div className="user-profile">
+                <span className="welcome-text">
+                  Olá, <strong>{utilizador.nome}</strong>
+                </span>
+                <button className="btn-logout" onClick={handleLogout}>
+                  Sair
+                </button>
+              </div>
+            ) : (
+              <>
+                <button className="btn-text" onClick={irParaLogin}>
+                  Iniciar Sessão
+                </button>
+                <button className="btn-dark" onClick={irParaRegisto}>
+                  Criar Conta
+                </button>
+              </>
+            )}
+          </div>
+        </div>,
+        document.body,
+      )}
 
       {/* ================================================================
           1. SECÇÃO HERO — Início

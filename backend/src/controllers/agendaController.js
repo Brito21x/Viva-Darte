@@ -2,6 +2,8 @@
  * @fileoverview Controlador para a Agenda de Aulas.
  */
 
+const { poolPromise } = require("../config/db");
+const sql = require("mssql");
 const agendaModel = require("../models/agendaModel");
 const { utilizadorTemPerfil } = require("../middlewares/auth");
 
@@ -31,6 +33,46 @@ async function getAgendaAulas(req, res, next) {
   }
 }
 
+async function inscreverAlunoModalidade(req, res, next) {
+  try {
+    const { idAluno, idModalidade } = req.body;
+    if (!idAluno || !idModalidade) {
+      return res.status(400).json({ mensagem: "Dados em falta." });
+    }
+
+    const pool = await poolPromise;
+
+    const existe = await pool
+      .request()
+      .input("IdAluno", sql.Int, idAluno)
+      .input("IdModalidade", sql.Int, idModalidade).query(`
+        SELECT 1 FROM ALUNO_MODALIDADE
+        WHERE ALUNOid_aluno = @IdAluno AND MODALIDADEid_modalidade = @IdModalidade
+      `);
+
+    if (existe.recordset.length > 0) {
+      return res
+        .status(409)
+        .json({ mensagem: "Já está inscrito nesta modalidade." });
+    }
+
+    await pool
+      .request()
+      .input("IdAluno", sql.Int, idAluno)
+      .input("IdModalidade", sql.Int, idModalidade).query(`
+        INSERT INTO ALUNO_MODALIDADE (ALUNOid_aluno, MODALIDADEid_modalidade)
+        VALUES (@IdAluno, @IdModalidade)
+      `);
+
+    return res
+      .status(201)
+      .json({ mensagem: "Inscrição efetuada com sucesso." });
+  } catch (error) {
+    next(error);
+  }
+}
+
 module.exports = {
   getAgendaAulas,
+  inscreverAlunoModalidade,
 };

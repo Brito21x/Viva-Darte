@@ -14,5 +14,6 @@ router.use(autenticar);
  * @description Obtém a agenda geral de aulas baseada no perfil.
  */
 router.get("/", agendaController.getAgendaAulas);
+router.post("/alunos/modalidades", agendaController.inscreverAlunoModalidade);
 
 module.exports = router;

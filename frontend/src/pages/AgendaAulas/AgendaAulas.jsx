@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo } from "react";
 import logoImg from "../../assets/logo.png";
+import { MapPin, Phone, Mail } from "lucide-react";
 import { apiAuthFetch } from "../../services/api";
 
 /* ─── Constantes ────────────────────────────────────────────────────────── */
@@ -852,13 +853,37 @@ export default function AgendaAulas({
             <h3>Contacto</h3>
             <ul className="footer-info">
               <li>
-                <span></span> Rua das Artes, nº 123, Braga
+                <MapPin
+                  size={14}
+                  style={{
+                    display: "inline",
+                    marginRight: 4,
+                    verticalAlign: "middle",
+                  }}
+                />{" "}
+                Rua das Artes, nº 123, Braga
               </li>
               <li>
-                <span></span> +351 000 000 000
+                <Phone
+                  size={14}
+                  style={{
+                    display: "inline",
+                    marginRight: 4,
+                    verticalAlign: "middle",
+                  }}
+                />{" "}
+                +351 000 000 000
               </li>
               <li>
-                <span></span> geral@vivadarte.pt
+                <Mail
+                  size={14}
+                  style={{
+                    display: "inline",
+                    marginRight: 4,
+                    verticalAlign: "middle",
+                  }}
+                />{" "}
+                geral@vivadarte.pt
               </li>
             </ul>
           </div>
@@ -870,7 +895,7 @@ export default function AgendaAulas({
                   href="#"
                   onClick={(e) => {
                     e.preventDefault();
-                    irParaLanding();
+                    if (irParaLanding) irParaLanding();
                   }}
                 >
                   Página Inicial

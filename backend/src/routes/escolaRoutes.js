@@ -65,6 +65,26 @@ router.get("/compatibilidade", escolaController.getCompatibilidade);
  * @access Protegido
  */
 router.get("/modalidades/:id/salas", escolaController.getSalasPorModalidade);
+/** POST /api/escola/horarios - Cria um novo horário */
+router.post(
+  "/horarios",
+  autorizar("Admin", "Coordenação"),
+  escolaController.criarHorario,
+);
+
+/** PUT /api/escola/horarios/:id - Edita um horário existente */
+router.put(
+  "/horarios/:id",
+  autorizar("Admin", "Coordenação"),
+  escolaController.atualizarHorario,
+);
+
+/** DELETE /api/escola/horarios/:id - Apaga um horário */
+router.delete(
+  "/horarios/:id",
+  autorizar("Admin", "Coordenação"),
+  escolaController.apagarHorario,
+);
 
 // ============================================================================
 // GESTÃO DE PROFESSORES E ASSOCIAÇÕES

@@ -33,7 +33,12 @@ const DIAS_EXTENSO = [
 /* ─── Utilitários ───────────────────────────────────────────────────────── */
 function formatHoraCurta(horaFull) {
   if (!horaFull) return "";
-  return String(horaFull).substring(0, 5);
+  const str = String(horaFull);
+  // SQL Server devolve TIME como '1970-01-01T10:00:00.000Z'
+  if (str.includes("T")) {
+    return str.split("T")[1].substring(0, 5);
+  }
+  return str.substring(0, 5);
 }
 
 function modalidadeParaClasse(modalidade) {
@@ -50,6 +55,33 @@ function modalidadeParaClasse(modalidade) {
   return "ballet";
 }
 
+/* ─── Estilos coaching ──────────────────────────────────────────────────── */
+const coachingStyle = `
+  .event-block--coaching {
+    background: #fff8f0 !important;
+    border: 2px solid #b38b59 !important;
+    color: #4a3728 !important;
+  }
+  .event-block--coaching .event-time {
+    color: #b38b59 !important;
+  }
+  .event-block--coaching .event-title {
+    color: #4a3728 !important;
+  }
+  .event-block__badge {
+    display: inline-block;
+    background: #b38b59;
+    color: #fff;
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 2px 7px;
+    border-radius: 4px;
+    margin-bottom: 4px;
+  }
+`;
+
 /* ─── Componente Principal ──────────────────────────────────────────────── */
 export default function AgendaAulas({
   irParaLanding,
@@ -62,26 +94,30 @@ export default function AgendaAulas({
   const [utilizador, setUtilizador] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [menuInternoAberto, setMenuInternoAberto] = useState(false);
+  const [educandos, setEducandos] = useState([]);
 
-  // Filtros da Agenda
+  // Filtros
   const [filtroAluno, setFiltroAluno] = useState("TODOS");
   const [filtroModalidade, setFiltroModalidade] = useState("TODAS");
 
-  // Estados para a funcionalidade de adicionar modalidade
+  // Inscrição
   const [modalidadesDisponiveis, setModalidadesDisponiveis] = useState([]);
   const [alunoParaInscricao, setAlunoParaInscricao] = useState("");
   const [novaModalidade, setNovaModalidade] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Sistema de Alertas
-  const [globalToast, setGlobalToast] = useState(null);
+  // Modalidades inscritas do aluno selecionado
+  const [modalidadesInscritas, setModalidadesInscritas] = useState([]);
+  const [isRemoving, setIsRemoving] = useState(false);
+
+  // Alertas
   const [alertModal, setAlertModal] = useState({ isOpen: false, mensagem: "" });
   const [alertaExcl, setAlertaExcl] = useState({ isOpen: false, message: "" });
-
-  function mostrarToast(texto, tipo = "sucesso") {
-    setGlobalToast({ texto, tipo });
-    setTimeout(() => setGlobalToast(null), 5000);
-  }
+  const [confirmarRemocao, setConfirmarRemocao] = useState({
+    isOpen: false,
+    idModalidade: null,
+    nomeModalidade: "",
+  });
 
   useEffect(() => {
     document.title = "Agenda Semanal | Viva D'arte";
@@ -101,33 +137,67 @@ export default function AgendaAulas({
     }
   }
 
+  async function fetchModalidadesInscritas(idAluno) {
+    if (!idAluno) return setModalidadesInscritas([]);
+    try {
+      const data = await apiAuthFetch(
+        `/api/agenda/alunos/${idAluno}/modalidades`,
+      );
+      setModalidadesInscritas(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error("Erro ao carregar modalidades inscritas:", error);
+    }
+  }
+
+  // Detectar perfis antes do useEffect
+  const isEE =
+    utilizador?.perfis?.some(
+      (p) =>
+        p.toLowerCase().includes("ee") ||
+        p.toLowerCase().includes("encarregado"),
+    ) ||
+    utilizador?.perfil?.toLowerCase().includes("encarregado") ||
+    false;
+
+  const isProfessor =
+    utilizador?.perfis?.some((p) => p.toLowerCase().includes("prof")) ||
+    utilizador?.perfil?.toLowerCase().includes("prof") ||
+    false;
+
   useEffect(() => {
     if (!utilizador) return;
+
     fetchAgenda();
 
-    // Carregar lista de todas as modalidades
     apiAuthFetch("/api/escola/modalidades")
       .then((res) => setModalidadesDisponiveis(Array.isArray(res) ? res : []))
       .catch((err) => console.error("Erro ao carregar modalidades", err));
+
+    if (isEE) {
+      apiAuthFetch("/api/agenda/educandos")
+        .then((res) => {
+          const lista = Array.isArray(res) ? res : [];
+          setEducandos(lista);
+          if (lista.length === 1) {
+            const idAuto = String(lista[0].id_aluno);
+            setAlunoParaInscricao(idAuto);
+            fetchModalidadesInscritas(idAuto);
+          }
+        })
+        .catch((err) => console.error("Erro ao carregar educandos", err));
+    }
   }, [utilizador]);
 
-  const isEE = utilizador?.perfil?.toLowerCase().includes("ee") || false;
-  const isProfessor =
-    utilizador?.perfil?.toLowerCase().includes("prof") || false;
+  // Quando o aluno selecionado muda, recarrega as modalidades inscritas
+  useEffect(() => {
+    if (isEE && alunoParaInscricao) {
+      fetchModalidadesInscritas(alunoParaInscricao);
+    } else {
+      setModalidadesInscritas([]);
+    }
+  }, [alunoParaInscricao]);
 
-  // Extrai lista única de educandos
-  const alunosUnicos = useMemo(() => {
-    if (!isEE) return [];
-    const map = new Map();
-    horarios.forEach((h) => {
-      if (h.id_aluno && h.nome_aluno) {
-        map.set(h.id_aluno, h.nome_aluno);
-      }
-    });
-    return Array.from(map.entries()).map(([id, nome]) => ({ id, nome }));
-  }, [horarios, isEE]);
-
-  // Modalidades únicas para o filtro dropdown
+  // Modalidades únicas para o filtro
   const modalidadesUnicas = useMemo(() => {
     const map = new Map();
     horarios.forEach((h) => {
@@ -138,7 +208,7 @@ export default function AgendaAulas({
     return Array.from(map.entries()).map(([id, nome]) => ({ id, nome }));
   }, [horarios]);
 
-  // Filtra horários pelo educando e modalidade selecionados
+  // Horários filtrados
   const horariosFiltrados = useMemo(() => {
     let filtrado = horarios;
     if (filtroAluno !== "TODOS") {
@@ -147,7 +217,6 @@ export default function AgendaAulas({
           String(h.id_aluno) === String(filtroAluno) || h.id_aluno === null,
       );
     }
-    // Apenas filtra por modalidade se não for professor
     if (!isProfessor && filtroModalidade !== "TODAS") {
       filtrado = filtrado.filter(
         (h) => String(h.id_modalidade) === String(filtroModalidade),
@@ -156,13 +225,12 @@ export default function AgendaAulas({
     return filtrado;
   }, [horarios, filtroAluno, filtroModalidade, isProfessor]);
 
-  // Estrutura os eventos para a grelha
+  // Grelha de eventos
   const grelhaEventos = useMemo(() => {
     const map = new Map();
     horariosFiltrados.forEach((h) => {
       const horaBloco = formatHoraCurta(h.hora_inicio).split(":")[0] + ":00";
       const diaAbrev = DIAS_SEMANA[h.dia_semana - 1];
-
       const key = `${diaAbrev}|${horaBloco}`;
       if (!map.has(key)) map.set(key, []);
       map.get(key).push(h);
@@ -170,7 +238,7 @@ export default function AgendaAulas({
     return map;
   }, [horariosFiltrados]);
 
-  // Submeter nova inscrição (EE e Alunos)
+  // Submeter inscrição
   const handleAdicionarModalidade = async () => {
     const idDoAluno = isEE
       ? Number(alunoParaInscricao)
@@ -179,20 +247,17 @@ export default function AgendaAulas({
 
     setIsSubmitting(true);
     try {
-      await apiAuthFetch("/api/escola/alunos/modalidades", {
+      await apiAuthFetch("/api/agenda/alunos/modalidades", {
         method: "POST",
-        body: {
-          idAluno: idDoAluno,
-          idModalidade: Number(novaModalidade),
-        },
+        body: { idAluno: idDoAluno, idModalidade: Number(novaModalidade) },
       });
       setAlertModal({
         isOpen: true,
         mensagem: "Inscrição efetuada com sucesso!",
       });
-      setAlunoParaInscricao("");
       setNovaModalidade("");
-      fetchAgenda(); // Recarregar a agenda
+      fetchAgenda();
+      fetchModalidadesInscritas(alunoParaInscricao);
     } catch (error) {
       setAlertaExcl({
         isOpen: true,
@@ -200,6 +265,37 @@ export default function AgendaAulas({
       });
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  // Confirmar e remover inscrição
+  const handleConfirmarRemocao = async () => {
+    const idDoAluno = Number(alunoParaInscricao);
+    const idModalidade = confirmarRemocao.idModalidade;
+    setIsRemoving(true);
+    try {
+      await apiAuthFetch("/api/agenda/alunos/modalidades", {
+        method: "DELETE",
+        body: { idAluno: idDoAluno, idModalidade },
+      });
+      setConfirmarRemocao({
+        isOpen: false,
+        idModalidade: null,
+        nomeModalidade: "",
+      });
+      setAlertModal({
+        isOpen: true,
+        mensagem: "Inscrição removida com sucesso!",
+      });
+      fetchAgenda();
+      fetchModalidadesInscritas(alunoParaInscricao);
+    } catch (error) {
+      setAlertaExcl({
+        isOpen: true,
+        message: error.message || "Erro ao remover a inscrição.",
+      });
+    } finally {
+      setIsRemoving(false);
     }
   };
 
@@ -213,15 +309,7 @@ export default function AgendaAulas({
 
   return (
     <div className="dashboard-container">
-      {globalToast && (
-        <div className={`global-toast global-toast--${globalToast.tipo}`}>
-          <span className="toast-icon">
-            {globalToast.tipo === "sucesso" ? "✅" : "❌"}
-          </span>
-          {globalToast.texto}
-        </div>
-      )}
-
+      <style>{coachingStyle}</style>
       {/* NAVBAR */}
       <nav className="navbar interna">
         <div className="nav-brand" onClick={irParaLanding}>
@@ -305,7 +393,7 @@ export default function AgendaAulas({
       </nav>
 
       <div className="dashboard-wrapper">
-        {/* CALENDÁRIO GERAL */}
+        {/* CALENDÁRIO */}
         <main className="calendar-container">
           <div
             className="calendar-nav-bar"
@@ -357,28 +445,57 @@ export default function AgendaAulas({
                           grelhaEventos.get(`${dia}|${hora}`) || [];
                         return (
                           <div key={`${dia}-${hora}`} className="slot-cell">
-                            {eventosBloco.map((evt, idx) => (
-                              <div
-                                key={idx}
-                                className={`event-block ${modalidadeParaClasse(evt.modalidade)}`}
-                              >
-                                <span className="event-time">
-                                  {formatHoraCurta(evt.hora_inicio)} -{" "}
-                                  {formatHoraCurta(evt.hora_fim)}
-                                </span>
-                                <h4 className="event-title">
-                                  {evt.modalidade}
-                                </h4>
-                                <p className="event-student">
-                                  Sala: {evt.sala || "A def."} <br />
-                                  {!isProfessor
-                                    ? `Prof: ${evt.professor}`
-                                    : evt.nome_aluno
-                                      ? `Aluno: ${evt.nome_aluno.split(" ")[0]}`
-                                      : "Turma Geral"}
-                                </p>
-                              </div>
-                            ))}
+                            {eventosBloco.map((evt, idx) =>
+                              evt.tipo === "coaching" ? (
+                                <div
+                                  key={idx}
+                                  className="event-block event-block--coaching"
+                                >
+                                  <span className="event-block__badge">
+                                    Coaching
+                                  </span>
+                                  <span className="event-time">
+                                    {formatHoraCurta(evt.hora_inicio)} –{" "}
+                                    {formatHoraCurta(evt.hora_fim)}
+                                  </span>
+                                  <h4 className="event-title">
+                                    {evt.modalidade}
+                                  </h4>
+                                  <p className="event-student">
+                                    Prof: {evt.professor}
+                                    {evt.data_aula && (
+                                      <>
+                                        <br />
+                                        {new Date(
+                                          evt.data_aula,
+                                        ).toLocaleDateString("pt-PT")}
+                                      </>
+                                    )}
+                                  </p>
+                                </div>
+                              ) : (
+                                <div
+                                  key={idx}
+                                  className={`event-block ${modalidadeParaClasse(evt.modalidade)}`}
+                                >
+                                  <span className="event-time">
+                                    {formatHoraCurta(evt.hora_inicio)} –{" "}
+                                    {formatHoraCurta(evt.hora_fim)}
+                                  </span>
+                                  <h4 className="event-title">
+                                    {evt.modalidade}
+                                  </h4>
+                                  <p className="event-student">
+                                    Sala: {evt.sala || "A def."} <br />
+                                    {!isProfessor
+                                      ? `Prof: ${evt.professor}`
+                                      : evt.nome_aluno
+                                        ? `Aluno: ${evt.nome_aluno.split(" ")[0]}`
+                                        : "Turma Geral"}
+                                  </p>
+                                </div>
+                              ),
+                            )}
                           </div>
                         );
                       })}
@@ -392,9 +509,7 @@ export default function AgendaAulas({
 
         {/* SIDEBAR */}
         <aside className="sidebar">
-          {/* =========================================================
-              VISÃO DO ENCARREGADO DE EDUCAÇÃO / ALUNO
-              ========================================================= */}
+          {/* EE / ALUNO */}
           {!isProfessor && (
             <div className="sidebar-card">
               <h3>Visualizar Agenda</h3>
@@ -403,8 +518,8 @@ export default function AgendaAulas({
                 por modalidade.
               </p>
 
-              {/* Filtros */}
-              {isEE && alunosUnicos.length > 0 && (
+              {/* Filtro por aluno — só aparece se tiver mais de 1 educando */}
+              {isEE && educandos.length > 1 && (
                 <div className="form-group" style={{ marginBottom: "12px" }}>
                   <select
                     className="form-control"
@@ -413,8 +528,8 @@ export default function AgendaAulas({
                     style={{ fontWeight: "bold" }}
                   >
                     <option value="TODOS">Todos os Alunos</option>
-                    {alunosUnicos.map((a) => (
-                      <option key={a.id} value={a.id}>
+                    {educandos.map((a) => (
+                      <option key={a.id_aluno} value={a.id_aluno}>
                         {a.nome}
                       </option>
                     ))}
@@ -422,6 +537,7 @@ export default function AgendaAulas({
                 </div>
               )}
 
+              {/* Filtro por modalidade — só aparece após clicar, default "Ver todas" */}
               {modalidadesUnicas.length > 0 && (
                 <div className="form-group" style={{ marginBottom: "10px" }}>
                   <select
@@ -430,7 +546,7 @@ export default function AgendaAulas({
                     onChange={(e) => setFiltroModalidade(e.target.value)}
                     style={{ fontWeight: "bold" }}
                   >
-                    <option value="TODAS">Todas as Modalidades</option>
+                    <option value="TODAS">Ver todas</option>
                     {modalidadesUnicas.map((m) => (
                       <option key={m.id} value={m.id}>
                         {m.nome}
@@ -440,7 +556,6 @@ export default function AgendaAulas({
                 </div>
               )}
 
-              {/* Menu para adicionar modalidades */}
               <hr style={{ borderTop: "1px solid #eee", margin: "24px 0" }} />
 
               <h4
@@ -453,7 +568,8 @@ export default function AgendaAulas({
                 Adicionar às minhas modalidades
               </h4>
 
-              {isEE && (
+              {/* Dropdown de aluno — só se tiver mais de 1 */}
+              {isEE && educandos.length > 1 && (
                 <div className="form-group" style={{ marginBottom: "12px" }}>
                   <select
                     className="form-control"
@@ -461,8 +577,8 @@ export default function AgendaAulas({
                     onChange={(e) => setAlunoParaInscricao(e.target.value)}
                   >
                     <option value="">Selecione o Aluno...</option>
-                    {alunosUnicos.map((a) => (
-                      <option key={a.id} value={a.id}>
+                    {educandos.map((a) => (
+                      <option key={a.id_aluno} value={a.id_aluno}>
                         {a.nome}
                       </option>
                     ))}
@@ -470,6 +586,104 @@ export default function AgendaAulas({
                 </div>
               )}
 
+              {/* Se só tem 1 educando, mostra o nome */}
+              {isEE && educandos.length === 1 && (
+                <p
+                  style={{
+                    fontSize: "0.85rem",
+                    color: "#555",
+                    marginBottom: "12px",
+                  }}
+                >
+                  Aluno: <strong>{educandos[0].nome}</strong>
+                </p>
+              )}
+
+              {/* Modalidades em que o aluno já está inscrito */}
+              {isEE && alunoParaInscricao && (
+                <div style={{ marginBottom: "16px" }}>
+                  <p
+                    style={{
+                      fontSize: "0.8rem",
+                      color: "#888",
+                      marginBottom: "8px",
+                      fontWeight: "600",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.05em",
+                    }}
+                  >
+                    Modalidades inscritas
+                  </p>
+                  {modalidadesInscritas.length === 0 ? (
+                    <p
+                      style={{
+                        fontSize: "0.82rem",
+                        color: "#aaa",
+                        fontStyle: "italic",
+                      }}
+                    >
+                      Sem inscrições ainda.
+                    </p>
+                  ) : (
+                    <div
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "6px",
+                      }}
+                    >
+                      {modalidadesInscritas.map((m) => (
+                        <div
+                          key={m.id_modalidade}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            background: "#f9f5ef",
+                            border: "1px solid #e8ddd0",
+                            borderRadius: "8px",
+                            padding: "7px 10px",
+                          }}
+                        >
+                          <span
+                            style={{
+                              fontSize: "0.85rem",
+                              fontWeight: "600",
+                              color: "#4a3728",
+                            }}
+                          >
+                            {m.nome}
+                          </span>
+                          <button
+                            onClick={() =>
+                              setConfirmarRemocao({
+                                isOpen: true,
+                                idModalidade: m.id_modalidade,
+                                nomeModalidade: m.nome,
+                              })
+                            }
+                            style={{
+                              background: "none",
+                              border: "none",
+                              cursor: "pointer",
+                              color: "#c0392b",
+                              fontSize: "1rem",
+                              lineHeight: 1,
+                              padding: "2px 4px",
+                              borderRadius: "4px",
+                            }}
+                            title="Remover inscrição"
+                          >
+                            x
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Dropdown de nova modalidade */}
               <div className="form-group" style={{ marginBottom: "16px" }}>
                 <select
                   className="form-control"
@@ -477,11 +691,18 @@ export default function AgendaAulas({
                   onChange={(e) => setNovaModalidade(e.target.value)}
                 >
                   <option value="">Selecione a Modalidade...</option>
-                  {modalidadesDisponiveis.map((m) => (
-                    <option key={m.id_modalidade} value={m.id_modalidade}>
-                      {m.nome}
-                    </option>
-                  ))}
+                  {modalidadesDisponiveis
+                    .filter(
+                      (m) =>
+                        !modalidadesInscritas.some(
+                          (mi) => mi.id_modalidade === m.id_modalidade,
+                        ),
+                    )
+                    .map((m) => (
+                      <option key={m.id_modalidade} value={m.id_modalidade}>
+                        {m.nome}
+                      </option>
+                    ))}
                 </select>
               </div>
 
@@ -507,7 +728,11 @@ export default function AgendaAulas({
                 Aqui podes consultar o horário semanal das tuas aulas. Para
                 pedires uma sessão de coaching, vai ao separador{" "}
                 <strong
-                  onClick={irParaMinhaAgendaProfessor}
+                  onClick={
+                    isProfessor
+                      ? irParaMinhaAgendaProfessor
+                      : irParaMinhaAgendaEE
+                  }
                   style={{ cursor: "pointer" }}
                 >
                   Coaching
@@ -517,12 +742,9 @@ export default function AgendaAulas({
             </div>
           )}
 
-          {/* =========================================================
-              VISÃO DO PROFESSOR
-              ========================================================= */}
+          {/* PROFESSOR */}
           {isProfessor && (
             <>
-              {/* 1. Resumo das "Aulas de Hoje" */}
               <div className="sidebar-card">
                 <h3>Aulas de Hoje</h3>
                 <p className="sidebar-subtitle">
@@ -566,7 +788,7 @@ export default function AgendaAulas({
                               marginBottom: "4px",
                             }}
                           >
-                            {formatHoraCurta(aula.hora_inicio)} -{" "}
+                            {formatHoraCurta(aula.hora_inicio)} –{" "}
                             {formatHoraCurta(aula.hora_fim)}
                           </strong>
                           <span
@@ -587,7 +809,6 @@ export default function AgendaAulas({
                 </div>
               </div>
 
-              {/* 2. Legenda das Suas Modalidades */}
               <div className="sidebar-card info-card">
                 <h3 style={{ fontSize: "1.1rem", marginBottom: "10px" }}>
                   Minhas Modalidades
@@ -631,13 +852,13 @@ export default function AgendaAulas({
             <h3>Contacto</h3>
             <ul className="footer-info">
               <li>
-                <span>📍</span> Rua das Artes, nº 123, Braga
+                <span></span> Rua das Artes, nº 123, Braga
               </li>
               <li>
-                <span>📞</span> +351 000 000 000
+                <span></span> +351 000 000 000
               </li>
               <li>
-                <span>✉️</span> geral@vivadarte.pt
+                <span></span> geral@vivadarte.pt
               </li>
             </ul>
           </div>
@@ -705,9 +926,9 @@ export default function AgendaAulas({
         </div>
       </footer>
 
-      {/* ================================================================
-          MODAIS DE ALERTA DO SISTEMA
-          ================================================================ */}
+      {/* ── MODAIS ── */}
+
+      {/* Sucesso inscrição */}
       {alertModal.isOpen && (
         <div
           className="modal-overlay modal-overlay-high-z"
@@ -725,6 +946,7 @@ export default function AgendaAulas({
         </div>
       )}
 
+      {/* Erro */}
       {alertaExcl.isOpen && (
         <div className="modal-alerta-overlay">
           <div className="modal-alerta-box">
@@ -737,6 +959,50 @@ export default function AgendaAulas({
             >
               Entendido
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmação de remoção */}
+      {confirmarRemocao.isOpen && (
+        <div className="modal-alerta-overlay">
+          <div className="modal-alerta-box">
+            <h3 className="modal-alerta-titulo">Remover Inscrição</h3>
+            <p className="modal-alerta-mensagem">
+              Tens a certeza que queres remover a inscrição em{" "}
+              <strong>{confirmarRemocao.nomeModalidade}</strong>?
+            </p>
+            <div
+              style={{
+                display: "flex",
+                gap: "10px",
+                justifyContent: "center",
+                marginTop: "16px",
+              }}
+            >
+              <button
+                type="button"
+                className="btn-gold modal-alerta-btn"
+                onClick={handleConfirmarRemocao}
+                disabled={isRemoving}
+              >
+                {isRemoving ? "A remover..." : "Confirmar"}
+              </button>
+              <button
+                type="button"
+                className="btn-dark modal-alerta-btn"
+                onClick={() =>
+                  setConfirmarRemocao({
+                    isOpen: false,
+                    idModalidade: null,
+                    nomeModalidade: "",
+                  })
+                }
+                disabled={isRemoving}
+              >
+                Cancelar
+              </button>
+            </div>
           </div>
         </div>
       )}

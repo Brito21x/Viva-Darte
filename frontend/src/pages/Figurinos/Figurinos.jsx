@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { Pencil, Trash2, MapPin, Phone, Mail } from "lucide-react";
 import "./Figurinos.css";
 import logoImg from "../../assets/logo.png";
 import { API_URL, getAuthToken } from "../../services/api";
@@ -1443,7 +1444,7 @@ export default function Figurinos({
                             title="Editar Peça"
                             onClick={(e) => abrirEdicao(e, item)}
                           >
-                            ✎
+                            <Pencil size={14} />
                           </button>
                           <button
                             className="action-btn delete-btn"
@@ -1459,7 +1460,7 @@ export default function Figurinos({
                               });
                             }}
                           >
-                            🗑️
+                            <Trash2 size={14} />
                           </button>
                         </div>
                       )}
@@ -2576,13 +2577,37 @@ export default function Figurinos({
             <h3>Contacto</h3>
             <ul className="footer-info">
               <li>
-                <span>📍</span> Rua das Artes, nº 123, Braga
+                <MapPin
+                  size={14}
+                  style={{
+                    display: "inline",
+                    marginRight: 4,
+                    verticalAlign: "middle",
+                  }}
+                />{" "}
+                Rua das Artes, nº 123, Braga
               </li>
               <li>
-                <span>📞</span> +351 000 000 000
+                <Phone
+                  size={14}
+                  style={{
+                    display: "inline",
+                    marginRight: 4,
+                    verticalAlign: "middle",
+                  }}
+                />{" "}
+                +351 000 000 000
               </li>
               <li>
-                <span>✉️</span> geral@vivadarte.pt
+                <Mail
+                  size={14}
+                  style={{
+                    display: "inline",
+                    marginRight: 4,
+                    verticalAlign: "middle",
+                  }}
+                />{" "}
+                geral@vivadarte.pt
               </li>
             </ul>
           </div>

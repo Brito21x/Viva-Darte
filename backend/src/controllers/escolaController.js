@@ -304,8 +304,38 @@ async function getHorarios(req, res, next) {
       return res.status(400).json({ mensagem: "idAnoLetivo inválido." });
     }
 
-    const horarios = await escolaModel.getHorariosPorAnoLetivo(id);
+    const horarios = await escolaModel.getHorarios();
     return res.status(200).json(horarios);
+  } catch (error) {
+    next(error);
+  }
+}
+async function criarHorario(req, res, next) {
+  try {
+    await escolaModel.criarHorario(req.body);
+    return res.status(201).json({ mensagem: "Horário criado com sucesso!" });
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function atualizarHorario(req, res, next) {
+  try {
+    const id = parseInt(req.params.id, 10);
+    await escolaModel.atualizarHorario(id, req.body);
+    return res
+      .status(200)
+      .json({ mensagem: "Horário atualizado com sucesso!" });
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function apagarHorario(req, res, next) {
+  try {
+    const id = parseInt(req.params.id, 10);
+    await escolaModel.apagarHorario(id);
+    return res.status(200).json({ mensagem: "Horário eliminado com sucesso!" });
   } catch (error) {
     next(error);
   }
@@ -326,4 +356,7 @@ module.exports = {
   associarProfessorModalidade,
   removerProfessorModalidade,
   getHorarios,
+  criarHorario,
+  atualizarHorario,
+  apagarHorario,
 };

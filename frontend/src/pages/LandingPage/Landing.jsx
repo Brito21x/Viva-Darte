@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { MapPin, Phone, Mail } from "lucide-react";
 import { createPortal } from "react-dom";
 import "./Landing.css";
 import logoImg from "../../assets/logo.png";
@@ -773,13 +774,37 @@ export default function Landing({
             <h3>Contacto</h3>
             <ul className="footer-info">
               <li>
-                <span>📍</span> Rua das Artes, nº 123, Braga
+                <MapPin
+                  size={14}
+                  style={{
+                    display: "inline",
+                    marginRight: 4,
+                    verticalAlign: "middle",
+                  }}
+                />{" "}
+                Rua das Artes, nº 123, Braga
               </li>
               <li>
-                <span>📞</span> +351 000 000 000
+                <Phone
+                  size={14}
+                  style={{
+                    display: "inline",
+                    marginRight: 4,
+                    verticalAlign: "middle",
+                  }}
+                />{" "}
+                +351 000 000 000
               </li>
               <li>
-                <span>✉️</span> geral@vivadarte.pt
+                <Mail
+                  size={14}
+                  style={{
+                    display: "inline",
+                    marginRight: 4,
+                    verticalAlign: "middle",
+                  }}
+                />{" "}
+                geral@vivadarte.pt
               </li>
             </ul>
           </div>

@@ -2,32 +2,72 @@
  * @fileoverview Controlador para a Agenda de Aulas.
  */
 
-const { poolPromise } = require("../config/db");
-const sql = require("mssql");
 const agendaModel = require("../models/agendaModel");
 const { utilizadorTemPerfil } = require("../middlewares/auth");
 
-async function getAgendaAulas(req, res, next) {
+async function getAgendaAulasComCoaching(req, res, next) {
   try {
-    const idUtilizador = req.utilizador.id || req.utilizador.id_utilizador;
+    const idUtilizador = req.utilizador.id_utilizador || req.utilizador.id;
     const perfis = req.utilizador.perfis || [];
 
     let horarios = [];
+    let coachings = [];
 
-    // Lógica para Professor
     if (utilizadorTemPerfil(perfis, "Professor")) {
       horarios = await agendaModel.getHorariosPorProfessor(idUtilizador);
-    }
-    // Lógica para Encarregado de Educação
-    else if (utilizadorTemPerfil(perfis, "EE")) {
+      coachings = await agendaModel.getCoachingsPorProfessor(idUtilizador);
+    } else if (
+      utilizadorTemPerfil(perfis, "EE") ||
+      utilizadorTemPerfil(perfis, "Encarregado de Educação") ||
+      utilizadorTemPerfil(perfis, "Encarregado")
+    ) {
       horarios = await agendaModel.getHorariosPorEncarregado(idUtilizador);
+      coachings = await agendaModel.getCoachingsPorEncarregado(idUtilizador);
     } else {
       return res
         .status(403)
         .json({ mensagem: "Acesso não autorizado a esta agenda." });
     }
 
-    return res.status(200).json(horarios);
+    // Mapeamento seguro: converte a data "YYYY-MM-DD" para dia da semana
+    const coachingsMarcados = coachings.map((c) => {
+      const dataObj = new Date(c.data_aula);
+      const diaJS = dataObj.getDay(); // 0 = Domingo, 1 = Segunda ... 6 = Sábado
+      const diaApp = diaJS === 0 ? 7 : diaJS; // A app espera: 1=Seg ... 7=Dom
+
+      return {
+        ...c,
+        dia_semana: diaApp,
+        tipo: "coaching",
+      };
+    });
+
+    const horariosMarcados = horarios.map((h) => ({ ...h, tipo: "aula" }));
+
+    // Junta as aulas normais e os coachings e devolve
+    return res.status(200).json([...horariosMarcados, ...coachingsMarcados]);
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function getEducandosDoEE(req, res, next) {
+  try {
+    const idEE = req.utilizador.id_utilizador || req.utilizador.id;
+    const educandos = await agendaModel.getEducandosPorEE(idEE);
+    return res.status(200).json(educandos);
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function getModalidadesDoAluno(req, res, next) {
+  try {
+    const { idAluno } = req.params;
+    const modalidades = await agendaModel.getModalidadesDoAluno(
+      Number(idAluno),
+    );
+    return res.status(200).json(modalidades);
   } catch (error) {
     next(error);
   }
@@ -40,29 +80,18 @@ async function inscreverAlunoModalidade(req, res, next) {
       return res.status(400).json({ mensagem: "Dados em falta." });
     }
 
-    const pool = await poolPromise;
+    const jaInscrito = await agendaModel.verificarInscricao(
+      Number(idAluno),
+      Number(idModalidade),
+    );
 
-    const existe = await pool
-      .request()
-      .input("IdAluno", sql.Int, idAluno)
-      .input("IdModalidade", sql.Int, idModalidade).query(`
-        SELECT 1 FROM ALUNO_MODALIDADE
-        WHERE ALUNOid_aluno = @IdAluno AND MODALIDADEid_modalidade = @IdModalidade
-      `);
-
-    if (existe.recordset.length > 0) {
+    if (jaInscrito) {
       return res
         .status(409)
         .json({ mensagem: "Já está inscrito nesta modalidade." });
     }
 
-    await pool
-      .request()
-      .input("IdAluno", sql.Int, idAluno)
-      .input("IdModalidade", sql.Int, idModalidade).query(`
-        INSERT INTO ALUNO_MODALIDADE (ALUNOid_aluno, MODALIDADEid_modalidade)
-        VALUES (@IdAluno, @IdModalidade)
-      `);
+    await agendaModel.inscreverAluno(Number(idAluno), Number(idModalidade));
 
     return res
       .status(201)
@@ -72,7 +101,27 @@ async function inscreverAlunoModalidade(req, res, next) {
   }
 }
 
+async function removerModalidadeAluno(req, res, next) {
+  try {
+    const { idAluno, idModalidade } = req.body;
+    if (!idAluno || !idModalidade) {
+      return res.status(400).json({ mensagem: "Dados em falta." });
+    }
+
+    await agendaModel.removerInscricao(Number(idAluno), Number(idModalidade));
+
+    return res
+      .status(200)
+      .json({ mensagem: "Inscrição removida com sucesso." });
+  } catch (error) {
+    next(error);
+  }
+}
+
 module.exports = {
-  getAgendaAulas,
+  getAgendaAulas: getAgendaAulasComCoaching,
+  getEducandosDoEE,
+  getModalidadesDoAluno,
   inscreverAlunoModalidade,
+  removerModalidadeAluno,
 };

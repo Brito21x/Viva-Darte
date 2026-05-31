@@ -286,16 +286,17 @@
   opacity: 0.98;
 }
 .event-block.rejeitado-block {
-  background: #fff0f0;
-  border: 1px solid #ffe0e0;
-  border-left: 3px solid #d9534f;
-  color: #d9534f;
-  opacity: 0.95;
+  background-color: #fff0f0 !important;
+  border: 1px solid #ffe0e0 !important;
+  border-left: 3px solid #d9534f !important;
+  color: #d9534f !important;
+  opacity: 0.95 !important;
 }
+
 .event-block.rejeitado-block .event-time,
 .event-block.rejeitado-block .event-title,
 .event-block.rejeitado-block .event-student {
-  color: #b02a2a;
+  color: #b02a2a !important;
 }
 
 .event-time {
@@ -363,10 +364,12 @@
   border: none;
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
 }
+
 .activity-panel-card h3 {
   color: var(--accent-gold);
   margin-bottom: 8px;
 }
+
 .activity-panel-card p {
   font-size: 0.85rem;
   color: #d8d3c7;
@@ -374,6 +377,7 @@
   margin-bottom: 16px;
   line-height: 1.4;
 }
+
 .activity-panel-card .alert-badge {
   background-color: #d9534f;
   color: white;

@@ -14,6 +14,7 @@ import RecoverPassword from "./pages/Login-Registo/RecoverPassword";
 import Figurinos from "./pages/Figurinos/Figurinos";
 import AdminDashboard from "./pages/AdminDashboard/AdminDashboard";
 import MinhaAgendaProfessor from "./pages/MinhaAgendaProfessor/MinhaAgendaProfessor";
+import Agenda from "./pages/AgendaAulas/AgendaAulas";
 
 // ============================================================================
 // COMPONENTE DE PROTEÇÃO DE ROTAS
@@ -50,6 +51,7 @@ function AppRoutes() {
     minha_agenda_professor: () => navigate("/coaching"),
     minha_agenda_ee: () => navigate("/coaching"),
     admin: () => navigate("/admin"),
+    agenda: () => navigate("/agenda"),
   };
 
   return (
@@ -66,6 +68,7 @@ function AppRoutes() {
             irParaFigurinos={nav.figurinos}
             irParaMinhaAgendaProfessor={nav.minha_agenda_professor}
             irParaMinhaAgendaEE={nav.minha_agenda_ee}
+            irParaAgenda={nav.agenda}
           />
         }
       />
@@ -99,6 +102,22 @@ function AppRoutes() {
       {/* ========================================== */}
       {/* ROTAS PROTEGIDAS (Apenas com Login) */}
       {/* ========================================== */}
+
+      <Route
+        path="/agenda"
+        element={
+          <ProtectedRoute>
+            <Agenda
+              irParaLanding={nav.landing}
+              irParaFigurinos={nav.figurinos}
+              irParaMinhaAgendaProfessor={nav.minha_agenda_professor}
+              irParaMinhaAgendaEE={nav.minha_agenda_ee}
+              irParaAgenda={nav.agenda}
+            />
+          </ProtectedRoute>
+        }
+      />
+
       <Route
         path="/figurinos"
         element={
@@ -108,6 +127,7 @@ function AppRoutes() {
               irParaFigurinos={nav.figurinos}
               irParaMinhaAgendaProfessor={nav.minha_agenda_professor}
               irParaMinhaAgendaEE={nav.minha_agenda_ee}
+              irParaAgenda={nav.agenda}
             />
           </ProtectedRoute>
         }
@@ -122,6 +142,7 @@ function AppRoutes() {
               irParaFigurinos={nav.figurinos}
               irParaMinhaAgendaProfessor={nav.minha_agenda_professor}
               irParaMinhaAgendaEE={nav.minha_agenda_ee}
+              irParaAgenda={nav.agenda}
             />
           </ProtectedRoute>
         }

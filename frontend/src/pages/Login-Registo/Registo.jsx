@@ -1,3 +1,14 @@
+/**
+ * @file Registo.jsx
+ * @description Página de criação de conta da Viva D'arte.
+ *
+ * Campos comuns: nome, email, telefone, palavra-passe
+ * Campos específicos de EE: nome do educando + data de nascimento
+ * Validações: password ≥8 chars + símbolo especial, reCAPTCHA obrigatório
+ *
+ * @param {Function} irParaLogin   - Navega para a página de login
+ * @param {Function} irParaLanding - Navega para a landing page
+ */
 import React, { useState, useEffect, useRef } from "react";
 import "./LoginRegisto.css";
 import ReCAPTCHA from "react-google-recaptcha";
@@ -25,10 +36,12 @@ export default function Registo({ irParaLogin, irParaLanding }) {
     document.title = "Criar Conta | Viva D'arte";
   }, []);
 
+  /** Mostra o alerta personalizado; se redirect=true, redireciona para login ao fechar */
   const mostrarAlerta = (msg, redirect = false) => {
     setCustomAlert({ show: true, message: msg, redirectOnClose: redirect });
   };
 
+  /** Fecha o alerta e redireciona para login se a flag redirectOnClose estiver ativa */
   const fecharAlerta = () => {
     if (customAlert.redirectOnClose) {
       irParaLogin();
@@ -36,6 +49,10 @@ export default function Registo({ irParaLogin, irParaLanding }) {
     setCustomAlert({ show: false, message: "", redirectOnClose: false });
   };
 
+  /**
+   * Formata o número de telefone em tempo real: "912 345 678"
+   * Remove não-dígitos e aplica máscara a cada 3 dígitos.
+   */
   const handleTelefoneChange = (e) => {
     let valor = e.target.value.replace(/\D/g, "");
     if (valor.length > 6) {
@@ -46,6 +63,11 @@ export default function Registo({ irParaLogin, irParaLanding }) {
     setTelefone(valor.substring(0, 11));
   };
 
+  /**
+   * Submete o formulário de registo.
+   * Valida reCAPTCHA, comprimento e símbolos da password antes de enviar.
+   * Em sucesso, exibe mensagem de aprovação pendente e redireciona para login.
+   */
   const lidarComRegisto = async (e) => {
     e.preventDefault();
 
@@ -111,6 +133,7 @@ export default function Registo({ irParaLogin, irParaLanding }) {
     }
   };
 
+  /** Callback do reCAPTCHA — guarda o token gerado */
   const onCaptchaChange = (token) => {
     setCaptchaToken(token);
   };
@@ -173,14 +196,8 @@ export default function Registo({ irParaLogin, irParaLanding }) {
             </div>
 
             {tipo === "EE" && (
-              <div
-                className="input-row"
-                style={{ display: "flex", gap: "15px", marginBottom: "15px" }}
-              >
-                <div
-                  className="input-container"
-                  style={{ flex: 2, marginBottom: 0 }}
-                >
+              <div className="input-row">
+                <div className="input-container input-container--flex2">
                   <label>Nome do Educando </label>
                   <input
                     type="text"
@@ -190,10 +207,7 @@ export default function Registo({ irParaLogin, irParaLanding }) {
                     required={tipo === "EE"}
                   />
                 </div>
-                <div
-                  className="input-container"
-                  style={{ flex: 1, marginBottom: 0 }}
-                >
+                <div className="input-container input-container--flex1">
                   <label>Data Nascimento </label>
                   <input
                     type="date"
@@ -218,19 +232,8 @@ export default function Registo({ irParaLogin, irParaLanding }) {
 
             <div className="input-container">
               <label>Nº de Telefone</label>
-              <div
-                className="input-tel-wrapper"
-                style={{ display: "flex", alignItems: "center" }}
-              >
-                <span
-                  className="tel-prefix"
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                    marginRight: "12px",
-                  }}
-                >
+              <div className="input-tel-wrapper">
+                <span className="tel-prefix" className="tel-prefix-inner">
                   <img
                     src="https://flagcdn.com/w20/pt.png"
                     alt="PT"
@@ -260,15 +263,7 @@ export default function Registo({ irParaLogin, irParaLanding }) {
               />
             </div>
 
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "center",
-                marginBottom: "5px",
-                transform: "scale(0.90)",
-                transformOrigin: "center",
-              }}
-            >
+            <div className="captcha-wrapper captcha-wrapper--tight">
               <ReCAPTCHA
                 ref={recaptchaRef}
                 sitekey="6LesTOIsAAAAACw0jFqhrje-SuCVR_HNRo3WhD2e"
@@ -297,15 +292,12 @@ export default function Registo({ irParaLogin, irParaLanding }) {
       </div>
 
       {customAlert.show && (
-        <div className="modal-overlay" style={{ zIndex: 9999 }}>
-          <div
-            className="modal-content alert-box"
-            style={{ maxWidth: "400px" }}
-          >
-            <p className="alert-message" style={{ marginBottom: "30px" }}>
+        <div className="modal-overlay modal-overlay--alert">
+          <div className="modal-content alert-box alert-box--sm">
+            <p className="alert-message alert-message--spaced">
               {customAlert.message}
             </p>
-            <div style={{ display: "flex", justifyContent: "center" }}>
+            <div className="alert-actions">
               <button className="btn-dark" onClick={fecharAlerta}>
                 OK
               </button>

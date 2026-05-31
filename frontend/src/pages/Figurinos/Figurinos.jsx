@@ -24,6 +24,7 @@ export default function Figurinos({
   irParaLanding,
   irParaMinhaAgendaProfessor,
   irParaMinhaAgendaEE,
+  irParaAgenda,
 }) {
   const [utilizador, setUtilizador] = useState(null);
   /** Controla a visibilidade do menu hamburger em mobile */
@@ -1089,6 +1090,18 @@ export default function Figurinos({
             </a>
           </li>
           <li className="nav-separator">|</li>
+          <li>
+            <a
+              href="#agenda"
+              className="special-link"
+              onClick={(e) => {
+                e.preventDefault();
+                irParaAgenda();
+              }}
+            >
+              Agenda
+            </a>
+          </li>
           <li>
             <a
               href="#"

@@ -38,6 +38,7 @@ export default function Landing({
   irParaFigurinos,
   irParaMinhaAgendaProfessor,
   irParaMinhaAgendaEE,
+  irParaAgenda,
 }) {
   /* ─── Estado local ─────────────────────────────────────────────────────── */
   const [utilizador, setUtilizador] = useState(null);
@@ -237,6 +238,18 @@ export default function Landing({
                   <>
                     <li>
                       <a
+                        href="#agenda"
+                        className="special-link"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          irParaAgenda();
+                        }}
+                      >
+                        Agenda
+                      </a>
+                    </li>
+                    <li>
+                      <a
                         href="#minha-agenda-professor"
                         className="special-link"
                         onClick={(e) => {
@@ -264,6 +277,18 @@ export default function Landing({
                   </>
                 ) : (
                   <>
+                    <li>
+                      <a
+                        href="#agenda"
+                        className="special-link"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          irParaAgenda();
+                        }}
+                      >
+                        Agenda
+                      </a>
+                    </li>
                     <li>
                       <a
                         href="#minha-agenda-ee"
@@ -294,30 +319,30 @@ export default function Landing({
                 )}
               </>
             )}
+            {/* Pílula de acesso ao portal — dentro do nav-menu para ser centrada
+                junto com os restantes links via position absolute. */}
+            {utilizador && !modoPortal && (
+              <li className="nav-portal-pill">
+                <div
+                  className="student-menu-bg"
+                  onClick={() => {
+                    setModoPortal(true);
+                    setMenuAberto(false);
+                  }}
+                >
+                  <a
+                    href="#portal"
+                    className="student-link"
+                    onClick={(e) => e.preventDefault()}
+                  >
+                    {isProfessorUtilizador(utilizador)
+                      ? "Portal do Professor"
+                      : "Portal do EE"}
+                  </a>
+                </div>
+              </li>
+            )}
           </ul>
-
-          {/* Pílula de acesso ao portal — elemento direto do nav-content (fora do
-              nav-menu) para não afetar o centramento dos links âncora.
-              Visível apenas quando autenticado e ainda não em modo portal. */}
-          {utilizador && !modoPortal && (
-            <div
-              className="student-menu-bg"
-              onClick={() => {
-                setModoPortal(true);
-                setMenuAberto(false);
-              }}
-            >
-              <a
-                href="#portal"
-                className="student-link"
-                onClick={(e) => e.preventDefault()}
-              >
-                {isProfessorUtilizador(utilizador)
-                  ? "Portal do Professor"
-                  : "Portal do EE"}
-              </a>
-            </div>
-          )}
 
           {/* Área de ações do utilizador (login / logout / criar conta) */}
           <div className="nav-actions">

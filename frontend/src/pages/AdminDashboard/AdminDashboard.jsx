@@ -1,3 +1,4 @@
+// Dependências externas: React com hooks e ícones da biblioteca lucide-react
 import React, { useState, useEffect, useRef } from "react";
 import {
   LayoutDashboard,
@@ -15,8 +16,10 @@ import {
 import "./AdminDashboard.css";
 import logoImg from "../../assets/logo.png";
 
+// URL base da API REST do backend da Viva D'arte
 const API_URL = "https://api-vivadarte.onrender.com";
 
+// Converte mensagens de erro técnicas da API de coaching em texto legível para o utilizador
 function traduzErroCoaching(err, fallback) {
   const msg = String(err?.message || "").trim();
   if (!msg) return fallback;
@@ -34,6 +37,7 @@ function traduzErroCoaching(err, fallback) {
   return msg;
 }
 
+// Wrapper de fetch simples: injeta o token de autenticação e o header de JSON em todos os pedidos
 function apiFetch(path, token, opts = {}) {
   return fetch(`${API_URL}${path}`, {
     ...opts,
@@ -47,6 +51,7 @@ function apiFetch(path, token, opts = {}) {
   }).then((r) => r.json());
 }
 
+// Versão verificada do fetch: lança um erro se a resposta HTTP não for 2xx
 async function apiFetchChecked(path, token, opts = {}) {
   const res = await fetch(`${API_URL}${path}`, {
     ...opts,
@@ -63,6 +68,7 @@ async function apiFetchChecked(path, token, opts = {}) {
   return data;
 }
 
+// Componente de seleção com pesquisa em tempo real — substitui o <select> nativo quando as listas são longas
 function SearchableSelect({ options, value, onChange, placeholder }) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -132,6 +138,7 @@ function SearchableSelect({ options, value, onChange, placeholder }) {
   );
 }
 
+// Normaliza valores de hora vindos da base de dados (Date, ISO 8601 ou HH:MM) para o formato "HH:MM"
 function formatarHoraSqlTime(valor) {
   if (valor == null) return "—";
   if (valor instanceof Date && !Number.isNaN(valor.getTime())) {
@@ -150,6 +157,7 @@ function formatarHoraSqlTime(valor) {
   return "—";
 }
 
+// Calcula a hora de fim de uma aula com base na hora de início e na duração em minutos
 function calcularHoraFim(horaInicio, duracaoMinutos) {
   const hi = formatarHoraSqlTime(horaInicio);
   if (hi === "—") return "";
@@ -162,6 +170,7 @@ function calcularHoraFim(horaInicio, duracaoMinutos) {
   return `${String(hFim).padStart(2, "0")}:${String(mFim).padStart(2, "0")}`;
 }
 
+// Cartão de estatística reutilizável exibido na grelha da visão geral; suporta click para navegar
 function StatCard({ icon, label, value, accent, onClick }) {
   return (
     <div
@@ -178,6 +187,7 @@ function StatCard({ icon, label, value, accent, onClick }) {
   );
 }
 
+// Secção retrátil com cabeçalho clicável; pode conter um botão de ação opcional ao lado do título
 function Section({
   title,
   icon,
@@ -207,6 +217,7 @@ function Section({
   );
 }
 
+// Extrai apenas "HH:MM" de uma string de hora, descartando segundos se presentes
 function formatHoraCurta(valor) {
   const s = String(valor || "").trim();
   if (!s) return "—";
@@ -215,6 +226,7 @@ function formatHoraCurta(valor) {
   return "—";
 }
 
+// Converte qualquer representação de data para o formato "YYYY-MM-DD" esperado pelas inputs de data HTML
 function formatDataApi(valor) {
   if (!valor) return "";
   const iso = String(valor).split("T")[0];
@@ -227,6 +239,7 @@ function formatDataApi(valor) {
   return `${yyyy}-${mm}-${dd}`;
 }
 
+// Mapeamento de códigos de evento de auditoria para descrições legíveis em PT-PT
 const AUDITORIA_LABELS = {
   LOGIN: "Login",
   LOGOUT: "Logout",
@@ -253,10 +266,12 @@ const AUDITORIA_LABELS = {
   FATURA_CANCELAR: "Cancelar fatura",
 };
 
+// Devolve a descrição legível de um tipo de evento de auditoria, ou o próprio código se não estiver mapeado
 function legivelTipoEvento(tipo) {
   return AUDITORIA_LABELS[tipo] || tipo || "—";
 }
 
+// Atribui uma cor de destaque a cada categoria de evento de auditoria para facilitar a leitura visual
 function corDoEventoAuditoria(tipo) {
   if (!tipo) return "#888";
   if (tipo.startsWith("LOGIN") || tipo === "REGISTO") return "#5a8dee";
@@ -270,7 +285,9 @@ function corDoEventoAuditoria(tipo) {
   return "#666";
 }
 
+// Componente principal do painel de administração; recebe apenas a função de navegação para a landing page
 export default function AdminDashboard({ irParaLanding }) {
+  // --- Estado de autenticação e sessão ---
   const [isAuthorized, setIsAuthorized] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -286,9 +303,7 @@ export default function AdminDashboard({ irParaLanding }) {
     selectedIds: [],
   });
 
-  // =================================================================
-  // ESTADOS E FUNÇÕES: AGENDA DE AULAS REGULARES
-  // =================================================================
+  // --- Estado e funções: agenda de aulas regulares (horários da escola) ---
   const [horariosEscola, setHorariosEscola] = useState([]);
   const [horariosLoading, setHorariosLoading] = useState(false);
   const [filtroModalidadeHorario, setFiltroModalidadeHorario] = useState("");
@@ -307,6 +322,7 @@ export default function AdminDashboard({ irParaLanding }) {
     },
   });
 
+  // Mapeamento de índice numérico para nome do dia da semana em PT-PT
   const DIAS_SEMANA_NOME = {
     1: "Segunda-feira",
     2: "Terça-feira",
@@ -317,6 +333,7 @@ export default function AdminDashboard({ irParaLanding }) {
     7: "Domingo",
   };
 
+  // Obtém a lista de horários da escola a partir da API e atualiza o estado
   async function carregarHorariosEscola() {
     setHorariosLoading(true);
     try {
@@ -329,6 +346,7 @@ export default function AdminDashboard({ irParaLanding }) {
     }
   }
 
+  // Prepara o modal de horário com valores em branco para criação de um novo registo
   function abrirModalCriarHorario() {
     setModalHorario({
       isOpen: true,
@@ -345,6 +363,7 @@ export default function AdminDashboard({ irParaLanding }) {
     });
   }
 
+  // Preenche o modal de horário com os dados de um registo existente para edição
   function abrirModalEditarHorario(h) {
     setModalHorario({
       isOpen: true,
@@ -361,6 +380,7 @@ export default function AdminDashboard({ irParaLanding }) {
     });
   }
 
+  // Envia o formulário do horário à API (POST para criar, PUT para editar) e fecha o modal em caso de sucesso
   async function submeterModalHorario(e) {
     e.preventDefault();
     const d = modalHorario.data;
@@ -405,6 +425,7 @@ export default function AdminDashboard({ irParaLanding }) {
     }
   }
 
+  // Elimina permanentemente um horário da escola após confirmação do utilizador
   async function handleEliminarHorario(id) {
     if (
       !window.confirm(
@@ -445,6 +466,7 @@ export default function AdminDashboard({ irParaLanding }) {
     },
   });
 
+  // Preenche o modal de preços com os dados de uma regra existente para edição
   function abrirModalEditarPreco(regra) {
     setModalPreco({
       isOpen: true,
@@ -459,6 +481,7 @@ export default function AdminDashboard({ irParaLanding }) {
     });
   }
 
+  // Envia a atualização de uma regra de preço à API via PUT e fecha o modal em caso de sucesso
   async function submeterModalPreco(e) {
     e.preventDefault();
     try {
@@ -487,6 +510,7 @@ export default function AdminDashboard({ irParaLanding }) {
   }
   const [precosLoading, setPrecosLoading] = useState(false);
 
+  // Obtém a tabela de preços de coaching a partir da API
   async function carregarPrecos() {
     setPrecosLoading(true);
     try {
@@ -598,6 +622,7 @@ export default function AdminDashboard({ irParaLanding }) {
     data: {},
   });
 
+  // Ao montar o componente: define o título da página e verifica se existe uma sessão de admin guardada
   useEffect(() => {
     document.title = "Painel Admin | Viva D'arte";
     const userGuardado = localStorage.getItem("viva_user");
@@ -622,12 +647,14 @@ export default function AdminDashboard({ irParaLanding }) {
     }
   }, []);
 
+  // Dispara o carregamento inicial de dados assim que o token e a autorização estiverem disponíveis
   useEffect(() => {
     if (!token || !isAuthorized) return;
     carregarDados();
     carregarInventario();
   }, [token, isAuthorized]);
 
+  // Autentica o administrador na API; valida que o perfil devolvido é Admin antes de autorizar o acesso
   async function handleAdminLogin(e) {
     e.preventDefault();
     setLoginError("");
@@ -671,6 +698,7 @@ export default function AdminDashboard({ irParaLanding }) {
     }
   }
 
+  // Carrega em paralelo utilizadores, modalidades, salas, anos letivos, pedidos de coaching e histórico
   async function carregarDados() {
     try {
       const [usersData, modalidadesData, salasData, anosData] =
@@ -723,11 +751,13 @@ export default function AdminDashboard({ irParaLanding }) {
     } catch (_) {}
   }
 
+  // Apresenta uma mensagem de feedback (toast) que desaparece automaticamente ao fim de 3,5 segundos
   function mostrarMsg(texto, tipo = "ok") {
     setMsg({ texto, tipo });
     setTimeout(() => setMsg(""), 3500);
   }
 
+  // Ativa um utilizador pendente após confirmação, permitindo-lhe aceder à plataforma
   async function handleAceitarUtilizador(id) {
     if (!window.confirm("Aprovar entrada deste utilizador?")) return;
     try {
@@ -749,6 +779,7 @@ export default function AdminDashboard({ irParaLanding }) {
     }
   }
 
+  // Desativa um utilizador ativo, bloqueando o seu acesso à plataforma sem apagar o registo
   async function handleRevogarUtilizador(id) {
     if (
       !window.confirm(
@@ -778,6 +809,7 @@ export default function AdminDashboard({ irParaLanding }) {
     }
   }
 
+  // Elimina permanentemente um utilizador da base de dados após dupla confirmação
   async function handleEliminarUtilizador(id) {
     if (
       !window.confirm(
@@ -802,6 +834,7 @@ export default function AdminDashboard({ irParaLanding }) {
     }
   }
 
+  // Abre o modal de utilizador em modo de criação, pré-selecionando o tipo de perfil recomendado
   function abrirModalCriar(tipoRecomendado) {
     setModalUser({
       isOpen: true,
@@ -819,6 +852,7 @@ export default function AdminDashboard({ irParaLanding }) {
     });
   }
 
+  // Abre o modal de utilizador em modo de edição, populando os campos com os dados atuais do registo
   function abrirModalEditar(u) {
     let tipoBase = "EE";
     if (u.perfis?.toLowerCase().includes("prof")) tipoBase = "PROF";
@@ -858,10 +892,12 @@ export default function AdminDashboard({ irParaLanding }) {
     });
   }
 
+  // Fecha o modal de utilizador e repõe o estado para os valores por omissão
   function fecharModal() {
     setModalUser({ isOpen: false, mode: "create", data: {} });
   }
 
+  // Valida e submete o formulário de criação/edição de utilizador à API; inclui validações de email, telefone e password
   async function submeterModal(e) {
     e.preventDefault();
     const { email, telefone, password } = modalUser.data;
@@ -930,6 +966,7 @@ export default function AdminDashboard({ irParaLanding }) {
     }
   }
 
+  // Abre o modal de modalidades com as modalidades atuais do professor pré-selecionadas
   function abrirModalModalidades(u) {
     const uMods =
       typeof u.modalidades === "string" ? u.modalidades.split(", ") : [];
@@ -943,6 +980,7 @@ export default function AdminDashboard({ irParaLanding }) {
     });
   }
 
+  // Envia a lista atualizada de modalidades de um professor à API via PUT
   async function guardarModalidades() {
     try {
       const res = await fetch(
@@ -968,6 +1006,7 @@ export default function AdminDashboard({ irParaLanding }) {
     }
   }
 
+  // Abre o modal de aprovação de pedido de coaching, pré-preenchendo professor e valor estimado
   function abrirModalAprovarPedido(p) {
     setModalAprovar({
       isOpen: true,
@@ -978,6 +1017,7 @@ export default function AdminDashboard({ irParaLanding }) {
     });
   }
 
+  // Envia a aprovação de um pedido de coaching à API, atribuindo sala, professor e valor final
   async function submeterAprovacao(e) {
     e.preventDefault();
     if (
@@ -1027,6 +1067,7 @@ export default function AdminDashboard({ irParaLanding }) {
     }
   }
 
+  // Cria e aprova diretamente um agendamento de coaching sem passar pelo fluxo de pedido normal
   async function handleAgendarDireto(e) {
     e.preventDefault();
     if (!modalAgendarDireto.idEncarregado)
@@ -1071,6 +1112,7 @@ export default function AdminDashboard({ irParaLanding }) {
     }
   }
 
+  // Rejeita um pedido de coaching pendente, exigindo ao administrador uma justificação obrigatória
   async function handleRejeitarPedido(idPedido) {
     const justificacao = window.prompt(
       "Por favor, introduza a justificação para rejeitar este pedido:",
@@ -1103,6 +1145,7 @@ export default function AdminDashboard({ irParaLanding }) {
     }
   }
 
+  // Cancela uma aula de coaching agendada, libertando a sala e o professor
   async function handleCancelarCoaching(idCoaching) {
     if (
       !window.confirm(
@@ -1129,6 +1172,7 @@ export default function AdminDashboard({ irParaLanding }) {
     }
   }
 
+  // Derivados do estado de utilizadores: segmentação por perfil e estado de ativação
   const pendentes = utilizadores.filter(
     (u) => u.ativo === false || u.ativo === 0,
   );
@@ -1152,6 +1196,7 @@ export default function AdminDashboard({ irParaLanding }) {
       u.perfis !== "EE",
   );
 
+  // Derivados do histórico de coachings: agrupamento por estado para facilitar a renderização por secção
   const coachingsEspera = historicoCoachings.filter(
     (c) => c.estado === "Agendado" || c.estado === "Confirmado",
   );
@@ -1186,6 +1231,7 @@ export default function AdminDashboard({ irParaLanding }) {
       ? profs.filter((p) => (p.modalidades || "").includes(modSelecionada.nome))
       : profs;
 
+  // Atualiza a modalidade selecionada no agendamento direto; limpa o professor se este não lecionar a nova modalidade
   const handleModChange = (idMod) => {
     let nextProf = modalAgendarDireto.idProfessor;
     if (idMod && nextProf) {
@@ -1206,6 +1252,7 @@ export default function AdminDashboard({ irParaLanding }) {
     });
   };
 
+  // Atualiza o professor selecionado no agendamento direto; limpa a modalidade se o novo professor não a lecionar
   const handleProfChange = (idProf) => {
     let nextMod = modalAgendarDireto.idModalidade;
     if (idProf && nextMod) {
@@ -1225,6 +1272,7 @@ export default function AdminDashboard({ irParaLanding }) {
       idModalidade: nextMod,
     });
   };
+  // Renderiza a tabela de utilizadores com colunas e ações adaptadas ao tipo (EE, PROF, ADMIN, PENDENTES)
   const renderTabelaUtilizadores = (listaUtilizadores, tipoTabela) => (
     <table className="admin-table">
       <thead>
@@ -1235,7 +1283,7 @@ export default function AdminDashboard({ irParaLanding }) {
           <th>Telefone</th>
           {tipoTabela === "PENDENTES" && <th>Educando / Modalidades</th>}
           {tipoTabela === "PROF" && <th>Modalidades</th>}
-          {tipoTabela === "EE" && <th>Educando / Modalidades</th>} {/* NOVO */}
+          {tipoTabela === "EE" && <th>Educando / Modalidades</th>}
           <th>Estado</th>
           <th>Criação</th>
           <th className="text-center">Ações</th>
@@ -1277,7 +1325,7 @@ export default function AdminDashboard({ irParaLanding }) {
               {tipoTabela === "EE" && (
                 <td>
                   <strong>{u.nomeAluno || "—"}</strong>
-                  {/* NOVO: Mostra as modalidades na tabela */}
+                  {/* Mostra as modalidades na tabela */}
                   <div
                     style={{
                       fontSize: "0.78rem",
@@ -1353,6 +1401,7 @@ export default function AdminDashboard({ irParaLanding }) {
     </table>
   );
 
+  // Renderiza uma linha da tabela de coachings; o segundo argumento controla se o botão de cancelamento é visível
   const renderLinhaCoaching = (c, permiteCancelar = false) => (
     <tr key={c.id_coaching}>
       <td>
@@ -1416,6 +1465,7 @@ export default function AdminDashboard({ irParaLanding }) {
     </tr>
   );
 
+  // Recarrega os dados da tab ativa sempre que o utilizador navega entre secções do painel
   useEffect(() => {
     if (!token || !isAuthorized) return;
     if (activeTab === "inventario") carregarInventario();
@@ -1431,9 +1481,52 @@ export default function AdminDashboard({ irParaLanding }) {
     }
   }, [activeTab, faturacaoFiltro.subTab, token, isAuthorized]);
 
+  // Ecrã de autenticação: mostrado enquanto o utilizador não tiver sessão válida de administrador
   if (!isAuthorized) {
+    // Preenche automaticamente as credenciais de teste ao clicar na linha da tabela
+    const preencherAdmin = () => {
+      setEmail("admin@gmail.com");
+      setPassword("vivadarte123!");
+    };
+
     return (
       <div className="admin-login-wrapper">
+        <div className="dev-credentials-panel">
+          <div className="dev-credentials-header">
+            <span className="dev-credentials-title">Credenciais de Teste</span>
+          </div>
+          <table className="dev-credentials-table">
+            <thead>
+              <tr>
+                <th>Perfil</th>
+                <th>Email</th>
+                <th>Palavra-passe</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                className="dev-credentials-row dev-credentials-admin-row"
+                onClick={preencherAdmin}
+                title="Clique para preencher o formulário"
+              >
+                <td>ADMIN</td>
+                <td>admin@gmail.com</td>
+                <td>vivadarte123!</td>
+              </tr>
+            </tbody>
+          </table>
+          <div className="dev-credentials-admin-link">
+            <span>Painel Login:</span>
+            <a
+              href="https://vivadarte-production.up.railway.app/login"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              vivadarte-production.up.railway.app/login ↗
+            </a>
+          </div>
+        </div>
+
         <div className="admin-login-box">
           <img src={logoImg} alt="Logo" className="admin-login-logo" />
           <h2 className="admin-login-title">Painel Restrito</h2>
@@ -4601,7 +4694,7 @@ export default function AdminDashboard({ irParaLanding }) {
                     </div>
                   </div>
 
-                  {/* NOVO: Checkboxes com as modalidades do Aluno */}
+                  {/* Checkboxes com as modalidades do Aluno */}
                   <div className="field">
                     <label>Modalidades do Aluno</label>
                     <div
@@ -5836,7 +5929,6 @@ export default function AdminDashboard({ irParaLanding }) {
         </div>
       )}
 
-      {/* A LINHA DAS MENSAGENS E OS FECHOS FINAIS TÊM DE FICAR AQUI NO FIM DE TUDO! */}
       {msg && <div className={`toast toast--${msg.tipo}`}>{msg.texto}</div>}
     </div>
   );

@@ -1,3 +1,4 @@
+/* Variáveis de design globais: paleta de cores partilhada por Login, Registo e RecoverPassword */
 :root {
   --bg-creme: #dfdbd2;
   --bg-section: #d5d0c5;
@@ -7,6 +8,7 @@
   --white: #eeeae2;
 }
 
+/* Layout raiz: ocupa o viewport completo em split horizontal (left-side | right-side) */
 .login-container {
   position: absolute;
   top: 0;
@@ -20,6 +22,7 @@
   font-family: "Poppins", "Inter", sans-serif;
 }
 
+/* Lado esquerdo: fundo escuro com imagem de dança em overlay — oculto em mobile */
 .left-side {
   flex: 1.2;
   background: linear-gradient(135deg, var(--primary-dark), #1a1816);
@@ -31,6 +34,7 @@
   position: relative;
 }
 
+/* Imagem de fundo com opacidade reduzida para não sobrepor o texto */
 .left-side::before {
   content: "";
   position: absolute;
@@ -41,6 +45,7 @@
   opacity: 0.25;
 }
 
+/* Conteúdo textual sobreposto à imagem (logótipo, título e subtítulo) */
 .overlay-content {
   position: relative;
   z-index: 2;
@@ -62,6 +67,7 @@
   margin-bottom: 20px;
 }
 
+/* Lado direito: fundo creme com o formulário centrado verticalmente */
 .right-side {
   flex: 1;
   background: var(--bg-creme);
@@ -72,6 +78,7 @@
   overflow-y: auto;
 }
 
+/* Caixa do formulário com largura máxima para legibilidade */
 .form-box {
   width: 100%;
   max-width: 380px;
@@ -91,6 +98,7 @@
   margin-bottom: 30px;
 }
 
+/* Toggle de perfil EE / Professor: dois botões dentro de uma pílula */
 .user-toggle {
   display: flex;
   background: var(--bg-section);
@@ -118,6 +126,7 @@
   box-shadow: 0 4px 15px rgba(42, 39, 36, 0.08);
 }
 
+/* Campo de formulário: label acima, input com borda inferior animada */
 .input-container {
   margin-bottom: 20px;
   display: flex;
@@ -150,6 +159,7 @@
   color: rgba(58, 54, 50, 0.4);
 }
 
+/* Wrapper do input de telefone: prefixo (+351) + input sem borda própria */
 .phone-input-wrapper {
   display: flex;
   align-items: center;
@@ -179,6 +189,7 @@
   padding-left: 0;
 }
 
+/* Botão de submissão principal: largura total com sombra e hover elevado */
 .btn-login {
   width: 100%;
   padding: 16px;
@@ -200,6 +211,7 @@
   box-shadow: 0 12px 25px rgba(42, 39, 36, 0.3);
 }
 
+/* Rodapé do formulário: link para registo ou login consoante a página */
 .form-footer {
   text-align: center;
   font-size: 0.9rem;
@@ -220,12 +232,14 @@
   color: var(--accent-gold);
 }
 
+/* Oculta o lado esquerdo em tablets e mobile (≤850px) */
 @media (max-width: 850px) {
   .left-side {
     display: none;
   }
 }
 
+/* Botão de retorno à landing: posicionado sobre o left-side com glassmorphism */
 .voltar-landing {
   position: absolute;
   top: 30px;
@@ -257,6 +271,7 @@
   line-height: 1;
 }
 
+/* Link "Esqueceu-se da palavra-passe?" alinhado à direita sob o campo de password */
 .forgot-password-link {
   text-align: right;
   margin-top: 8px;
@@ -281,9 +296,7 @@
   margin-top: 20px;
 }
 
-/* =============================================================================
-   CLASSES MIGRADAS DOS INLINE STYLES
-   ============================================================================= */
+/* Classes utilitárias migradas dos inline styles do JSX para manter o CSS centralizado */
 
 /* ── Login — input com margem inferior reduzida (campo palavra-passe) ── */
 .input-container--tight {
@@ -385,9 +398,7 @@
   height: auto;
 }
 
-/* =============================================================================
-   RESPONSIVIDADE MOBILE
-   ============================================================================= */
+/* Responsividade: mobile (≤768px) e smartphones pequenos (≤400px) */
 
 /* ── Mobile (≤ 768px) ── */
 @media (max-width: 768px) {
@@ -464,4 +475,106 @@
     transform: scale(0.72);
     transform-origin: left center;
   }
+}
+/* Painel de credenciais de teste: sobreposto ao left-side, clicável para pré-preencher o formulário */
+
+.dev-credentials-panel {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  background: rgba(0, 0, 0, 0.677);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+  padding: 8px 11px;
+  max-width: 320px;
+  z-index: 10;
+  box-shadow: 0 2px 14px rgba(0, 0, 0, 0.18);
+}
+
+.dev-credentials-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 7px;
+}
+
+.dev-credentials-title {
+  font-size: 8.5px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.28);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.dev-credentials-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 10.5px;
+  font-family: "Courier New", Courier, monospace;
+}
+
+.dev-credentials-table thead tr th {
+  text-align: left;
+  color: rgba(255, 255, 255, 0.22);
+  font-size: 8.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  padding: 2px 8px 5px 3px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.dev-credentials-row {
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.dev-credentials-row:hover td {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.dev-credentials-table tbody tr td {
+  padding: 3.5px 8px 3.5px 3px;
+  color: rgba(255, 255, 255, 0.5);
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.dev-credentials-table tbody tr:not(:last-child) td {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+/* Linha ADMIN destacada com cor dourada */
+.dev-credentials-admin-row td {
+  border-top: 1px solid rgba(255, 215, 100, 0.1) !important;
+  color: rgba(255, 215, 100, 0.55) !important;
+}
+
+.dev-credentials-admin-row:hover td {
+  background: rgba(255, 215, 100, 0.05) !important;
+}
+
+/* Link para o painel de coordenação (Railway) no rodapé do painel de credenciais */
+.dev-credentials-admin-link {
+  margin-top: 7px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  font-size: 9.5px;
+  color: rgba(255, 255, 255, 0.22);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+
+.dev-credentials-admin-link a {
+  color: rgba(255, 215, 100, 0.5);
+  text-decoration: none;
+  font-family: "Courier New", Courier, monospace;
+  font-size: 9.5px;
+  transition: color 0.2s ease;
+}
+
+.dev-credentials-admin-link a:hover {
+  color: rgba(255, 215, 100, 0.8);
 }

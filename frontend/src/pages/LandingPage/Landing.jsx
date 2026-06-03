@@ -1,3 +1,4 @@
+// Dependências: React com hooks, ícones de contacto, portal para o menu mobile, estilos e utilitário de perfil
 import React, { useState, useEffect, useRef } from "react";
 import { MapPin, Phone, Mail } from "lucide-react";
 import { createPortal } from "react-dom";
@@ -5,6 +6,7 @@ import "./Landing.css";
 import logoImg from "../../assets/logo.png";
 import { isProfessorUtilizador } from "../../utils/perfilUtilizador";
 
+// Assets de imagens comentados — serão ativados quando os ficheiros estiverem disponíveis
 /*
 import anaSilva from "../../assets/ana-silva.jpg";
 import carlosMendes from "../../assets/carlos-mendes.jpg";
@@ -18,22 +20,7 @@ import hipHop from "../../assets/hip-hop.jpg";
 import jazz from "../../assets/jazz.jpg";
 */
 
-/**
- * Componente principal da página de landing da Viva D'arte.
- *
- * Responsabilidades:
- * - Renderizar a navbar com navegação condicional (visitante / aluno / professor)
- * - Gerir o estado de autenticação a partir do localStorage
- * - Controlar o modo portal (vista do utilizador autenticado)
- * - Apresentar as secções Hero, Sobre Nós, Modalidades e Professores
- * - Gerir os carrosseis automáticos de modalidades e professores
- *
- * @param {Function} irParaLogin               - Navega para a página de login
- * @param {Function} irParaRegisto             - Navega para a página de registo
- * @param {Function} irParaFigurinos           - Navega para o marketplace de figurinos
- * @param {Function} irParaMinhaAgendaProfessor - Navega para a agenda do professor
- * @param {Function} irParaMinhaAgendaEE       - Navega para a agenda do encarregado de educação
- */
+// Componente da landing page: navbar condicional, secções de conteúdo e carrosseis automáticos
 export default function Landing({
   irParaLogin,
   irParaRegisto,
@@ -42,18 +29,16 @@ export default function Landing({
   irParaMinhaAgendaEE,
   irParaAgenda,
 }) {
-  /* ─── Estado local ─────────────────────────────────────────────────────── */
+  // Estado: utilizador autenticado, modo portal ativo e visibilidade do menu hamburger
   const [utilizador, setUtilizador] = useState(null);
   const [modoPortal, setModoPortal] = useState(false);
-
-  /** Controla a visibilidade do menu hamburger em mobile */
   const [menuAberto, setMenuAberto] = useState(false);
 
-  /* ─── Referências para os carrosseis ───────────────────────────────────── */
+  // Referências aos elementos de scroll dos carrosseis de modalidades e professores
   const modalidadesRef = useRef(null);
   const professoresRef = useRef(null);
 
-  /* ─── Efeito: inicialização — leitura do utilizador guardado ───────────── */
+  // Ao montar: lê o utilizador do localStorage, ativa o modo portal se existir e define o título da página
   useEffect(() => {
     const userGuardado = localStorage.getItem("viva_user");
     if (userGuardado) {
@@ -63,7 +48,7 @@ export default function Landing({
     document.title = "Viva D'arte | Escola de Dança";
   }, []);
 
-  /* ─── Handler: logout do utilizador ────────────────────────────────────── */
+  // Termina a sessão: limpa o localStorage, repõe o estado e recarrega a página
   const handleLogout = () => {
     localStorage.removeItem("viva_user");
     localStorage.removeItem("viva_token");
@@ -72,11 +57,7 @@ export default function Landing({
     setModoPortal(false);
     window.location.reload();
   };
-
-  /**
-   * Navega para a secção inicial (#inicio) e desativa o modo portal.
-   * Utiliza scrollIntoView para uma transição suave.
-   */
+  // Navega para a secção Hero (#inicio) com scroll suave e desativa o modo portal
   const handleIrParaInicio = (e) => {
     if (e) e.preventDefault();
     setModoPortal(false);
@@ -91,15 +72,7 @@ export default function Landing({
       window.scrollTo({ top: 0, left: 0, behavior: "smooth" });
     }
   };
-
-  /**
-   * Avança ou recua o carrossel indicado pela referência.
-   *
-   * @param {React.RefObject} ref    - Referência ao elemento do carrossel
-   * @param {"esquerda"|"direita"} direcao - Sentido do scroll
-   * @param {"unico"|"multiplo"} tipo       - "unico" desloca uma largura completa;
-   *                                          "multiplo" desloca 420 px
-   */
+  // Avança ou recua o carrossel indicado; "unico" desloca uma largura completa, "multiplo" desloca 420px
   const scrollCarrossel = (ref, direcao, tipo) => {
     if (ref.current) {
       const scrollAmount = tipo === "unico" ? ref.current.clientWidth : 420;
@@ -110,7 +83,7 @@ export default function Landing({
     }
   };
 
-  /* ─── Efeito: auto-scroll do carrossel de Modalidades (6 s) ────────────── */
+  // Auto-scroll do carrossel de Modalidades a cada 6 s; volta ao início quando chega ao fim
   useEffect(() => {
     const autoScroll = setInterval(() => {
       if (modalidadesRef.current) {
@@ -134,7 +107,7 @@ export default function Landing({
     return () => clearInterval(autoScroll);
   }, []);
 
-  /* ─── Efeito: auto-scroll do carrossel de Professores (6 s) ────────────── */
+  // Auto-scroll do carrossel de Professores a cada 6 s; volta ao início quando chega ao fim
   useEffect(() => {
     const autoScroll = setInterval(() => {
       if (professoresRef.current) {
@@ -158,25 +131,17 @@ export default function Landing({
     return () => clearInterval(autoScroll);
   }, []);
 
-  /* ─── Render ────────────────────────────────────────────────────────────── */
+  // Render principal
   return (
     <div className="landing-container">
-      {/* ================================================================
-          NAVBAR
-          Sticky no topo; adapta os itens consoante o estado de autenticação.
-          Em mobile exibe um botão hamburger que expande o menu.
-          ================================================================ */}
+      {/* Navbar: adapta links e ações consoante o estado de autenticação e o perfil do utilizador */}
       <nav className="navbar">
         {/* Marca / logótipo */}
         <div className="nav-brand">
           <img src={logoImg} alt="Logo" className="nav-logo-img" />
           <span className="texto-viva-simples">
             {"VIVA D'ARTE".split("").map((letra, index) => (
-              /*
-               * Cada letra recebe um animationDelay dinâmico (baseado no índice)
-               * para criar o efeito de onda. O whiteSpace é definido via CSS
-               * na classe .letra-ritmo para preservar o espaço entre palavras.
-               */
+              // Cada letra recebe animationDelay dinâmico para criar o efeito de onda
               <span
                 key={index}
                 className="letra-ritmo"
@@ -363,8 +328,7 @@ export default function Landing({
         </div>
       </nav>
 
-      {/* Mobile: nav-content via portal no document.body —
-          escapa completamente qualquer overflow:hidden nos containers pai */}
+      {/* Menu mobile via React portal — renderizado em document.body para escapar a overflow:hidden nos containers pai */}
       {createPortal(
         <div
           className={`nav-content nav-content-mobile${menuAberto ? " aberto" : ""}`}
@@ -528,10 +492,7 @@ export default function Landing({
         document.body,
       )}
 
-      {/* ================================================================
-          1. SECÇÃO HERO — Início
-          Imagem de fundo com parallax e texto de boas-vindas.
-          ================================================================ */}
+      {/* Secção Hero: imagem de fundo com parallax e texto de boas-vindas */}
       <header id="inicio" className="hero">
         <div className="hero-content">
           <h1>
@@ -545,10 +506,7 @@ export default function Landing({
         </div>
       </header>
 
-      {/* ================================================================
-          2. SECÇÃO SOBRE NÓS
-          Texto institucional centrado.
-          ================================================================ */}
+      {/* Secção Sobre Nós: texto institucional centrado */}
       <section id="sobre" className="section-container">
         <div className="sobre-layout">
           <h2>A Nossa Escola</h2>
@@ -568,10 +526,7 @@ export default function Landing({
         </div>
       </section>
 
-      {/* ================================================================
-          3. SECÇÃO MODALIDADES
-          Carrossel horizontal com auto-scroll a cada 6 segundos.
-          ================================================================ */}
+      {/* Secção Modalidades: carrossel horizontal com auto-scroll a cada 6 s */}
       <section id="modalidades" className="section-container bg-light">
         <div className="section-header">
           <h2>Modalidades</h2>
@@ -679,10 +634,7 @@ export default function Landing({
         </div>
       </section>
 
-      {/* ================================================================
-          4. SECÇÃO PROFESSORES
-          Carrossel de item único com auto-scroll a cada 6 segundos.
-          ================================================================ */}
+      {/* Secção Professores: carrossel de item único com auto-scroll a cada 6 s */}
       <section id="professores" className="section-container">
         <div className="section-header">
           <h2>Os Nossos Professores</h2>
@@ -764,10 +716,7 @@ export default function Landing({
         </div>
       </section>
 
-      {/* ================================================================
-          FOOTER
-          Grelha de três colunas: Contacto, Links Rápidos, Redes Sociais.
-          ================================================================ */}
+      {/* Rodapé: grelha de três colunas com contactos, links rápidos e redes sociais */}
       <footer className="main-footer">
         <div className="footer-container">
           <div className="footer-column">

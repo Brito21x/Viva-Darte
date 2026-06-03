@@ -1,47 +1,45 @@
-/**
- * @file RecoverPassword.jsx
- * @description Página de recuperação de palavra-passe (3 etapas).
- *
- * Etapa 1 — Email + reCAPTCHA: solicita o envio de token
- * Etapa 2 — Token: o utilizador insere o código recebido no email
- * Etapa 3 — Nova password: define a nova palavra-passe e submete
- *
- * @param {Function} irParaLogin   - Navega para a página de login
- * @param {Function} irParaLanding - Navega para a landing page
- */
+// Dependências: React com hooks, estilos partilhados e reCAPTCHA
 import React, { useState, useEffect, useRef } from "react";
 import "./LoginRegisto.css";
 import ReCAPTCHA from "react-google-recaptcha";
 
+// Recuperação de password em 3 etapas: email + reCAPTCHA → token → nova password
 export default function RecoverPassword({ irParaLogin, irParaLanding }) {
+  // Etapa atual do fluxo (1 = email, 2 = token, 3 = nova password) e campo de email
   const [etapa, setEtapa] = useState(1);
   const [email, setEmail] = useState("");
 
+  // Token introduzido pelo utilizador na etapa 2
   const [token, setToken] = useState("");
 
+  // Token devolvido pela API na etapa 1 — usado para validação local na etapa 2
   const [tokenGerado, setTokenGerado] = useState("");
 
+  // Nova password a definir na etapa 3
   const [novaPassword, setNovaPassword] = useState("");
 
+  // Token e referência do reCAPTCHA exigido na etapa 1
   const [captchaToken, setCaptchaToken] = useState(null);
   const recaptchaRef = useRef(null);
 
+  // Modal de alerta: mensagem e flag para redirecionar para login ao fechar
   const [customAlert, setCustomAlert] = useState({
     show: false,
     message: "",
     redirectOnClose: false,
   });
 
+  // Define o título da página ao montar o componente
   useEffect(() => {
     document.title = "Recuperar Password | Viva D'arte";
   }, []);
 
-  /** Mostra o alerta personalizado; se redirect=true, redireciona para login ao fechar */
+  // Mostra o alerta; se redirect=true, redireciona para login ao fechar
   const mostrarAlerta = (msg, redirect = false) => {
     setCustomAlert({ show: true, message: msg, redirectOnClose: redirect });
   };
 
-  /** Fecha o alerta e redireciona para login se a flag redirectOnClose estiver ativa */
+  // Fecha o alerta e redireciona para login se a flag redirectOnClose estiver ativa
   const fecharAlerta = () => {
     if (customAlert.redirectOnClose) {
       irParaLogin();
@@ -49,15 +47,12 @@ export default function RecoverPassword({ irParaLogin, irParaLanding }) {
     setCustomAlert({ show: false, message: "", redirectOnClose: false });
   };
 
-  /** Callback do reCAPTCHA — guarda o token gerado */
+  // Callback do reCAPTCHA: guarda o token gerado
   const onCaptchaChange = (token) => {
     setCaptchaToken(token);
   };
 
-  /**
-   * Etapa 1 — Envia o email para a API e obtém o token de recuperação.
-   * Exige reCAPTCHA válido antes de submeter.
-   */
+  // Etapa 1: envia o email à API e obtém o token de recuperação; exige reCAPTCHA válido
   const lidarComEmail = async (e) => {
     e.preventDefault();
 
@@ -96,10 +91,7 @@ export default function RecoverPassword({ irParaLogin, irParaLanding }) {
     }
   };
 
-  /**
-   * Etapa 2 — Valida o token introduzido pelo utilizador
-   * contra o token devolvido pela API na etapa anterior.
-   */
+  // Etapa 2: valida o token introduzido pelo utilizador contra o devolvido pela API
   const lidarComToken = (e) => {
     e.preventDefault();
 
@@ -112,10 +104,7 @@ export default function RecoverPassword({ irParaLogin, irParaLanding }) {
     }
   };
 
-  /**
-   * Etapa 3 — Valida a nova password (≥8 chars + símbolo especial)
-   * e submete a alteração à API.
-   */
+  // Etapa 3: valida força da password (≥8 chars + símbolo) e submete a alteração à API
   const confirmarAlteracao = async (e) => {
     e.preventDefault();
 

@@ -1,9 +1,10 @@
+// Dependências: React com hooks, logótipo, ícones de contacto e o serviço de fetch autenticado
 import React, { useEffect, useState, useMemo } from "react";
 import logoImg from "../../assets/logo.png";
 import { MapPin, Phone, Mail } from "lucide-react";
 import { apiAuthFetch } from "../../services/api";
 
-/* ─── Constantes ────────────────────────────────────────────────────────── */
+// Horas exibidas nas linhas da grelha semanal — de 08:00 às 21:00, com intervalos de 1 hora
 const HORAS_GRELHA = [
   "08:00",
   "09:00",
@@ -20,6 +21,7 @@ const HORAS_GRELHA = [
   "20:00",
   "21:00",
 ];
+// Abreviaturas e nomes completos dos dias da semana para os cabeçalhos da grelha
 const DIAS_SEMANA = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
 const DIAS_EXTENSO = [
   "Segunda",
@@ -31,7 +33,7 @@ const DIAS_EXTENSO = [
   "Domingo",
 ];
 
-/* ─── Utilitários ───────────────────────────────────────────────────────── */
+// Extrai "HH:MM" de qualquer formato de hora devolvido pela API (ISO 8601 ou HH:MM:SS)
 function formatHoraCurta(horaFull) {
   if (!horaFull) return "";
   const str = String(horaFull);
@@ -42,6 +44,7 @@ function formatHoraCurta(horaFull) {
   return str.substring(0, 5);
 }
 
+// Mapeia o nome de uma modalidade para a classe CSS correspondente, usada para colorir os blocos na grelha
 function modalidadeParaClasse(modalidade) {
   const s = String(modalidade || "")
     .toLowerCase()
@@ -56,7 +59,7 @@ function modalidadeParaClasse(modalidade) {
   return "ballet";
 }
 
-/* ─── Estilos coaching ──────────────────────────────────────────────────── */
+// Estilos injetados em linha para os blocos de coaching — separados para não conflituar com o CSS global
 const coachingStyle = `
   .event-block--coaching {
     background: #fff8f0 !important;
@@ -83,7 +86,7 @@ const coachingStyle = `
   }
 `;
 
-/* ─── Componente Principal ──────────────────────────────────────────────── */
+// Componente principal da agenda semanal — compatível com perfis EE e Professor
 export default function AgendaAulas({
   irParaLanding,
   irParaFigurinos,
@@ -91,27 +94,28 @@ export default function AgendaAulas({
   irParaMinhaAgendaEE,
   irParaAgenda,
 }) {
+  // --- Estado principal: horários carregados, utilizador autenticado e controlo do menu mobile ---
   const [horarios, setHorarios] = useState([]);
   const [utilizador, setUtilizador] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [menuInternoAberto, setMenuInternoAberto] = useState(false);
   const [educandos, setEducandos] = useState([]);
 
-  // Filtros
+  // Filtros activos na grelha: por aluno (EE com vários educandos) e por modalidade
   const [filtroAluno, setFiltroAluno] = useState("TODOS");
   const [filtroModalidade, setFiltroModalidade] = useState("TODAS");
 
-  // Inscrição
+  // Estado do formulário de inscrição numa nova modalidade
   const [modalidadesDisponiveis, setModalidadesDisponiveis] = useState([]);
   const [alunoParaInscricao, setAlunoParaInscricao] = useState("");
   const [novaModalidade, setNovaModalidade] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Modalidades inscritas do aluno selecionado
+  // Modalidades em que o aluno selecionado já está inscrito — usadas para listagem e remoção
   const [modalidadesInscritas, setModalidadesInscritas] = useState([]);
   const [isRemoving, setIsRemoving] = useState(false);
 
-  // Alertas
+  // Estado dos três modais de feedback: confirmação de sucesso, erro e confirmação de remoção
   const [alertModal, setAlertModal] = useState({ isOpen: false, mensagem: "" });
   const [alertaExcl, setAlertaExcl] = useState({ isOpen: false, message: "" });
   const [confirmarRemocao, setConfirmarRemocao] = useState({
@@ -120,12 +124,14 @@ export default function AgendaAulas({
     nomeModalidade: "",
   });
 
+  // Ao montar: define o título da página e recupera o utilizador autenticado do localStorage
   useEffect(() => {
     document.title = "Agenda Semanal | Viva D'arte";
     const userRaw = localStorage.getItem("viva_user");
     if (userRaw) setUtilizador(JSON.parse(userRaw));
   }, []);
 
+  // Obtém os horários semanais da API e atualiza o estado; gere o indicador de carregamento
   async function fetchAgenda() {
     setIsLoading(true);
     try {
@@ -138,6 +144,7 @@ export default function AgendaAulas({
     }
   }
 
+  // Carrega as modalidades em que um aluno específico está inscrito; limpa a lista se não houver aluno
   async function fetchModalidadesInscritas(idAluno) {
     if (!idAluno) return setModalidadesInscritas([]);
     try {
@@ -150,7 +157,7 @@ export default function AgendaAulas({
     }
   }
 
-  // Detectar perfis antes do useEffect
+  // Derivados do utilizador: booleanos de perfil usados para condicionar a UI e a lógica de dados
   const isEE =
     utilizador?.perfis?.some(
       (p) =>
@@ -165,6 +172,7 @@ export default function AgendaAulas({
     utilizador?.perfil?.toLowerCase().includes("prof") ||
     false;
 
+  // Quando o utilizador fica disponível: carrega agenda, modalidades e (se EE) lista de educandos
   useEffect(() => {
     if (!utilizador) return;
 
@@ -189,7 +197,7 @@ export default function AgendaAulas({
     }
   }, [utilizador]);
 
-  // Quando o aluno selecionado muda, recarrega as modalidades inscritas
+  // Recarrega as modalidades inscritas sempre que o aluno selecionado no formulário de inscrição muda
   useEffect(() => {
     if (isEE && alunoParaInscricao) {
       fetchModalidadesInscritas(alunoParaInscricao);
@@ -198,7 +206,7 @@ export default function AgendaAulas({
     }
   }, [alunoParaInscricao]);
 
-  // Modalidades únicas para o filtro
+  // Lista deduplificada de modalidades presentes nos horários — alimenta o dropdown de filtro
   const modalidadesUnicas = useMemo(() => {
     const map = new Map();
     horarios.forEach((h) => {
@@ -209,7 +217,7 @@ export default function AgendaAulas({
     return Array.from(map.entries()).map(([id, nome]) => ({ id, nome }));
   }, [horarios]);
 
-  // Horários filtrados
+  // Subconjunto dos horários após aplicar os filtros de aluno e modalidade
   const horariosFiltrados = useMemo(() => {
     let filtrado = horarios;
     if (filtroAluno !== "TODOS") {
@@ -226,7 +234,7 @@ export default function AgendaAulas({
     return filtrado;
   }, [horarios, filtroAluno, filtroModalidade, isProfessor]);
 
-  // Grelha de eventos
+  // Índice de eventos organizados por chave "Dia|HH:00" para renderização eficiente de cada célula da grelha
   const grelhaEventos = useMemo(() => {
     const map = new Map();
     horariosFiltrados.forEach((h) => {
@@ -239,7 +247,7 @@ export default function AgendaAulas({
     return map;
   }, [horariosFiltrados]);
 
-  // Submeter inscrição
+  // Envia o pedido de inscrição numa nova modalidade à API e mostra feedback ao utilizador
   const handleAdicionarModalidade = async () => {
     const idDoAluno = isEE
       ? Number(alunoParaInscricao)
@@ -269,7 +277,7 @@ export default function AgendaAulas({
     }
   };
 
-  // Confirmar e remover inscrição
+  // Confirma e executa a remoção da inscrição do aluno numa modalidade após o modal de confirmação
   const handleConfirmarRemocao = async () => {
     const idDoAluno = Number(alunoParaInscricao);
     const idModalidade = confirmarRemocao.idModalidade;
@@ -300,6 +308,7 @@ export default function AgendaAulas({
     }
   };
 
+  // Termina a sessão do utilizador: limpa o localStorage e redireciona para a landing page
   const handleLogout = () => {
     localStorage.removeItem("viva_user");
     localStorage.removeItem("viva_token");
@@ -311,7 +320,7 @@ export default function AgendaAulas({
   return (
     <div className="dashboard-container">
       <style>{coachingStyle}</style>
-      {/* NAVBAR */}
+      {/* Barra de navegação interna: logótipo, links de secção, saudação e botão de logout */}
       <nav className="navbar interna">
         <div className="nav-brand" onClick={irParaLanding}>
           <img src={logoImg} alt="Logo" className="nav-logo-img" />
@@ -394,7 +403,7 @@ export default function AgendaAulas({
       </nav>
 
       <div className="dashboard-wrapper">
-        {/* CALENDÁRIO */}
+        {/* Grelha semanal: cabeçalho com dias fixos + área scrollável com células hora × dia */}
         <main className="calendar-container">
           <div
             className="calendar-nav-bar"
@@ -508,7 +517,7 @@ export default function AgendaAulas({
           </div>
         </main>
 
-        {/* SIDEBAR */}
+        {/* Sidebar: filtros e inscrições para EE; resumo de aulas do dia para Professor */}
         <aside className="sidebar">
           {/* EE / ALUNO */}
           {!isProfessor && (
@@ -519,7 +528,7 @@ export default function AgendaAulas({
                 por modalidade.
               </p>
 
-              {/* Filtro por aluno — só aparece se tiver mais de 1 educando */}
+              {/* Filtro de aluno — apenas visível para EE com mais de um educando registado */}
               {isEE && educandos.length > 1 && (
                 <div className="form-group" style={{ marginBottom: "12px" }}>
                   <select
@@ -538,7 +547,7 @@ export default function AgendaAulas({
                 </div>
               )}
 
-              {/* Filtro por modalidade — só aparece após clicar, default "Ver todas" */}
+              {/* Filtro de modalidade — lista as modalidades presentes nos horários carregados */}
               {modalidadesUnicas.length > 0 && (
                 <div className="form-group" style={{ marginBottom: "10px" }}>
                   <select
@@ -569,7 +578,7 @@ export default function AgendaAulas({
                 Adicionar às minhas modalidades
               </h4>
 
-              {/* Dropdown de aluno — só se tiver mais de 1 */}
+              {/* Seletor de aluno para o formulário de inscrição — ocultado quando só existe um educando */}
               {isEE && educandos.length > 1 && (
                 <div className="form-group" style={{ marginBottom: "12px" }}>
                   <select
@@ -587,7 +596,7 @@ export default function AgendaAulas({
                 </div>
               )}
 
-              {/* Se só tem 1 educando, mostra o nome */}
+              {/* Quando o EE tem apenas um educando, exibe o nome diretamente sem dropdown */}
               {isEE && educandos.length === 1 && (
                 <p
                   style={{
@@ -600,7 +609,7 @@ export default function AgendaAulas({
                 </p>
               )}
 
-              {/* Modalidades em que o aluno já está inscrito */}
+              {/* Lista as modalidades do aluno com botão de remoção individual em cada linha */}
               {isEE && alunoParaInscricao && (
                 <div style={{ marginBottom: "16px" }}>
                   <p
@@ -684,7 +693,7 @@ export default function AgendaAulas({
                 </div>
               )}
 
-              {/* Dropdown de nova modalidade */}
+              {/* Dropdown de seleção para nova inscrição — exclui modalidades em que o aluno já está */}
               <div className="form-group" style={{ marginBottom: "16px" }}>
                 <select
                   className="form-control"
@@ -743,7 +752,7 @@ export default function AgendaAulas({
             </div>
           )}
 
-          {/* PROFESSOR */}
+          {/* Sidebar exclusiva do professor: aulas do dia atual e legenda de cores por modalidade */}
           {isProfessor && (
             <>
               <div className="sidebar-card">
@@ -846,7 +855,7 @@ export default function AgendaAulas({
         </aside>
       </div>
 
-      {/* FOOTER */}
+      {/* Rodapé com informações de contacto, links rápidos e redes sociais */}
       <footer className="main-footer">
         <div className="footer-container">
           <div className="footer-column">
@@ -951,9 +960,7 @@ export default function AgendaAulas({
         </div>
       </footer>
 
-      {/* ── MODAIS ── */}
-
-      {/* Sucesso inscrição */}
+      {/* Modal de sucesso: confirmação de inscrição ou remoção efetuada com sucesso */}
       {alertModal.isOpen && (
         <div
           className="modal-overlay modal-overlay-high-z"
@@ -971,7 +978,7 @@ export default function AgendaAulas({
         </div>
       )}
 
-      {/* Erro */}
+      {/* Modal de erro: exibe mensagens de falha devolvidas pela API */}
       {alertaExcl.isOpen && (
         <div className="modal-alerta-overlay">
           <div className="modal-alerta-box">
@@ -988,7 +995,7 @@ export default function AgendaAulas({
         </div>
       )}
 
-      {/* Confirmação de remoção */}
+      {/* Modal de confirmação: pede validação antes de remover a inscrição de uma modalidade */}
       {confirmarRemocao.isOpen && (
         <div className="modal-alerta-overlay">
           <div className="modal-alerta-box">

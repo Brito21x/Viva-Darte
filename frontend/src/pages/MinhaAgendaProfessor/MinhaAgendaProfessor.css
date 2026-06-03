@@ -1,3 +1,4 @@
+/* Variáveis de design: alturas da grelha, cores por modalidade, paleta global e indicador de alerta */
 :root {
   --hour-height: 52px;
   --calendar-bg: #fdfaf5;
@@ -12,6 +13,7 @@
   --pending-alert: #d9534f;
 }
 
+/* Contentor raiz do dashboard: fundo bege e layout em coluna */
 .dashboard-container {
   background-color: #dfdbd2;
   min-height: 100vh;
@@ -20,6 +22,7 @@
   display: flex;
   flex-direction: column;
 }
+/* Navbar sticky com backdrop blur — partilhada com AgendaAulas e Figurinos */
 .navbar.interna {
   display: flex;
   justify-content: space-between;
@@ -115,6 +118,7 @@
   background-color: #1a1816;
 }
 
+/* Layout principal: grelha semanal (flex-1) + sidebar fixa de 280px */
 .dashboard-wrapper {
   display: grid;
   grid-template-columns: 1fr 280px;
@@ -125,6 +129,7 @@
   flex: 1;
 }
 
+/* Contentor da grelha semanal: altura fixa, overflow oculto para manter bordas arredondadas */
 .calendar-container {
   display: flex;
   flex-direction: column;
@@ -135,10 +140,11 @@
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
   border: 1px solid rgba(0, 0, 0, 0.03);
 }
-/* Desktop: wrapper é transparente — não altera o layout */
+/* Wrapper de scroll mobile: transparent em desktop, recebe overflow em mobile */
 .calendar-mobile-scroll {
   display: contents;
 }
+/* Cabeçalho de dias: sticky no topo da área de scroll da grelha */
 .calendar-days-sticky {
   display: grid;
   grid-template-columns: 80px repeat(7, 1fr);
@@ -165,6 +171,7 @@
   color: var(--primary-dark);
   background: #fdfaf5;
 }
+/* Área de scroll vertical da grelha com scrollbar dourada personalizada */
 .calendar-scrollable-area {
   flex: 1;
   overflow-y: auto;
@@ -179,6 +186,7 @@
   background-color: var(--accent-gold);
   border-radius: 10px;
 }
+/* Corpo da grelha: 8 colunas (labels de hora + 7 dias) com separador de 1px */
 .calendar-grid-body {
   display: grid;
   grid-template-columns: 80px repeat(7, 1fr);
@@ -196,6 +204,7 @@
   background: white;
 }
 
+/* Célula de slot horário: fundo branco, borda subtil e flex vertical */
 .slot-cell {
   min-height: var(--hour-height);
   position: relative;
@@ -208,6 +217,7 @@
   border-bottom: 1px solid #f0f0f0;
   box-sizing: border-box;
 }
+/* Slot disponível: fundo com padrão pontilhado dourado — clicável pelo EE */
 .slot-cell.is-available {
   background-color: #fffdf8;
   background-image: radial-gradient(
@@ -222,6 +232,7 @@
   cursor: pointer;
 }
 
+/* Bloco de evento na grelha: cor de fundo por modalidade, hover com escala ligeira */
 .event-block {
   position: relative;
   border-radius: 6px;
@@ -263,6 +274,7 @@
   background-color: var(--color-contemporaneo);
 }
 
+/* Variante disponibilidade: padrão diagonal tracejado para distinguir de aulas confirmadas */
 .event-block.disponibilidade-block {
   background-image: repeating-linear-gradient(
     -45deg,
@@ -274,6 +286,7 @@
   border: 2px dashed rgba(255, 255, 255, 0.6);
   opacity: 0.8;
 }
+/* Variante pedido pendente: gradiente escuro com borda esquerda tracejada */
 .event-block.pendente-coordenacao {
   background: linear-gradient(
     135deg,
@@ -285,6 +298,7 @@
   border-left-color: rgba(255, 255, 255, 0.45);
   opacity: 0.98;
 }
+/* Variante rejeitado: fundo rosado com borda e texto vermelhos */
 .event-block.rejeitado-block {
   background-color: #fff0f0 !important;
   border: 1px solid #ffe0e0 !important;
@@ -337,6 +351,7 @@
   text-overflow: ellipsis;
 }
 
+/* Sidebar: sticky a 100px do topo, empilha os cards verticalmente */
 .sidebar {
   position: sticky;
   top: 100px;
@@ -358,6 +373,7 @@
   font-weight: 800;
 }
 
+/* Card escuro do painel de atividade — com badge de alerta pulsante */
 .activity-panel-card {
   background: linear-gradient(135deg, var(--primary-dark) 0%, #1a1816 100%);
   color: #fff;
@@ -462,6 +478,7 @@
   border-color: rgba(0, 0, 0, 0.2);
 }
 
+/* Lista de disponibilidades ou pedidos na sidebar com scroll interno */
 .dispo-list-hud {
   display: flex;
   flex-direction: column;
@@ -509,6 +526,7 @@
   font-weight: 600;
 }
 
+/* Item simples de pedido/aula na sidebar: linha com info + badge de estado */
 .pedido-item-simples {
   display: flex;
   justify-content: space-between;
@@ -563,6 +581,7 @@
   font-weight: 500;
 }
 
+/* Botões globais: texto, escuro (primário), outline (secundário) e dourado (CTA) */
 .btn-text {
   background: none;
   border: none;
@@ -634,6 +653,7 @@
   display: block;
 }
 
+/* Toast de feedback: centrado na base do ecrã com animação de entrada */
 .global-toast {
   position: fixed;
   bottom: 30px;
@@ -685,6 +705,7 @@
   margin: 0 0 24px;
 }
 
+/* Overlay dos modais: fundo escurecido e desfocado, z-index 3000 */
 .modal-overlay {
   position: fixed;
   inset: 0;
@@ -696,6 +717,7 @@
   backdrop-filter: blur(4px);
   padding: 20px;
 }
+/* Caixa dos modais: cantos arredondados, scroll interno e animação de entrada */
 .modal-modern {
   background: #fff;
   border-radius: 20px;
@@ -749,6 +771,7 @@
   font-size: 0.95rem;
 }
 
+/* Grelha interna do painel do professor: 2 colunas que passam a 1 em mobile */
 .prof-dashboard-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -789,6 +812,7 @@
   color: #d9534f;
 }
 
+/* Grelha de cartões de estatística (aulas dadas + valor a receber) */
 .prof-stat-cards {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -821,6 +845,7 @@
   color: var(--accent-gold);
 }
 
+/* Card de aula no painel: borda esquerda colorida por estado */
 .aula-item-modern {
   border: 1px solid rgba(0, 0, 0, 0.06);
   border-left: 4px solid var(--accent-gold);
@@ -903,6 +928,7 @@
   padding: 30px 0;
 }
 
+/* Card de resumo de preço no modal de pedido: info à esquerda, valor à direita */
 .price-summary-card {
   background: #fdfaf5;
   border: 1px solid rgba(179, 139, 89, 0.2);
@@ -942,6 +968,7 @@
   line-height: 1;
 }
 
+/* Grelha de formulário responsiva: colunas auto-fit com mínimo de 200px */
 .modern-form-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -1017,6 +1044,7 @@
   border-top: 1px solid rgba(0, 0, 0, 0.05);
 }
 
+/* Formulário de nova disponibilidade: dia | hora início | hora fim */
 .dispo-form-grid {
   display: grid;
   grid-template-columns: 2fr 1fr 1fr;
@@ -1158,6 +1186,7 @@
   font-size: 0.9rem;
 }
 
+/* Rodapé escuro com contactos, links e redes sociais */
 .main-footer {
   background-color: var(--primary-dark);
   color: #c4c0b5;
@@ -1474,15 +1503,7 @@
   z-index: 1000000;
 }
 
-/* ============================================================================
-   PEDIDO CARD — Card "Os Meus Pedidos" (vista do EE)
-   Layout vertical: badge em linha própria → título → descrição → detalhes.
-   Resolve a sobreposição badge/título mesmo com textos longos.
-   ============================================================================ */
-/* ============================================================================
-   PEDIDO CARD — Card "Os Meus Pedidos" (vista do EE)
-   Usa display:block para fluir naturalmente (sem o pai flex achatar conteúdo).
-   ============================================================================ */
+/* Card "Os Meus Pedidos" (vista do EE): layout block vertical com badge, título, descrição e detalhes */
 .pedido-card {
   display: block;
   padding: 14px 16px;
@@ -1609,9 +1630,7 @@
   min-width: 0;
 }
 
-/* ============================================================================
-   PAINEL "À ESPERA DA COORDENAÇÃO" — variantes de estado (vista Professor)
-   ============================================================================ */
+/* Painel "À Espera da Coordenação" (vista do Professor): variantes por estado de pedido */
 
 /* Cartão que precisa de DECISÃO do professor (Pendente Professor) */
 .aula-item-modern--needs-action {
@@ -1664,11 +1683,7 @@
   margin-right: 4px;
 }
 
-/* ============================================================================
-   AULA-ITEM-MODERN — Versão melhorada do card no painel "À Espera da
-   Coordenação" (vista do Professor). Mantém compatibilidade com classes antigas
-   e adiciona variantes coerentes com o estilo dos "Meus Pedidos" do EE.
-   ============================================================================ */
+/* aula-item-modern versão melhorada: mantém compatibilidade e adiciona variantes de estado */
 .aula-item-modern {
   display: block;
 }
@@ -1746,9 +1761,7 @@
   width: auto;
 }
 
-/* =============================================================================
-   ESTILOS MIGRADOS DOS INLINE STYLES DO JSX
-   ============================================================================= */
+/* Estilos migrados dos inline styles do JSX para manter o CSS centralizado */
 
 /* cursor: help no bloco de disponibilidade */
 .disponibilidade-block {
@@ -1962,9 +1975,7 @@
   padding: 10px 30px !important;
 }
 
-/* =============================================================================
-   RESPONSIVIDADE MOBILE
-   ============================================================================= */
+/* Responsividade: hamburger, navbar mobile, calendário com scroll horizontal e layout em coluna */
 
 /* ── Hamburger para a navbar interna (oculto em desktop) ── */
 .hamburger-interna {

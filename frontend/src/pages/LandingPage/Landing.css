@@ -1,7 +1,4 @@
-/* =============================================================================
-   RESET & GLOBALS
-   Garante um box model consistente e scroll suave em toda a página.
-   ============================================================================= */
+/* Reset e globals: box model consistente e scroll suave em toda a página */
 * {
   box-sizing: border-box;
 }
@@ -36,10 +33,7 @@ body {
   line-height: 1.6;
 }
 
-/* =============================================================================
-   NAVBAR
-   Barra de navegação sticky com blur de fundo.
-   ============================================================================= */
+/* Navbar: barra sticky com backdrop blur; adapta-se a desktop e mobile */
 .navbar {
   display: flex;
   justify-content: space-between;
@@ -285,10 +279,7 @@ body {
   transform: translateY(-8px) rotate(-45deg);
 }
 
-/* =============================================================================
-   ANIMAÇÕES DO LOGO — VIVA D'ARTE
-   Cada letra flutua com um atraso diferente (definido via style inline no JSX).
-   ============================================================================= */
+/* Animações do logótipo: cada letra flutua com atraso diferente definido via inline style no JSX */
 
 /* Wrapper inline-flex para as letras animadas */
 .texto-viva-simples {
@@ -335,9 +326,7 @@ body {
   }
 }
 
-/* =============================================================================
-   HERO — Secção de entrada
-   ============================================================================= */
+/* Secção Hero: fundo com imagem e gradiente, parallax em desktop */
 .hero {
   height: 85vh;
   min-height: 600px;
@@ -383,9 +372,7 @@ body {
   display: inline-block;
 }
 
-/* =============================================================================
-   SECÇÕES GERAIS
-   ============================================================================= */
+/* Layout e tipografia comuns a todas as secções de conteúdo */
 
 /* Padding padrão de todas as secções de conteúdo */
 .section-container {
@@ -437,9 +424,7 @@ body {
   opacity: 0.9;
 }
 
-/* =============================================================================
-   CARROSSEL — Wrapper e controlos
-   ============================================================================= */
+/* Carrossel: wrapper relativo, faixa de scroll horizontal com snap e botões de navegação */
 
 /* Contentor relativo para posicionar os botões de seta */
 .carousel-wrapper {
@@ -494,9 +479,7 @@ body {
   right: -20px;
 }
 
-/* =============================================================================
-   CARTÕES DE MODALIDADES
-   ============================================================================= */
+/* Cartões de modalidades: layout split horizontal com imagem à esquerda e texto à direita */
 
 /* Cartão horizontal com imagem à esquerda e texto à direita */
 .modalidade-card {
@@ -577,9 +560,7 @@ body {
   opacity: 0.85;
 }
 
-/* =============================================================================
-   CARTÕES DE PROFESSORES
-   ============================================================================= */
+/* Cartões de professores: mesmo padrão dos cartões de modalidades com avatar e bio */
 
 /* Cartão horizontal de professor */
 .horizontal-card {
@@ -662,9 +643,7 @@ body {
   opacity: 0.85;
 }
 
-/* =============================================================================
-   FOOTER
-   ============================================================================= */
+/* Rodapé escuro: grelha de três colunas com contactos, links e redes sociais */
 .main-footer {
   background-color: var(--primary-dark);
   color: #c4c0b5;
@@ -775,9 +754,7 @@ body {
   letter-spacing: 0.5px;
 }
 
-/* =============================================================================
-   RESPONSIVIDADE — MEDIA QUERIES
-   ============================================================================= */
+/* Responsividade: tablet largo, tablet/landscape, mobile e smartphones pequenos */
 
 /* ── Tablet / Desktop largo: dois cartões de modalidade visíveis ── */
 @media (min-width: 768px) {

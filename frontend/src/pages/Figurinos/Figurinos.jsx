@@ -1,3 +1,4 @@
+// Dependências: React com hooks, ícones lucide, estilos, logótipo, helpers da API e o DatePicker para seleção de datas
 import React, { useState, useEffect } from "react";
 import { Pencil, Trash2, MapPin, Phone, Mail } from "lucide-react";
 import "./Figurinos.css";
@@ -7,28 +8,16 @@ import { API_URL, getAuthToken } from "../../services/api";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 
-/**
- * Componente Marketplace de Figurinos da Viva D'arte.
- *
- * Responsabilidades:
- * - Listar peças disponíveis para venda e empréstimo da comunidade
- * - Gerir o inventário pessoal do utilizador (adicionar, editar, apagar)
- * - Permitir compras e pedidos de empréstimo
- * - Gerir pedidos de empréstimo recebidos (aprovar, rejeitar, devolução, multas)
- * - Acompanhar as requisições feitas pelo utilizador
- *
- * @param {Function} irParaLanding              - Navega para a landing page
- * @param {Function} irParaMinhaAgendaProfessor - Navega para agenda do professor
- * @param {Function} irParaMinhaAgendaEE        - Navega para agenda do EE
- */
+// Marketplace de figurinos: listagem, filtros, inscrição de peças, compra, empréstimo e gestão de reservas
 export default function Figurinos({
   irParaLanding,
   irParaMinhaAgendaProfessor,
   irParaMinhaAgendaEE,
   irParaAgenda,
 }) {
+  // --- Estado de sessão, dados de inventário e controlo de UI ---
   const [utilizador, setUtilizador] = useState(null);
-  /** Controla a visibilidade do menu hamburger em mobile */
+  // Controla a visibilidade do menu hamburger em mobile
   const [menuAberto, setMenuAberto] = useState(false);
   const [pecasOriginais, setPecasOriginais] = useState([]);
   const [vendasOriginais, setVendasOriginais] = useState([]);
@@ -37,17 +26,20 @@ export default function Figurinos({
   const [reservaEmGestao, setReservaEmGestao] = useState(null);
   const [minhasRequisicoes, setMinhasRequisicoes] = useState([]);
 
+  // Tab ativa, campo de pesquisa, filtros de condição/tipo e critério de ordenação
   const [activeTab, setActiveTab] = useState("marketplace");
   const [pesquisa, setPesquisa] = useState("");
   const [filtroEstado, setFiltroEstado] = useState("Todos");
   const [filtroTipoMarket, setFiltroTipoMarket] = useState("Todos");
   const [ordenacao, setOrdenacao] = useState("recentes");
 
+  // Índice atual do carrossel por item, item aberto no painel de detalhe, lightbox e flag de submissão
   const [indicesImagens, setIndicesImagens] = useState({});
   const [itemDetalhe, setItemDetalhe] = useState(null);
   const [isLightboxOpen, setIsLightboxOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Flags de visibilidade dos vários modais do componente
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isDisponibilizarModalOpen, setIsDisponibilizarModalOpen] =
     useState(false);
@@ -60,6 +52,7 @@ export default function Figurinos({
 
   const [itemSelecionado, setItemSelecionado] = useState(null);
 
+  // Formulário de nova peça: campos base + disponibilidade e método de pagamento
   const [novaPeca, setNovaPeca] = useState({
     nome: "",
     tamanho: "",
@@ -71,6 +64,7 @@ export default function Figurinos({
     metodos_pagamento: ["MBWay"],
   });
 
+  // Espelho editável de uma peça existente — populado ao abrir o modal de edição
   const [pecaEmEdicao, setPecaEmEdicao] = useState({
     id_peca: "",
     nome: "",
@@ -82,14 +76,17 @@ export default function Figurinos({
     metodos_pagamento: [],
   });
 
+  // Formulário para disponibilizar uma peça guardada (venda ou empréstimo)
   const [formDisponibilizar, setFormDisponibilizar] = useState({
     tipo: "Venda",
     preco: "",
     metodos_pagamento: ["MBWay"],
   });
 
+  // Formulário de confirmação de compra: guarda o método de pagamento escolhido
   const [formCompra, setFormCompra] = useState({ metodoPagamento: "MBWay" });
 
+  // Formulário de pedido de empréstimo: período, método de pagamento e observações
   const [formEmprestimo, setFormEmprestimo] = useState({
     dataInicio: null,
     dataFim: null,
@@ -97,6 +94,7 @@ export default function Figurinos({
     observacoes: "",
   });
 
+  // Formulário de gestão de um empréstimo aprovado: pagamento, devolução ou penalização
   const [acaoEmprestimoForm, setAcaoEmprestimoForm] = useState({
     tipoAcao: "Aprovar",
     valorPagamento: "",
@@ -110,17 +108,14 @@ export default function Figurinos({
     descricaoPenalizacao: "",
   });
 
+  // Modal de alerta/confirmação genérico: pode ter callback onConfirm para ações destrutivas
   const [customAlert, setCustomAlert] = useState({
     show: false,
     message: "",
     type: "alert",
     onConfirm: null,
   });
-
-  /**
-   * Calcula as datas já ocupadas para um item, para bloquear no DatePicker.
-   * Inclui pedidos Aprovados, Em Curso e Pendentes.
-   */
+  // Calcula as datas já ocupadas por reservas ativas para bloquear no DatePicker
   const datasOcupadasTeste = React.useMemo(() => {
     let datas = [];
     pedidosAtuais.forEach((p) => {
@@ -139,11 +134,7 @@ export default function Figurinos({
     });
     return datas;
   }, [pedidosAtuais]);
-
-  /**
-   * Abre o modal de solicitação de empréstimo e carrega os pedidos
-   * existentes para mostrar datas ocupadas no calendário.
-   */
+  // Abre o modal de pedido de empréstimo e carrega os pedidos existentes para mostrar datas ocupadas
   const abrirSolicitarEmprestimo = async (e, item) => {
     e.stopPropagation();
     setItemSelecionado(item);
@@ -167,11 +158,7 @@ export default function Figurinos({
       console.error(err);
     }
   };
-
-  /**
-   * Abre o modal de gestão de pedidos de empréstimo (visão do dono da peça)
-   * e carrega a lista de pedidos atuais.
-   */
+  // Abre o modal de gestão de pedidos recebidos (visão do dono) e carrega a lista de reservas
   const abrirGerirEmprestimo = async (e, item) => {
     e.stopPropagation();
     setItemSelecionado(item);
@@ -190,15 +177,14 @@ export default function Figurinos({
     }
   };
 
-  /** URL base da API de inventário */
+  // Atalhos locais: URL base do inventário, função de token e ID do utilizador para comparações
   const API_INV = `${API_URL}/api/inventario`;
-
-  /** Obtém o token JWT do utilizador autenticado */
   const getToken = () => getAuthToken() || "";
-  /** ID do utilizador autenticado — usado para distinguir itens próprios */
+  // ID do utilizador autenticado — usado para distinguir itens próprios dos de terceiros
   const userId = utilizador?.id_utilizador || utilizador?.id;
 
-  /** Mostra um alerta personalizado ao utilizador */
+  // Mostra um alerta personalizado ao utilizador
+  // Mostra um alerta personalizado ao utilizador
   const mostrarAlerta = (msg) =>
     setCustomAlert({
       show: true,
@@ -207,7 +193,8 @@ export default function Figurinos({
       onConfirm: null,
     });
 
-  /** Fecha o alerta/confirmação ativo */
+  // Fecha o alerta/confirmação ativo
+  // Fecha o alerta ou confirmação ativo
   const fecharAlerta = () =>
     setCustomAlert({
       show: false,
@@ -216,7 +203,8 @@ export default function Figurinos({
       onConfirm: null,
     });
 
-  /** Termina a sessão do utilizador, limpa o localStorage e redireciona */
+  // Termina a sessão do utilizador, limpa o localStorage e redireciona
+  // Termina a sessão: limpa o localStorage e redireciona para a landing page
   const handleLogout = () => {
     localStorage.clear();
     setUtilizador(null);
@@ -226,12 +214,7 @@ export default function Figurinos({
       window.location.reload();
     }
   };
-
-  /**
-   * Extrai valor_dia e métodos de pagamento de uma peça de empréstimo.
-   * Suporta dois formatos: campo metodos_pagamento direto ou campo
-   * localizacao serializado como "valor_dia:X;metodos:Y,Z".
-   */
+  // Extrai valor_dia e métodos de pagamento de uma peça — suporta campo direto ou formato serializado
   const parsearLocalizacao = (peca) => {
     if (!peca || typeof peca !== "object")
       return { valor_dia: "0", metodos: ["MBWay"] };
@@ -268,13 +251,7 @@ export default function Figurinos({
 
     return { valor_dia: "0", metodos: ["MBWay"] };
   };
-
-  /**
-   * Carrega peças, vendas e pedidos do utilizador da API.
-   * Para cada peça nova, carrega as fotos completas em segundo plano
-   * sem bloquear o render inicial.
-   * @param {boolean} showLoading - Se true, mostra spinner durante o carregamento
-   */
+  // Carrega peças, vendas e requisições da API; fotos adicionais são carregadas em segundo plano
   const carregarDados = async (showLoading = false) => {
     if (showLoading) setIsLoading(true);
     try {
@@ -335,20 +312,14 @@ export default function Figurinos({
     }
   };
 
-  /** Inicialização: define o título da página, carrega o utilizador do localStorage e os dados da API */
+  // Ao montar: define o título da página, recupera o utilizador do localStorage e carrega os dados
   useEffect(() => {
     document.title = "Figurinos | Viva D'arte";
     const userGuardado = localStorage.getItem("viva_user");
     if (userGuardado) setUtilizador(JSON.parse(userGuardado));
     carregarDados(true);
   }, []);
-
-  /**
-   * Constrói a lista de itens para o tab Marketplace.
-   * Combina peças de empréstimo (da tabela inventário) com vendas
-   * (da tabela vendas), excluindo os próprios itens do utilizador.
-   * @returns {Array} Lista normalizada de items com campos comuns
-   */
+  // Constrói a lista do Marketplace combinando peças de empréstimo e vendas de terceiros
   const buildMarketplaceItems = () => {
     let items = [];
     pecasOriginais.forEach((p) => {
@@ -412,13 +383,7 @@ export default function Figurinos({
     });
     return items;
   };
-
-  /**
-   * Constrói a lista de itens para o tab "Os Meus Figurinos".
-   * Filtra apenas as peças que pertencem ao utilizador autenticado
-   * e enriquece com estado global (Guardado / À Venda / Para Empréstimo).
-   * @returns {Array} Lista de peças do utilizador com estado calculado
-   */
+  // Constrói a lista "Os Meus Figurinos" com as peças do utilizador e o seu estado atual
   const buildMeusItems = () => {
     if (!userId) return [];
     return pecasOriginais
@@ -465,11 +430,11 @@ export default function Figurinos({
       });
   };
 
-  /** Lista de items da tab ativa (marketplace ou meus) */
+  // Seleciona o builder adequado consoante a tab ativa
   const itemsAtuais =
     activeTab === "marketplace" ? buildMarketplaceItems() : buildMeusItems();
 
-  /** Items da tab ativa após aplicar pesquisa, filtros e ordenação */
+  // Aplica pesquisa por nome, filtro de condição, filtro de tipo (venda/empréstimo) e ordenação
   const itemsFiltrados = itemsAtuais
     .filter((i) =>
       (i.nome || "").toLowerCase().includes(pesquisa.toLowerCase()),
@@ -497,7 +462,8 @@ export default function Figurinos({
       return (b.id_peca || 0) - (a.id_peca || 0);
     });
 
-  /** Avança para a próxima foto do carrossel de um item */
+  // Avança para a próxima foto do carrossel de um item
+  // Avança para a próxima foto do carrossel de um item
   const proximaImagem = (e, uid, total) => {
     e.stopPropagation();
     setIndicesImagens((prev) => ({
@@ -505,7 +471,8 @@ export default function Figurinos({
       [uid]: ((prev[uid] || 0) + 1) % total,
     }));
   };
-  /** Recua para a foto anterior do carrossel de um item */
+  // Recua para a foto anterior do carrossel de um item
+  // Recua para a foto anterior do carrossel de um item
   const imagemAnterior = (e, uid, total) => {
     e.stopPropagation();
     setIndicesImagens((prev) => ({
@@ -513,11 +480,7 @@ export default function Figurinos({
       [uid]: ((prev[uid] || 0) - 1 + total) % total,
     }));
   };
-
-  /**
-   * Processa o upload de fotos: redimensiona cada imagem para máx 800px
-   * e converte para JPEG com qualidade 0.7, reduzindo o tamanho de envio.
-   */
+  // Processa o upload de fotos: redimensiona para máx 800px e converte para JPEG com qualidade 0.7
   const handleFotosUpload = async (e) => {
     const files = Array.from(e.target.files);
     if (!files.length) return;
@@ -558,18 +521,14 @@ export default function Figurinos({
     }
   };
 
-  /** Remove uma foto da lista de fotos do novo figurino pelo índice */
+  // Remove uma foto da lista de fotos do novo figurino pelo índice
+  // Remove uma foto da lista de fotos do novo figurino pelo índice
   const removerFoto = (idx) =>
     setNovaPeca((prev) => ({
       ...prev,
       fotos: prev.fotos.filter((_, i) => i !== idx),
     }));
-
-  /**
-   * Submete o formulário de nova peça.
-   * Cria a peça na API; se disponibilidade = Venda, cria também o registo
-   * de venda; se Emprestimo, atualiza a peça com disponivel_para_emprestimo.
-   */
+  // Submete o formulário de nova peça; cria também venda ou empréstimo conforme a disponibilidade
   const submitNovaPeca = async (e) => {
     e.preventDefault();
     if (!utilizador) return mostrarAlerta("Erro: Sessão inválida.");
@@ -668,11 +627,7 @@ export default function Figurinos({
       setIsSubmitting(false);
     }
   };
-
-  /**
-   * Apaga definitivamente uma peça do inventário do utilizador.
-   * Chamado após confirmação no alerta customizado.
-   */
+  // Elimina definitivamente uma peça do inventário após confirmação no alerta
   const apagarPeca = async (idPeca) => {
     fecharAlerta();
     try {
@@ -691,11 +646,7 @@ export default function Figurinos({
       mostrarAlerta("Erro");
     }
   };
-
-  /**
-   * Prepara e abre o modal de edição de uma peça.
-   * Detecta automaticamente os métodos de pagamento e disponibilidade atuais.
-   */
+  // Prepara e abre o modal de edição, detetando automaticamente disponibilidade e métodos atuais
   const abrirEdicao = (e, item) => {
     e.stopPropagation();
     let metodosPre = [];
@@ -732,11 +683,7 @@ export default function Figurinos({
     });
     setIsEditModalOpen(true);
   };
-
-  /**
-   * Submete as alterações de edição de uma peça.
-   * Atualiza nome, tamanho, condição, preço, disponibilidade e métodos.
-   */
+  // Envia as alterações de edição à API, atualizando nome, condição, preço e disponibilidade
   const handleGuardarEdicao = async (e) => {
     e.preventDefault();
     if (
@@ -796,11 +743,7 @@ export default function Figurinos({
       setIsSubmitting(false);
     }
   };
-
-  /**
-   * Confirma a compra de um figurino.
-   * Regista o comprador e o método de pagamento na API.
-   */
+  // Confirma a compra de um figurino registando comprador e método de pagamento na API
   const confirmarCompra = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -832,11 +775,7 @@ export default function Figurinos({
       setIsSubmitting(false);
     }
   };
-
-  /**
-   * Submete o pedido de empréstimo com as datas e método de pagamento.
-   * Valida que as datas foram selecionadas e que fim > início.
-   */
+  // Submete o pedido de empréstimo com período e método de pagamento; valida as datas
   const confirmarEmprestimo = async (e) => {
     e.preventDefault();
     if (!formEmprestimo.dataInicio || !formEmprestimo.dataFim) {
@@ -891,11 +830,7 @@ export default function Figurinos({
       setIsSubmitting(false);
     }
   };
-
-  /**
-   * Aprova ou rejeita um pedido de empréstimo pendente.
-   * Após a ação, recarrega a lista de pedidos para refletir o novo estado.
-   */
+  // Aprova ou rejeita um pedido de empréstimo pendente e refresca a lista de reservas
   const gerirEstadoReserva = async (idEmprestimo, novoEstado) => {
     setIsSubmitting(true);
     try {
@@ -935,13 +870,7 @@ export default function Figurinos({
       setIsSubmitting(false);
     }
   };
-
-  /**
-   * Submete uma ação de gestão sobre um empréstimo aprovado:
-   * - Pagamento: regista o valor e método recebido
-   * - Devolução: regista a entrega da peça e a sua condição
-   * - Penalização: aplica uma multa por atraso ou dano
-   */
+  // Submete uma ação sobre um empréstimo aprovado: pagamento, devolução ou penalização
   const submitGerirEmprestimo = async (e) => {
     e.preventDefault();
     const idEmp = reservaEmGestao;
@@ -1019,11 +948,7 @@ export default function Figurinos({
     }
   };
 
-  /**
-   * Atalhos de teclado globais:
-   * - Setas esquerda/direita: navegar entre itens no detalhe ou lightbox
-   * - Escape: fechar detalhe ou lightbox
-   */
+  // Atalhos de teclado: setas para navegar entre itens/fotos, Escape para fechar painéis
   useEffect(() => {
     const hk = (e) => {
       if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA")
@@ -1064,11 +989,7 @@ export default function Figurinos({
 
   return (
     <div className="figurinos-page">
-      {/* ================================================================
-          NAVBAR INTERNA
-          Versão autenticada da navbar. Em mobile oculta o logótipo e
-          apresenta hamburger (esquerda) + perfil (direita).
-          ================================================================ */}
+      {/* Navbar autenticada: logótipo + links + perfil/logout; em mobile converte-se em hamburger */}
       <nav className="navbar interna">
         {/* Marca — oculta em mobile via CSS */}
         <div className="nav-brand" onClick={irParaLanding}>
@@ -1217,6 +1138,7 @@ export default function Figurinos({
           )}
         </div>
 
+        {/* Barra de filtros: pesquisa por texto, tipo de transação, condição e ordenação */}
         {!isLoading && (
           <div className="filtros-bar">
             {activeTab === "marketplace" && (
@@ -1265,6 +1187,7 @@ export default function Figurinos({
           </div>
         )}
 
+        {/* Lista de requisições feitas pelo utilizador — visível apenas na tab correspondente */}
         {activeTab === "requisicoes" && !isLoading && (
           <div className="requisicoes-list">
             {minhasRequisicoes.length === 0 ? (
@@ -1352,6 +1275,7 @@ export default function Figurinos({
           </div>
         )}
 
+        {/* Grelha de cards: renderiza items filtrados ou estados de carregamento/vazio */}
         {activeTab !== "requisicoes" && (
           <div className="items-grid">
             {isLoading ? (
@@ -2571,6 +2495,7 @@ export default function Figurinos({
         </div>
       )}
 
+      {/* Rodapé: contactos, links rápidos e redes sociais */}
       <footer className="main-footer">
         <div className="footer-container">
           <div className="footer-column">

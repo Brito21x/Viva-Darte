@@ -1,3 +1,4 @@
+/* Variáveis de design globais: paleta de cores, tipografia e dimensões da sidebar */
 :root {
   --bg-creme: #fdfaf5;
   --bg-section: #f7f3ed;
@@ -13,6 +14,7 @@
   --blue: #2980b9;
 }
 
+/* Layout raiz do painel: flex horizontal com sidebar fixa à esquerda e área de conteúdo à direita */
 .admin-root {
   display: flex;
   min-height: 100vh;
@@ -21,6 +23,7 @@
   color: var(--text-main);
 }
 
+/* Sidebar de navegação: fixa em altura total, posição sticky para não sair do viewport ao fazer scroll */
 .admin-sidebar {
   width: var(--sidebar-w);
   min-width: var(--sidebar-w);
@@ -33,6 +36,7 @@
   height: 100vh;
 }
 
+/* Área de identidade no topo da sidebar: logótipo e nome da aplicação */
 .sidebar-brand {
   display: flex;
   align-items: center;
@@ -41,6 +45,7 @@
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
+/* Nome da aplicação em destaque */
 .brand-name {
   color: var(--white);
   font-weight: 700;
@@ -48,6 +53,7 @@
   margin: 0;
 }
 
+/* Subtítulo de perfil/função abaixo do nome */
 .brand-role {
   color: var(--accent-gold);
   font-size: 0.75rem;
@@ -55,6 +61,7 @@
   opacity: 0.85;
 }
 
+/* Lista de itens de navegação que ocupa o espaço disponível da sidebar */
 .sidebar-nav {
   flex: 1;
   display: flex;
@@ -63,6 +70,7 @@
   gap: 4px;
 }
 
+/* Botão de navegação individual: aparência de link, destaque ao hover */
 .nav-item {
   background: none;
   border: none;
@@ -82,12 +90,14 @@
   color: var(--white);
 }
 
+/* Estado ativo do item de navegação: fundo dourado para indicar a secção atual */
 .nav-item--active {
   background-color: var(--accent-gold) !important;
   color: var(--white) !important;
   font-weight: 700;
 }
 
+/* Rodapé da sidebar: contém o email do utilizador e o botão de logout */
 .sidebar-footer {
   padding: 20px;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
@@ -119,6 +129,7 @@
   background-color: rgba(255, 255, 255, 0.18);
 }
 
+/* Contador de notificações nos itens da sidebar (ex: pedidos pendentes) */
 .sidebar-badge {
   margin-left: 8px;
   color: white;
@@ -133,6 +144,7 @@
   background: var(--teal);
 }
 
+/* Área de conteúdo principal: ocupa o espaço restante e permite scroll vertical independente */
 .admin-main {
   flex: 1;
   overflow-y: auto;
@@ -140,6 +152,7 @@
   position: relative;
 }
 
+/* Título de cada secção do painel */
 .page-title {
   font-size: 1.8rem;
   font-weight: 800;
@@ -147,12 +160,14 @@
   margin: 0 0 4px 0;
 }
 
+/* Subtítulo descritivo abaixo do título da secção */
 .page-subtitle {
   color: #8a8480;
   margin: 0 0 28px 0;
   font-size: 0.9rem;
 }
 
+/* Ecrã de login: ocupa o viewport completo e centra o formulário horizontal e verticalmente */
 .admin-login-wrapper {
   display: flex;
   justify-content: center;
@@ -161,6 +176,7 @@
   background-color: var(--bg-section);
 }
 
+/* Caixa branca que envolve o formulário de login */
 .admin-login-box {
   background-color: var(--white);
   padding: 40px;
@@ -171,12 +187,14 @@
   text-align: left;
 }
 
+/* Logótipo centrado no topo do formulário de login */
 .admin-login-logo {
   display: block;
   margin: 0 auto 20px auto;
   width: 120px;
 }
 
+/* Título principal do formulário de autenticação */
 .admin-login-title {
   font-size: 1.6rem;
   margin-bottom: 8px;
@@ -185,6 +203,7 @@
   text-align: center;
 }
 
+/* Texto de contexto abaixo do título do login */
 .admin-login-subtitle {
   color: #8a8480;
   margin-bottom: 30px;
@@ -192,6 +211,7 @@
   text-align: center;
 }
 
+/* Botão com aparência de link de texto (ex: "Voltar ao site") */
 .btn-text-link {
   display: block;
   width: 100%;
@@ -205,6 +225,7 @@
   text-align: center;
 }
 
+/* Notificação temporária (toast) que surge no canto superior direito com animação de entrada */
 .toast {
   position: fixed;
   top: 24px;
@@ -227,6 +248,7 @@
   color: white;
 }
 
+/* Caixa de informação contextual com borda lateral colorida */
 .info-note {
   background-color: #fffbf0;
   border-left: 3px solid var(--accent-gold);
@@ -237,12 +259,14 @@
   margin-top: 12px;
 }
 
+/* Variante de erro da caixa de informação: fundo avermelhado e borda vermelha */
 .info-note--error {
   border-left-color: var(--red);
   background-color: #fce8e8;
   color: var(--red);
 }
 
+/* Animação de entrada do toast: desliza da direita com fade in */
 @keyframes slideIn {
   from {
     opacity: 0;
@@ -254,6 +278,7 @@
   }
 }
 
+/* Grelha responsiva de cartões de estatística na visão geral */
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -261,6 +286,7 @@
   margin-bottom: 32px;
 }
 
+/* Cartão individual de estatística com borda lateral colorida por categoria */
 .stat-card {
   background: var(--white);
   border-radius: 14px;
@@ -306,6 +332,7 @@
   margin: 0;
 }
 
+/* Contentor de cada secção retrátil do painel */
 .admin-section {
   background: var(--white);
   border-radius: 14px;
@@ -314,6 +341,7 @@
   overflow: hidden;
 }
 
+/* Cabeçalho clicável da secção retrátil: título à esquerda, chevron à direita */
 .section-toggle {
   width: 100%;
   background: none;
@@ -345,6 +373,7 @@
   margin-left: 15px;
 }
 
+/* Indicador visual de estado aberto/fechado da secção */
 .chevron {
   margin-left: 12px;
   font-size: 1.2rem;
@@ -355,16 +384,19 @@
   transform: rotate(90deg);
 }
 
+/* Área de conteúdo da secção, visível apenas quando a secção está expandida */
 .section-body {
   padding: 0 24px 24px;
 }
 
+/* Formulários do painel: layout em coluna com espaçamento uniforme entre campos */
 .admin-form {
   display: flex;
   flex-direction: column;
   gap: 14px;
 }
 
+/* Linha de formulário com múltiplos campos lado a lado */
 .form-group-row {
   display: flex;
   gap: 20px;
@@ -377,6 +409,7 @@
   flex: 2;
 }
 
+/* Campo de formulário individual: label acima, input abaixo */
 .field {
   display: flex;
   flex-direction: column;
@@ -418,6 +451,7 @@
   text-transform: none;
 }
 
+/* Sobreposição escurecida e desfocada que aparece por trás dos modais */
 .admin-modal-overlay {
   position: fixed;
   top: 0;
@@ -432,6 +466,7 @@
   align-items: center;
 }
 
+/* Caixa branca do modal: largura adaptável com máximo definido */
 .admin-modal-content {
   background-color: #ffffff;
   padding: 40px;
@@ -446,6 +481,7 @@
   max-width: 500px;
 }
 
+/* Título do modal com tipografia serif e linha divisória inferior */
 .admin-modal-title {
   margin: 0 0 25px 0;
   font-family: "Cormorant Garamond", serif;
@@ -468,6 +504,7 @@
   font-size: 0.9rem;
 }
 
+/* Área de ações do modal: botões alinhados à direita */
 .modal-actions {
   display: flex;
   gap: 15px;
@@ -475,6 +512,7 @@
   margin-top: 15px;
 }
 
+/* Grelha de checkboxes de modalidades no modal de edição de professor */
 .modalities-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -487,6 +525,7 @@
   grid-column: 1 / -1;
 }
 
+/* Checkbox com estilo personalizado de card clicável */
 .check-label-styled {
   background-color: #f9f9f9;
   padding: 10px 15px;
@@ -513,6 +552,7 @@
   color: #444;
 }
 
+/* Tabela de dados do painel */
 .admin-table {
   width: 100%;
   border-collapse: collapse;
@@ -558,6 +598,7 @@
   white-space: nowrap;
 }
 
+/* Etiqueta de estado (ex: Ativo, Pendente, Agendado) */
 .badge {
   display: inline-block;
   padding: 3px 10px;
@@ -578,6 +619,7 @@
   color: var(--red);
 }
 
+/* Botão principal de ação com fundo escuro */
 .btn-primary {
   background-color: var(--primary-dark);
   color: var(--white);
@@ -601,6 +643,7 @@
   cursor: not-allowed;
 }
 
+/* Botão compacto para ações dentro de tabelas */
 .btn-sm {
   padding: 6px 14px;
   border-radius: 6px;
@@ -631,6 +674,7 @@
   color: white;
 }
 
+/* Botão de cancelamento: fundo neutro cinzento */
 .btn-cancel {
   padding: 12px 24px;
   background-color: #f1f1f1;
@@ -645,6 +689,7 @@
 .btn-cancel:hover {
   background-color: #e4e4e4;
 }
+/* Botão de submissão principal dentro de modais */
 .btn-submit {
   padding: 12px 24px;
   background-color: var(--primary-dark);
@@ -660,6 +705,7 @@
   background-color: #2a2520;
 }
 
+/* Utilitários de espaçamento e dimensionamento rápido */
 .mr-8 {
   margin-right: 8px;
 }
@@ -670,6 +716,7 @@
   padding: 14px;
 }
 
+/* Animação de entrada ao mudar de tab: sobe suavemente com fade in */
 .tab-content {
   animation: fadeUp 0.25s ease;
 }
@@ -711,6 +758,86 @@
     flex-direction: column;
     gap: 14px;
   }
+}
+
+/* Componente SearchableSelect: wrapper com posicionamento relativo para o dropdown absoluto */
+.searchable-wrapper {
+  position: relative;
+  width: 100%;
+}
+
+/* Seta indicadora de dropdown */
+.searchable-arrow {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 0.75rem;
+  color: #999;
+  pointer-events: none;
+}
+
+/* Lista dropdown do campo de pesquisa: aparece por cima de todos os outros elementos */
+.searchable-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: #ffffff;
+  border: 1px solid var(--accent-gold);
+  border-top: none;
+  border-radius: 0 0 8px 8px;
+  z-index: 10000;
+  max-height: 220px;
+  overflow-y: auto;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+}
+
+.searchable-dropdown::-webkit-scrollbar {
+  width: 6px;
+}
+.searchable-dropdown::-webkit-scrollbar-thumb {
+  background-color: rgba(179, 139, 89, 0.5);
+  border-radius: 10px;
+}
+
+/* Opção individual da lista */
+.searchable-option {
+  padding: 12px 14px;
+  cursor: pointer;
+  border-bottom: 1px solid #f9f9f9;
+  color: var(--primary-dark);
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition:
+    background 0.2s,
+    color 0.2s;
+}
+
+.searchable-option:last-child {
+  border-bottom: none;
+}
+
+.searchable-option:hover {
+  background: #fdfaf5;
+  color: var(--accent-gold);
+}
+
+/* Mensagem exibida quando não há resultados para a pesquisa */
+.searchable-empty {
+  padding: 12px 14px;
+  color: #999;
+  font-size: 0.9rem;
+  text-align: center;
+  font-style: italic;
+}
+
+/* Variante alargada do modal para conteúdo mais complexo  */
+.admin-modal-content--lg {
+  max-width: 850px;
 }
 
 .searchable-wrapper {
@@ -783,83 +910,7 @@
   font-style: italic;
 }
 
-.admin-modal-content--lg {
-  max-width: 850px;
-}
-
-.searchable-wrapper {
-  position: relative;
-  width: 100%;
-}
-
-.searchable-arrow {
-  position: absolute;
-  right: 14px;
-  top: 50%;
-  transform: translateY(-50%);
-  font-size: 0.75rem;
-  color: #999;
-  pointer-events: none;
-}
-
-.searchable-dropdown {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  right: 0;
-  background: #ffffff;
-  border: 1px solid var(--accent-gold);
-  border-top: none;
-  border-radius: 0 0 8px 8px;
-  z-index: 10000;
-  max-height: 220px;
-  overflow-y: auto;
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
-}
-
-.searchable-dropdown::-webkit-scrollbar {
-  width: 6px;
-}
-.searchable-dropdown::-webkit-scrollbar-thumb {
-  background-color: rgba(179, 139, 89, 0.5); /* Accent gold transparent */
-  border-radius: 10px;
-}
-
-.searchable-option {
-  padding: 12px 14px;
-  cursor: pointer;
-  border-bottom: 1px solid #f9f9f9;
-  color: var(--primary-dark);
-  font-size: 0.9rem;
-  font-weight: 500;
-  transition:
-    background 0.2s,
-    color 0.2s;
-}
-
-.searchable-option:last-child {
-  border-bottom: none;
-}
-
-.searchable-option:hover {
-  background: #fdfaf5;
-  color: var(--accent-gold);
-}
-
-.searchable-empty {
-  padding: 12px 14px;
-  color: #999;
-  font-size: 0.9rem;
-  text-align: center;
-  font-style: italic;
-}
-
-/* =============================================================================
-   RESPONSIVIDADE MOBILE — adicionado sem alterar nenhum estilo existente
-   ============================================================================= */
+/* Responsividade: ajustes de layout para ecrãs mais pequenos (tablet e mobile) */
 
 /* ── Tablet largo (≤ 1024px) ── */
 @media (max-width: 1024px) {
@@ -910,14 +961,7 @@
     gap: 14px;
   }
 
-  /* ── Tabelas: scroll horizontal em TODAS as tabelas ──
-     Técnica: wrapper <div> já existente recebe overflow-x.
-     Para cobrir todos os casos, aplicamos a qualquer div/section
-     que seja pai direto de uma .admin-table. Como não podemos
-     selecionar "pai de" em CSS puro, usamos a abordagem mais
-     segura: tornar a própria tabela um bloco scrollável com
-     display:block. Esta abordagem é amplamente suportada e não
-     quebra a renderização das células. */
+  /* ── Tabelas: scroll horizontal em TODAS as tabelas */
   .admin-table {
     display: block;
     overflow-x: auto;

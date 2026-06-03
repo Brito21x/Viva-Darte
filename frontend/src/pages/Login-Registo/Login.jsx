@@ -1,24 +1,18 @@
-/**
- * @file Login.jsx
- * @description Página de início de sessão da Viva D'arte.
- *
- * Fluxo:
- * - O utilizador seleciona o perfil (EE ou Professor)
- * - Introduz email e palavra-passe
- * - Após 3 tentativas falhadas surge o reCAPTCHA
- * - Em caso de sucesso, guarda o utilizador/token no localStorage
- *   e navega para a landing page
- *
- * @param {Function} irParaRegisto              - Navega para a página de registo
- * @param {Function} irParaLanding              - Navega para a landing page
- * @param {Function} irParaRecuperar            - Navega para recuperação de password
- * @param {Function} irParaMinhaAgendaProfessor - Navega para agenda do professor
- * @param {Function} irParaMinhaAgendaEE        - Navega para agenda do EE
- */
+// Dependências: React com hooks, estilos partilhados e componente reCAPTCHA
 import React, { useState, useEffect, useRef } from "react";
 import "./LoginRegisto.css";
 import ReCAPTCHA from "react-google-recaptcha";
 
+// Credenciais de teste para pré-preenchimento rápido do formulário em ambiente de desenvolvimento
+const CREDENCIAIS = [
+  { tipo: "EE", email: "ee@gmail.com", password: "###AASDDAD123" },
+  { tipo: "EE", email: "eematos@gmail.com", password: "eematos123#" },
+  { tipo: "PROF", email: "professor@gmail.com", password: "#BRITO123" },
+  { tipo: "PROF", email: "profmatos@gmail.com", password: "profmatos123#" },
+  { tipo: "ADMIN", email: "admin@gmail.com", password: "vivadarte123!" },
+];
+
+// Página de login: seleção de perfil, autenticação com reCAPTCHA após 3 falhas e tabela de credenciais de teste
 export default function Login({
   irParaRegisto,
   irParaLanding,
@@ -26,35 +20,44 @@ export default function Login({
   irParaMinhaAgendaProfessor,
   irParaMinhaAgendaEE,
 }) {
+  // Estado do formulário: perfil selecionado, email e password
   const [tipo, setTipo] = useState("EE");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
+  // Controlo do reCAPTCHA: contador de tentativas falhadas, token e referência ao widget
   const [tentativasFalhadas, setTentativasFalhadas] = useState(0);
   const [captchaToken, setCaptchaToken] = useState(null);
   const recaptchaRef = useRef(null);
 
+  // Estado do modal de alerta personalizado
   const [customAlert, setCustomAlert] = useState({ show: false, message: "" });
 
+  // Define o título da página ao montar o componente
   useEffect(() => {
     document.title = "Iniciar Sessão | Viva D'arte";
   }, []);
 
-  /** Mostra o alerta personalizado com uma mensagem */
+  // Mostra o alerta personalizado com a mensagem indicada
   const mostrarAlerta = (msg) => {
     setCustomAlert({ show: true, message: msg });
   };
 
-  /** Fecha o alerta personalizado */
+  // Fecha o alerta personalizado
   const fecharAlerta = () => {
     setCustomAlert({ show: false, message: "" });
   };
 
-  /**
-   * Submete o formulário de login.
-   * Bloqueia se ≥3 tentativas falhadas e o reCAPTCHA não foi resolvido.
-   * Em sucesso guarda utilizador e token no localStorage.
-   */
+  // Preenche email, password e perfil ao clicar numa linha da tabela de credenciais de teste
+  const preencherCredenciais = (cred) => {
+    if (cred.tipo === "EE" || cred.tipo === "PROF") {
+      setTipo(cred.tipo);
+    }
+    setEmail(cred.email);
+    setPassword(cred.password);
+  };
+
+  // Submete o login: bloqueia se reCAPTCHA pendente, guarda sessão no localStorage em caso de sucesso
   const lidarComLogin = async (e) => {
     e.preventDefault();
 
@@ -97,7 +100,7 @@ export default function Login({
     }
   };
 
-  /** Callback do reCAPTCHA — guarda o token gerado */
+  // Callback do reCAPTCHA: guarda o token gerado
   const onCaptchaChange = (token) => {
     setCaptchaToken(token);
   };
@@ -117,6 +120,46 @@ export default function Login({
           <div className="logo-viva">VIVA D'ARTE</div>
           <h1>Bem-vindo de volta.</h1>
           <p>Entra na tua conta para acompanhar o percurso na dança.</p>
+        </div>
+
+        {/* Painel de credenciais de teste: clique numa linha para pré-preencher o formulário */}
+        <div className="dev-credentials-panel">
+          <div className="dev-credentials-header">
+            <span className="dev-credentials-title">Credenciais de Teste</span>
+          </div>
+          <table className="dev-credentials-table">
+            <thead>
+              <tr>
+                <th>Perfil</th>
+                <th>Email</th>
+                <th>Palavra-passe</th>
+              </tr>
+            </thead>
+            <tbody>
+              {CREDENCIAIS.map((cred, i) => (
+                <tr
+                  key={i}
+                  className={`dev-credentials-row${cred.tipo === "ADMIN" ? " dev-credentials-admin-row" : ""}`}
+                  onClick={() => preencherCredenciais(cred)}
+                  title="Clique para preencher o formulário"
+                >
+                  <td>{cred.tipo}</td>
+                  <td>{cred.email}</td>
+                  <td>{cred.password}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div className="dev-credentials-admin-link">
+            <span>Painel Coordenação:</span>
+            <a
+              href="https://vivadarte-production.up.railway.app/admin"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              vivadarte-production.up.railway.app/admin ↗
+            </a>
+          </div>
         </div>
       </div>
 

@@ -1,21 +1,14 @@
-/**
- * @file Registo.jsx
- * @description Página de criação de conta da Viva D'arte.
- *
- * Campos comuns: nome, email, telefone, palavra-passe
- * Campos específicos de EE: nome do educando + data de nascimento
- * Validações: password ≥8 chars + símbolo especial, reCAPTCHA obrigatório
- *
- * @param {Function} irParaLogin   - Navega para a página de login
- * @param {Function} irParaLanding - Navega para a landing page
- */
+// Dependências: React com hooks, estilos partilhados e reCAPTCHA
 import React, { useState, useEffect, useRef } from "react";
 import "./LoginRegisto.css";
 import ReCAPTCHA from "react-google-recaptcha";
 
+// Página de registo: campos comuns + campos específicos de EE, validações e reCAPTCHA obrigatório
 export default function Registo({ irParaLogin, irParaLanding }) {
+  // Perfil selecionado: EE (Encarregado de Educação) ou PROF (Professor)
   const [tipo, setTipo] = useState("EE");
 
+  // Campos do formulário: dados do encarregado e, se EE, dados do educando
   const [nome, setNome] = useState("");
   const [email, setEmail] = useState("");
   const [telefone, setTelefone] = useState("");
@@ -23,25 +16,28 @@ export default function Registo({ irParaLogin, irParaLanding }) {
   const [nomeAluno, setNomeAluno] = useState("");
   const [dataNascimentoAluno, setDataNascimentoAluno] = useState("");
 
+  // Token e referência do reCAPTCHA — obrigatório para submeter o formulário
   const [captchaToken, setCaptchaToken] = useState(null);
   const recaptchaRef = useRef(null);
 
+  // Modal de alerta: mensagem e flag para redirecionar para login ao fechar
   const [customAlert, setCustomAlert] = useState({
     show: false,
     message: "",
     redirectOnClose: false,
   });
 
+  // Define o título da página ao montar o componente
   useEffect(() => {
     document.title = "Criar Conta | Viva D'arte";
   }, []);
 
-  /** Mostra o alerta personalizado; se redirect=true, redireciona para login ao fechar */
+  // Mostra o alerta; se redirect=true, redireciona para login ao fechar
   const mostrarAlerta = (msg, redirect = false) => {
     setCustomAlert({ show: true, message: msg, redirectOnClose: redirect });
   };
 
-  /** Fecha o alerta e redireciona para login se a flag redirectOnClose estiver ativa */
+  // Fecha o alerta e redireciona para login se a flag redirectOnClose estiver ativa
   const fecharAlerta = () => {
     if (customAlert.redirectOnClose) {
       irParaLogin();
@@ -49,10 +45,7 @@ export default function Registo({ irParaLogin, irParaLanding }) {
     setCustomAlert({ show: false, message: "", redirectOnClose: false });
   };
 
-  /**
-   * Formata o número de telefone em tempo real: "912 345 678"
-   * Remove não-dígitos e aplica máscara a cada 3 dígitos.
-   */
+  // Formata o número de telefone em tempo real com máscara "912 345 678"
   const handleTelefoneChange = (e) => {
     let valor = e.target.value.replace(/\D/g, "");
     if (valor.length > 6) {
@@ -63,11 +56,7 @@ export default function Registo({ irParaLogin, irParaLanding }) {
     setTelefone(valor.substring(0, 11));
   };
 
-  /**
-   * Submete o formulário de registo.
-   * Valida reCAPTCHA, comprimento e símbolos da password antes de enviar.
-   * Em sucesso, exibe mensagem de aprovação pendente e redireciona para login.
-   */
+  // Valida reCAPTCHA e regras de password antes de submeter o registo à API
   const lidarComRegisto = async (e) => {
     e.preventDefault();
 
@@ -133,7 +122,7 @@ export default function Registo({ irParaLogin, irParaLanding }) {
     }
   };
 
-  /** Callback do reCAPTCHA — guarda o token gerado */
+  // Callback do reCAPTCHA: guarda o token gerado
   const onCaptchaChange = (token) => {
     setCaptchaToken(token);
   };

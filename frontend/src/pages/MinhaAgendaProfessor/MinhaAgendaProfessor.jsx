@@ -1,3 +1,4 @@
+// Dependências: React com hooks, ícones, portal DOM, estilos, logótipo e serviço de fetch autenticado
 import React, { useEffect, useMemo, useState } from "react";
 import { CheckCircle2, XCircle, MapPin, Phone, Mail } from "lucide-react";
 import { createPortal } from "react-dom";
@@ -5,15 +6,13 @@ import "./MinhaAgendaProfessor.css";
 import logoImg from "../../assets/logo.png";
 import { apiAuthFetch } from "../../services/api";
 
-/* ─── Constantes de domínio ─────────────────────────────────────────────── */
-
-/** Formatos de aula disponíveis para pedidos de coaching */
+// Constantes de domínio: formatos e durações de aula, meses e anos letivos
 const FORMATOS_AULA = ["Solo", "Dueto", "Trio", "Ensemble"];
 
-/** Durações de aula disponíveis em minutos */
+// Durações de aula disponíveis em minutos
 const DURACOES_AULA = [30, 60, 90, 120];
 
-/** Nomes dos meses em português para o filtro do resumo financeiro */
+// Nomes dos meses em português para o filtro do resumo financeiro
 const MESES = [
   "Janeiro",
   "Fevereiro",
@@ -29,17 +28,10 @@ const MESES = [
   "Dezembro",
 ];
 
-/** Anos letivos disponíveis para seleção */
+// Anos letivos disponíveis para seleção
 const ANOS = [2025, 2026, 2027, 2028];
 
-/* ─── Funções utilitárias ────────────────────────────────────────────────── */
-
-/**
- * Traduz mensagens de erro da API de coaching para português legível.
- * @param {Error|object} err - Objeto de erro
- * @param {string} fallback  - Mensagem de fallback
- * @returns {string} Mensagem traduzida
- */
+// Funções utilitárias: formatação de datas/horas, cálculos de calendário e lógica de domínio
 function traduzErroCoaching(err, fallback) {
   const msg = String(err?.message || "").trim();
   if (!msg) return fallback;
@@ -57,11 +49,7 @@ function traduzErroCoaching(err, fallback) {
   return msg;
 }
 
-/**
- * Formata uma string de hora para "HH:MM", removendo os segundos.
- * @param {string|number} valor - Hora no formato "HH:MM:SS" ou similar
- * @returns {string}
- */
+// Extrai "HH:MM" de qualquer formato de hora, descartando segundos
 function formatHoraCurta(valor) {
   const s = String(valor || "").trim();
   if (!s) return "";
@@ -70,23 +58,14 @@ function formatHoraCurta(valor) {
   return "";
 }
 
-/**
- * Adiciona N dias a uma data.
- * @param {Date} date - Data base
- * @param {number} days - Número de dias a adicionar
- * @returns {Date}
- */
+// Adiciona N dias a uma data
 function addDays(date, days) {
   const d = new Date(date);
   d.setDate(d.getDate() + days);
   return d;
 }
 
-/**
- * Retorna a segunda-feira da semana à qual pertence a data fornecida.
- * @param {Date} date
- * @returns {Date}
- */
+// Devolve a segunda-feira da semana à qual pertence a data fornecida
 function getMonday(date) {
   const d = new Date(date);
   const day = d.getDay();
@@ -96,11 +75,7 @@ function getMonday(date) {
   return d;
 }
 
-/**
- * Formata uma data no formato "YYYY-MM-DD".
- * @param {Date} date
- * @returns {string}
- */
+// Formata uma data no formato "YYYY-MM-DD"
 function formatYMD(date) {
   const d = new Date(date);
   const yyyy = d.getFullYear();
@@ -109,12 +84,7 @@ function formatYMD(date) {
   return `${yyyy}-${mm}-${dd}`;
 }
 
-/**
- * Converte um valor (Date, string ISO, etc.) num objeto Date sem componente
- * de hora, para comparações de dia corretas.
- * @param {*} valor
- * @returns {Date|null}
- */
+// Converte qualquer representação de data num objeto Date sem hora, para comparações de dia corretas
 function parseDataCalendario(valor) {
   if (valor == null) return null;
   if (valor instanceof Date && !Number.isNaN(valor.getTime())) {
@@ -133,11 +103,7 @@ function parseDataCalendario(valor) {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());
 }
 
-/**
- * Retorna a abreviatura do dia da semana (ex: "Seg") para a data fornecida.
- * @param {*} dataAula - Data da aula
- * @returns {string|null}
- */
+// Devolve a abreviatura do dia da semana (ex: "Seg") para a data fornecida
 function diaSemanaAbrevData(dataAula) {
   const d = parseDataCalendario(dataAula);
   if (!d) return null;
@@ -154,11 +120,7 @@ function diaSemanaAbrevData(dataAula) {
   return map[js] || null;
 }
 
-/**
- * Converte um número de dia da semana (1–7) na sua abreviatura.
- * @param {number|string} diaSemana
- * @returns {string}
- */
+// Converte um número de dia da semana (1–7) na sua abreviatura PT
 function abrevDiaSemana(diaSemana) {
   const map = {
     1: "Seg",
@@ -172,11 +134,7 @@ function abrevDiaSemana(diaSemana) {
   return map[Number(diaSemana)];
 }
 
-/**
- * Determina o estado visual (label + tom de cor) de um pedido de coaching.
- * @param {object} p - Objeto do pedido
- * @returns {{ label: string, tone: string }}
- */
+// Determina o estado visual (label + tom de cor) de um pedido de coaching
 function estadoPedidoVisual(p) {
   const estado = p?.estado || "";
   const estadoCoaching = p?.estado_coaching || null;
@@ -198,12 +156,7 @@ function estadoPedidoVisual(p) {
   return { label: estado || "—", tone: "pendente" };
 }
 
-/**
- * Converte uma hora de início no slot de hora inteira correspondente.
- * Exemplo: "14:35" → "14:00"
- * @param {string} horaInicio
- * @returns {string|null}
- */
+// Converte uma hora de início no slot de hora inteira (ex: "14:35" → "14:00")
 function horaParaSlot(horaInicio) {
   const hhmm = formatHoraCurta(horaInicio);
   if (!hhmm) return null;
@@ -211,11 +164,7 @@ function horaParaSlot(horaInicio) {
   return `${hh}:00`;
 }
 
-/**
- * Converte uma string "HH:MM:SS" em minutos totais desde meia-noite.
- * @param {string} hhmmss
- * @returns {number|null}
- */
+// Converte uma string "HH:MM:SS" em minutos totais desde meia-noite
 function parseTimeToMinutes(hhmmss) {
   const hhmm = formatHoraCurta(hhmmss);
   if (!hhmm) return null;
@@ -225,24 +174,14 @@ function parseTimeToMinutes(hhmmss) {
   return hh * 60 + mm;
 }
 
-/**
- * Converte minutos totais em string "HH:MM".
- * @param {number} mins
- * @returns {string}
- */
+// Converte minutos totais em string "HH:MM"
 function minutesToHHMM(mins) {
   const h = String(Math.floor(mins / 60)).padStart(2, "0");
   const m = String(mins % 60).padStart(2, "0");
   return `${h}:${m}`;
 }
 
-/**
- * Formata um intervalo de tempo "HH:MM - HH:MM" a partir da hora de início
- * e da duração em minutos.
- * @param {string} horaInicio
- * @param {number} duracaoMinutos
- * @returns {string}
- */
+// Formata um intervalo "HH:MM - HH:MM" a partir da hora de início e duração em minutos
 function formatIntervalo(horaInicio, duracaoMinutos) {
   const start = parseTimeToMinutes(horaInicio);
   const dur = Number(duracaoMinutos || 0);
@@ -250,14 +189,7 @@ function formatIntervalo(horaInicio, duracaoMinutos) {
   return `${minutesToHHMM(start)} - ${minutesToHHMM(start + dur)}`;
 }
 
-/**
- * Verifica se uma sessão de coaching já terminou com base na data, hora
- * de início e duração.
- * @param {*} dataAula
- * @param {string} horaInicio
- * @param {number} duracaoMinutos
- * @returns {boolean}
- */
+// Verifica se uma sessão de coaching já terminou com base na data, hora e duração
 function coachingJaTerminou(dataAula, horaInicio, duracaoMinutos) {
   const dia = parseDataCalendario(dataAula);
   if (!dia) return false;
@@ -279,11 +211,7 @@ function coachingJaTerminou(dataAula, horaInicio, duracaoMinutos) {
   return fim.getTime() <= Date.now();
 }
 
-/**
- * Converte o nome de uma modalidade numa classe CSS correspondente.
- * @param {string} modalidade
- * @returns {string}
- */
+// Mapeia o nome de uma modalidade para a classe CSS correspondente
 function modalidadeParaClasse(modalidade) {
   const s = String(modalidade || "")
     .toLowerCase()
@@ -298,11 +226,7 @@ function modalidadeParaClasse(modalidade) {
   return "ballet";
 }
 
-/**
- * Formata uma data no formato "DD/MM".
- * @param {Date|string} date
- * @returns {string}
- */
+// Formata uma data no formato "DD/MM"
 function formatDM(date) {
   const d = new Date(date);
   const dd = String(d.getDate()).padStart(2, "0");
@@ -310,36 +234,14 @@ function formatDM(date) {
   return `${dd}/${mm}`;
 }
 
-/**
- * Normaliza uma hora "HH:MM" para o formato "HH:MM:00" esperado pela API.
- * @param {string} hhmm
- * @returns {string}
- */
+// Normaliza uma hora "HH:MM" para o formato "HH:MM:00" esperado pela API
 function normalizeTime(hhmm) {
   const hora = formatHoraCurta(hhmm);
   if (!hora) return String(hhmm || "").trim();
   return `${hora}:00`;
 }
 
-/* ─── Componente principal ──────────────────────────────────────────────── */
-
-/**
- * Componente de agenda de coaching — serve tanto o professor como o
- * encarregado de educação (EE), controlado pela prop `modo`.
- *
- * Responsabilidades:
- * - Exibir a grelha semanal de slots com disponibilidades e aulas agendadas
- * - Permitir ao professor gerir as suas disponibilidades
- * - Permitir ao EE pedir e acompanhar sessões de coaching
- * - Mostrar painel de gestão (pedidos, validações, resumo financeiro)
- *
- * @param {Function} irParaLanding                - Navega para a landing page
- * @param {Function} irParaEmprestimos            - Navega para empréstimos
- * @param {Function} irParaFigurinos              - Navega para o marketplace
- * @param {Function} irParaMinhaAgendaProfessor   - Navega para agenda do professor
- * @param {Function} irParaMinhaAgendaEE          - Navega para agenda do EE
- * @param {"professor"|"ee"} modo                 - Perfil ativo do utilizador
- */
+// Componente de agenda de coaching — compatível com perfil Professor e EE, controlado pela prop `modo`
 export default function MinhaAgendaProfessor({
   irParaLanding,
   irParaEmprestimos,
@@ -349,7 +251,7 @@ export default function MinhaAgendaProfessor({
   irParaAgenda,
   modo = "professor",
 }) {
-  /* ─── Estado: dados do utilizador e agenda ─────────────────────────────── */
+  // Estado: agenda semanal, pedidos pendentes, utilizador e controlo de loading/erro
   const [agenda, setAgenda] = useState([]);
   const [pedidosPendentesProf, setPedidosPendentesProf] = useState([]);
   const [utilizador, setUtilizador] = useState(null);
@@ -357,14 +259,16 @@ export default function MinhaAgendaProfessor({
   const [erroAgenda, setErroAgenda] = useState("");
   const [weekStart, setWeekStart] = useState(() => getMonday(new Date()));
 
-  /** Controla a visibilidade do menu hamburger em mobile */
+  // Visibilidade do menu hamburger em mobile
+
   const [menuInternoAberto, setMenuInternoAberto] = useState(false);
 
-  /* ─── Estado: modais e painéis ──────────────────────────────────────────── */
-  /** Controla a visibilidade do painel de gestão do professor */
+  // Visibilidade dos modais e painéis
+  // Visibilidade do painel de gestão do professor
+
   const [isProfMenuOpen, setIsProfMenuOpen] = useState(false);
 
-  /* ─── Estado: disponibilidades do professor ────────────────────────────── */
+  // Estado: disponibilidades horários do professor — loading, erro e formulário de nova disponibilidade
   const [disponibilidades, setDisponibilidades] = useState([]);
   const [isLoadingDispo, setIsLoadingDispo] = useState(false);
   const [erroDispo, setErroDispo] = useState("");
@@ -374,29 +278,29 @@ export default function MinhaAgendaProfessor({
   const [novoHoraFim, setNovoHoraFim] = useState("19:00");
   const [isSavingDispo, setIsSavingDispo] = useState(false);
 
-  /* ─── Estado: filtros do resumo financeiro ─────────────────────────────── */
+  // Filtros do resumo financeiro: mês selecionado, ano letivo e modal de detalhes
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
   const [selectedAnoLetivoId, setSelectedAnoLetivoId] = useState("");
   const [isDetalhesModalOpen, setIsDetalhesModalOpen] = useState(false);
 
-  /* ─── Estado: modal de confirmação de execução ─────────────────────────── */
+  // Modal de confirmação de realização de aula e registo de pagamento
   const [modalConfirmarAula, setModalConfirmarAula] = useState({
     isOpen: false,
     aula: null,
     metodoPagamento: "Numerário",
   });
 
-  /* ─── Estado: pesquisa de alunos externos por email ────────────────────── */
+  // Pesquisa de alunos externos por email do encarregado para pedidos em grupo
   const [emailBusca, setEmailBusca] = useState("");
   const [isBuscandoEmail, setIsBuscandoEmail] = useState(false);
   const [alunosExternos, setAlunosExternos] = useState([]);
 
-  /* ─── Estado: alertas e toasts ─────────────────────────────────────────── */
+  // Alertas, toasts de feedback e modal de mensagem simples
   const [alertaExcl, setAlertaExcl] = useState({ isOpen: false, message: "" });
   const [globalToast, setGlobalToast] = useState(null);
   const [alertModal, setAlertModal] = useState({ isOpen: false, mensagem: "" });
 
-  /* ─── Estado: modal de preço e pedido de coaching ──────────────────────── */
+  // Modal de consulta de preço estimado e submissão do pedido de coaching
   const [isPrecoModalOpen, setIsPrecoModalOpen] = useState(false);
   const [precoInfo, setPrecoInfo] = useState({
     isLoading: false,
@@ -410,7 +314,7 @@ export default function MinhaAgendaProfessor({
   const [pedidoErro, setPedidoErro] = useState("");
   const [isSubmittingPedido, setIsSubmittingPedido] = useState(false);
 
-  /* ─── Estado: dados dos formulários de pedido ──────────────────────────── */
+  // Dados dos dropdowns do formulário de pedido: modalidades, anos, professores e alunos
   const [modalidadesPedido, setModalidadesPedido] = useState([]);
   const [anosLetivosPedido, setAnosLetivosPedido] = useState([]);
   const [professoresPedido, setProfessoresPedido] = useState([]);
@@ -424,9 +328,10 @@ export default function MinhaAgendaProfessor({
   });
   const [minhasModalidades, setMinhasModalidades] = useState([]);
 
-  /* ─── Constantes da grelha ──────────────────────────────────────────────── */
+  // Constantes da grelha semanal
 
-  /** Horas da grelha semanal (08:00 – 21:00) */
+  // Horas exibidas na grelha semanal (08:00–21:00) e abreviaturas dos dias
+
   const horas = [
     "08:00",
     "09:00",
@@ -444,12 +349,9 @@ export default function MinhaAgendaProfessor({
     "21:00",
   ];
 
-  /** Abreviaturas dos dias da semana para os cabeçalhos da grelha */
   const dias = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
 
-  /* ─── Memos derivados ───────────────────────────────────────────────────── */
-
-  /** Pedidos que ainda aguardam resposta do professor */
+  // Pedidos que aguardam resposta do professor
   const pedidosParaResponder = useMemo(() => {
     return pedidosPendentesProf.filter((p) => {
       const estLow = String(p.estado || "").toLowerCase();
@@ -457,7 +359,7 @@ export default function MinhaAgendaProfessor({
     });
   }, [pedidosPendentesProf]);
 
-  /** Determina se o utilizador atual tem perfil de Encarregado de Educação */
+  // Booleano: o utilizador atual tem perfil de Encarregado de Educação
   const isPerfilEE = useMemo(() => {
     const perfil = String(utilizador?.perfil || "").toLowerCase();
     if (perfil.includes("ee") || perfil.includes("encarregado")) return true;
@@ -474,9 +376,8 @@ export default function MinhaAgendaProfessor({
     });
   }, [utilizador]);
 
-  /* ─── Funções de carregamento de dados ─────────────────────────────────── */
+  // Carrega os pedidos de coaching pendentes de resposta do professor
 
-  /** Carrega os pedidos de coaching pendentes de resposta pelo professor */
   const carregarPedidosPendentesProf = async () => {
     if (utilizador?.perfil !== "Professor") return;
     try {
@@ -493,29 +394,24 @@ export default function MinhaAgendaProfessor({
     carregarPedidosPendentesProf();
   }, [utilizador]);
 
-  /** Flag: a agenda atual é do EE (seja por prop ou por perfil) */
+  // Flags derivadas: modo EE ativo e permissão para pedir aulas
+
   const isAgendaEE = modo === "ee" || isPerfilEE;
 
-  /** Flag: o utilizador atual pode pedir aulas (apenas EE) */
   const podePedirAula = isAgendaEE;
 
-  /**
-   * Exibe um toast global temporário.
-   * @param {string} texto - Mensagem a apresentar
-   * @param {"sucesso"|"erro"} tipo - Tipo visual do toast
-   */
+  // Exibe um toast global temporário (desaparece após 5 s)
   function mostrarToast(texto, tipo = "sucesso") {
     setGlobalToast({ texto, tipo });
     setTimeout(() => setGlobalToast(null), 5000);
   }
 
-  /* ─── Efeitos de inicialização ──────────────────────────────────────────── */
-
+  // Define o título da página ao montar
   useEffect(() => {
     document.title = "Coaching | Viva D'arte";
   }, []);
 
-  /** Lê o utilizador do localStorage ao montar */
+  // Recupera o utilizador do localStorage e popula o estado de sessão
   useEffect(() => {
     const userRaw = localStorage.getItem("viva_user");
     if (!userRaw) {
@@ -530,7 +426,7 @@ export default function MinhaAgendaProfessor({
     }
   }, []);
 
-  /** Carrega as modalidades do professor autenticado */
+  // Carrega as modalidades atribuídas ao professor autenticado
   useEffect(() => {
     if (!utilizador || isAgendaEE) return;
     let active = true;
@@ -551,9 +447,9 @@ export default function MinhaAgendaProfessor({
     };
   }, [utilizador, isAgendaEE]);
 
-  /** Carrega modalidades e anos letivos para o formulário de pedido */
   useEffect(() => {
     if (!utilizador) return;
+    // Carrega em paralelo modalidades e anos letivos para os dropdowns do pedido
     let active = true;
     async function carregarDadosPedido() {
       try {
@@ -584,9 +480,9 @@ export default function MinhaAgendaProfessor({
     };
   }, [utilizador]);
 
-  /** Carrega os alunos associados ao EE autenticado */
   useEffect(() => {
     if (!utilizador) return;
+    // Carrega a lista de alunos do EE para seleção no formulário de pedido
     let active = true;
     async function carregarAlunosPedido() {
       setIsLoadingAlunosPedido(true);
@@ -616,9 +512,9 @@ export default function MinhaAgendaProfessor({
     };
   }, [utilizador]);
 
-  /** Carrega as disponibilidades do professor (apenas para o perfil professor) */
   useEffect(() => {
     if (!utilizador) return;
+    // Carrega as disponibilidades horárias do professor; limpa o estado para o perfil EE
     let isMounted = true;
     async function carregarDisponibilidades() {
       if (isAgendaEE) {
@@ -647,13 +543,8 @@ export default function MinhaAgendaProfessor({
     };
   }, [isAgendaEE, utilizador]);
 
-  /* ─── Carregamento da agenda semanal ───────────────────────────────────── */
+  // Carrega a agenda da semana: pedidos do EE ou agenda+pendentes do professor
 
-  /**
-   * Carrega os dados da agenda para a semana visível.
-   * Para o EE: carrega os seus pedidos.
-   * Para o professor: carrega a agenda + pedidos pendentes.
-   */
   async function carregarAgendaSemana() {
     setIsLoadingAgenda(true);
     setErroAgenda("");
@@ -682,12 +573,8 @@ export default function MinhaAgendaProfessor({
     carregarAgendaSemana();
   }, [utilizador, weekStart, isAgendaEE]);
 
-  /* ─── Memos da grelha e estatísticas ───────────────────────────────────── */
+  // Resumo financeiro mensal: aulas realizadas e valor total a receber
 
-  /**
-   * Resumo financeiro mensal do professor:
-   * aulas dadas no mês selecionado + valor total a receber.
-   */
   const resumoMensal = useMemo(() => {
     const aulasDadasNoPeriodo = agenda.filter((row) => {
       if (row.estado !== "Realizado" && row.estado !== "Concluido")
@@ -712,10 +599,7 @@ export default function MinhaAgendaProfessor({
     };
   }, [agenda, selectedMonth, selectedAnoLetivoId]);
 
-  /**
-   * Mapa "DIA|HORA" → lista de eventos (disponibilidades, aulas, pedidos)
-   * para renderização na grelha semanal.
-   */
+  // Índice "DIA|HORA" → eventos (disponibilidades, aulas, pedidos) para renderização na grelha
   const agendaPorDiaHora = useMemo(() => {
     const map = new Map();
     const addEvent = (key, event) => {
@@ -847,7 +731,8 @@ export default function MinhaAgendaProfessor({
     weekStart,
   ]);
 
-  /** Aulas que já terminaram e ainda precisam de validação pelo professor */
+  // Aulas que já terminaram e aguardam validação de realização
+
   const aulasParaValidar = useMemo(() => {
     return agenda.filter(
       (a) =>
@@ -856,7 +741,8 @@ export default function MinhaAgendaProfessor({
     );
   }, [agenda]);
 
-  /** Aulas futuras que ainda não foram canceladas nem realizadas */
+  // Aulas futuras agendadas (exclui canceladas, rejeitadas e realizadas)
+
   const proximasAulas = useMemo(() => {
     const agora = new Date();
     return agenda.filter((a) => {
@@ -892,7 +778,8 @@ export default function MinhaAgendaProfessor({
     });
   }, [agenda]);
 
-  /** Pedidos aguardando decisão do professor ou da coordenação */
+  // Pedidos pendentes de decisão do professor ou da coordenação
+
   const aulasAguardandoCoordenacao = useMemo(() => {
     return pedidosPendentesProf
       .filter(
@@ -911,26 +798,21 @@ export default function MinhaAgendaProfessor({
       }));
   }, [pedidosPendentesProf]);
 
-  /* ─── Navegação semanal ─────────────────────────────────────────────────── */
-
+  // Funções de navegação semanal e label do intervalo visível
   const irParaHoje = () => setWeekStart(getMonday(new Date()));
   const irParaSemanaAnterior = () => setWeekStart((d) => addDays(d, -7));
   const irParaSemanaSeguinte = () => setWeekStart((d) => addDays(d, 7));
 
-  /** Label "DD/MM — DD/MM" do intervalo da semana visível */
+  // Label "DD/MM — DD/MM" do intervalo da semana visível
+
   const semanaLabel = useMemo(() => {
     const inicio = weekStart;
     const fim = addDays(weekStart, 6);
     return `${formatDM(inicio)} — ${formatDM(fim)}`;
   }, [weekStart]);
 
-  /* ─── Handlers de pedidos e disponibilidades ────────────────────────────── */
+  // Aceita ou rejeita um pedido de coaching como professor
 
-  /**
-   * Aceita ou rejeita um pedido de coaching como professor.
-   * @param {number} idPedido
-   * @param {boolean} aceitar
-   */
   const handleResponderPedido = async (idPedido, aceitar) => {
     try {
       await apiAuthFetch(
@@ -953,7 +835,8 @@ export default function MinhaAgendaProfessor({
     }
   };
 
-  /** Guarda uma nova disponibilidade horária do professor */
+  // Guarda uma nova disponibilidade horária do professor na API
+
   const guardarDisponibilidade = async () => {
     setErroDispo("");
     setIsSavingDispo(true);
@@ -981,10 +864,7 @@ export default function MinhaAgendaProfessor({
     }
   };
 
-  /**
-   * Remove uma disponibilidade pelo seu ID.
-   * @param {number} id
-   */
+  // Remove uma disponibilidade pelo seu ID
   const removerDisponibilidade = async (id) => {
     if (!id) return;
     setErroDispo("");
@@ -1001,11 +881,7 @@ export default function MinhaAgendaProfessor({
     }
   };
 
-  /**
-   * Valida a realização de uma aula e regista o método de pagamento.
-   * @param {object} row - Objeto da aula
-   * @param {string} metodoPagamento
-   */
+  // Valida a realização de uma aula e regista o método de pagamento na API
   const validarRealizacao = async (row, metodoPagamento) => {
     if (!row?.id_coaching) return;
     try {
@@ -1035,11 +911,7 @@ export default function MinhaAgendaProfessor({
     }
   };
 
-  /**
-   * Pesquisa um aluno externo pelo email do seu encarregado de educação
-   * e adiciona-o à lista de participantes do pedido.
-   * @param {Event} e
-   */
+  // Pesquisa um aluno externo pelo email do EE e adiciona-o aos participantes do pedido
   const buscarAlunoPorEmail = async (e) => {
     if (e) e.preventDefault();
     if (!emailBusca.trim()) return;
@@ -1087,10 +959,7 @@ export default function MinhaAgendaProfessor({
     }
   };
 
-  /**
-   * Remove um aluno externo (convidado por email) da lista de participantes.
-   * @param {number} id
-   */
+  // Remove um aluno externo (convidado por email) da lista de participantes
   const removerAlunoExterno = (id) => {
     setAlunosExternos(alunosExternos.filter((a) => a.id_aluno !== id));
     setPedidoForm((prev) => ({
@@ -1099,11 +968,8 @@ export default function MinhaAgendaProfessor({
     }));
   };
 
-  /* ─── Handlers do modal de preço / pedido ───────────────────────────────── */
+  // Obtém o preço estimado da aula com os parâmetros atuais do formulário
 
-  /**
-   * Carrega o preço estimado da aula com os parâmetros atuais do formulário.
-   */
   const carregarPrecoEstimado = async ({
     dataAula,
     horaInicio,
@@ -1145,10 +1011,7 @@ export default function MinhaAgendaProfessor({
     }
   };
 
-  /**
-   * Abre o modal de pedido e carrega o preço estimado para o slot clicado.
-   * @param {{ dataAulaYmd: string, horaInicio: string }} params
-   */
+  // Abre o modal de pedido e carrega o preço estimado para o slot clicado
   const verPrecoEstimado = async ({ dataAulaYmd, horaInicio }) => {
     if (!podePedirAula) return;
     setPedidoErro("");
@@ -1187,7 +1050,8 @@ export default function MinhaAgendaProfessor({
     }
   };
 
-  /** Atualiza o formato da aula e recarrega o preço estimado */
+  // Atualiza o formato da aula no estado e recarrega o preço estimado
+
   const atualizarFormatoAula = (formatoAula) => {
     setPrecoInfo((p) => ({ ...p, formatoAula }));
     if (precoInfo.dataAula && precoInfo.horaInicio) {
@@ -1200,7 +1064,8 @@ export default function MinhaAgendaProfessor({
     }
   };
 
-  /** Atualiza a duração da aula e recarrega o preço estimado */
+  // Atualiza a duração da aula no estado e recarrega o preço estimado
+
   const atualizarDuracaoAula = (duracaoMinutos) => {
     const dur = Number(duracaoMinutos);
     setPrecoInfo((p) => ({ ...p, duracaoMinutos: dur }));
@@ -1214,10 +1079,7 @@ export default function MinhaAgendaProfessor({
     }
   };
 
-  /**
-   * Carrega a lista de professores disponíveis para uma modalidade.
-   * @param {string|number} idModalidade
-   */
+  // Carrega a lista de professores disponíveis para a modalidade selecionada
   const carregarProfessoresPorModalidade = async (idModalidade) => {
     if (!idModalidade) {
       setProfessoresPedido([]);
@@ -1242,7 +1104,8 @@ export default function MinhaAgendaProfessor({
     }
   };
 
-  /** Submete o pedido de coaching direto pelo EE */
+  // Valida e submete o pedido de coaching direto pelo EE à API
+
   const submeterPedidoCoachingDireto = async () => {
     if (!podePedirAula) {
       setPedidoErro("Apenas o encarregado de educação pode pedir aulas.");
@@ -1293,7 +1156,8 @@ export default function MinhaAgendaProfessor({
     }
   };
 
-  /** Faz logout do utilizador e redireciona para a landing */
+  // Termina a sessão: limpa o localStorage e redireciona para a landing
+
   const handleLogout = () => {
     localStorage.removeItem("viva_user");
     localStorage.removeItem("viva_token");
@@ -1302,7 +1166,7 @@ export default function MinhaAgendaProfessor({
     window.location.reload();
   };
 
-  /* ─── Render ────────────────────────────────────────────────────────────── */
+  // Render principal
   return (
     <div className="dashboard-container">
       {/* Toast global de feedback (sucesso / erro) */}
@@ -1319,9 +1183,7 @@ export default function MinhaAgendaProfessor({
         </div>
       )}
 
-      {/* ================================================================
-          NAVBAR INTERNA
-          ================================================================ */}
+      {/* Navbar autenticada com links contextuais e hamburger para mobile */}
       <nav className="navbar interna" style={{ position: "relative" }}>
         {/* Marca — visível em desktop, oculta em mobile via CSS */}
         <div className="nav-brand" onClick={irParaLanding}>
@@ -1389,7 +1251,7 @@ export default function MinhaAgendaProfessor({
           </li>
         </ul>
 
-        {/* Perfil — inline style garante posição à direita em mobile independente do CSS */}
+        {/* Perfil */}
         <div className="nav-actions nav-actions--interna">
           <div className="user-profile">
             <span className="welcome-text">
@@ -1414,10 +1276,7 @@ export default function MinhaAgendaProfessor({
         </button>
       </nav>
 
-      {/* ================================================================
-          DASHBOARD PRINCIPAL
-          Grelha semanal (esquerda) + sidebar de informação (direita).
-          ================================================================ */}
+      {/* Dashboard: grelha semanal à esquerda e sidebar de resumo/gestão à direita */}
       <div className="dashboard-wrapper" id="agenda">
         {/* ── Calendário semanal ── */}
         <main className="calendar-container">
@@ -1447,11 +1306,7 @@ export default function MinhaAgendaProfessor({
             </button>
           </div>
 
-          {/* Em mobile, este wrapper faz scroll horizontal em conjunto
-              para o cabeçalho e a grelha scrollarem juntos */}
           <div className="calendar-mobile-scroll">
-            {/* Cabeçalho fixo com nomes e datas dos dias — fora da área scrollável
-              para ficar sticky em desktop. Em mobile é encapsulado no wrapper. */}
             <div className="calendar-days-sticky">
               <div className="time-corner"></div>
               {dias.map((dia, idx) => {
@@ -1511,7 +1366,6 @@ export default function MinhaAgendaProfessor({
                                   className={`event-block ${classeModalidade} disponibilidade-block`}
                                   onClick={(e) => e.stopPropagation()}
                                   title={`Disciplinas disponíveis: ${listaDisciplinas}`}
-                                  /* cursor: help migrado para CSS via .disponibilidade-block */
                                 >
                                   <div className="event-info">
                                     <span className="event-time">
@@ -1630,10 +1484,9 @@ export default function MinhaAgendaProfessor({
           {/* end calendar-mobile-scroll */}
         </main>
 
-        {/* ================================================================
+        {/* 
             MODAL DE PEDIDO DE COACHING (EE)
-            Permite ao EE escolher modalidade, professor, duração e alunos.
-            ================================================================ */}
+            Permite ao EE escolher modalidade, professor, duração e alunos.*/}
         {isPrecoModalOpen && (
           <div
             className="modal-overlay"
@@ -1938,11 +1791,10 @@ export default function MinhaAgendaProfessor({
           </div>
         )}
 
-        {/* ================================================================
+        {/*
             SIDEBAR
             Professor: painel de atividade + disponibilidades.
-            EE: informação + lista dos seus pedidos.
-            ================================================================ */}
+            EE: informação + lista dos seus pedidos. */}
         <aside className="sidebar">
           {/* Vista do professor */}
           {!isAgendaEE && (
@@ -2118,9 +1970,7 @@ export default function MinhaAgendaProfessor({
         </aside>
       </div>
 
-      {/* ================================================================
-          MODAL DE GESTÃO DE DISPONIBILIDADES (professor)
-          ================================================================ */}
+      {/* MODAL DE GESTÃO DE DISPONIBILIDADES (professor) */}
       {!isAgendaEE && isDispoModalOpen && (
         <div
           className="modal-overlay"
@@ -2250,10 +2100,7 @@ export default function MinhaAgendaProfessor({
         </div>
       )}
 
-      {/* ================================================================
-          PAINEL DE GESTÃO DO PROFESSOR
-          Pedidos, validações, próximas marcações e resumo financeiro.
-          ================================================================ */}
+      {/* PAINEL DE GESTÃO DO PROFESSO : Pedidos, validações, próximas marcações e resumo financeiro.*/}
       {isProfMenuOpen && (
         <div className="modal-overlay" onClick={() => setIsProfMenuOpen(false)}>
           <div
@@ -2700,9 +2547,7 @@ export default function MinhaAgendaProfessor({
         </div>
       )}
 
-      {/* ================================================================
-          FOOTER
-          ================================================================ */}
+      {/* FOOTER*/}
       <footer className="main-footer">
         <div className="footer-container">
           <div className="footer-column">
@@ -2807,9 +2652,7 @@ export default function MinhaAgendaProfessor({
         </div>
       </footer>
 
-      {/* ================================================================
-          MODAL DE CONFIRMAÇÃO DE EXECUÇÃO E PAGAMENTO
-          ================================================================ */}
+      {/* MODAL DE CONFIRMAÇÃO DE EXECUÇÃO E PAGAMENTO*/}
       {modalConfirmarAula.isOpen && (
         <div
           className="modal-overlay modal-overlay-high-z"
@@ -2831,7 +2674,6 @@ export default function MinhaAgendaProfessor({
                 Confirma que a aula foi dada e indica o método de pagamento.
               </p>
             </div>
-            {/* gridTemplateColumns: "1fr" migrado para .modern-form-grid--single no CSS */}
             <div className="modern-form-grid modern-form-grid--single">
               <div className="form-group">
                 <label>Método de Pagamento *</label>
@@ -2852,7 +2694,6 @@ export default function MinhaAgendaProfessor({
                 </select>
               </div>
             </div>
-            {/* marginTop: "20px" migrado para .modal-actions-footer--mt no CSS */}
             <div className="modal-actions-footer modal-actions-footer--mt">
               <button
                 className="btn-text"
@@ -2882,10 +2723,7 @@ export default function MinhaAgendaProfessor({
         </div>
       )}
 
-      {/* ================================================================
-          MODAL DE ALERTA DO SISTEMA (alertaExcl)
-          Todos os estilos inline migrados para .modal-alerta-* no CSS.
-          ================================================================ */}
+      {/* MODAL DE ALERTA DO SISTEMA (alertaExcl)*/}
       {alertaExcl.isOpen && (
         <div className="modal-alerta-overlay">
           <div className="modal-alerta-box">

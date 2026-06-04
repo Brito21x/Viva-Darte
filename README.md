@@ -372,8 +372,6 @@ NODE_ENV=development   # Definir como "production" em deployment
 VITE_API_URL=https://api-vivadarte.onrender.com
 ```
 
-> **Aviso de segurança:** Nunca faças commit de ficheiros `.env` com credenciais reais. O `.gitignore` do repositório exclui-os por defeito. Se alguma chave for exposta inadvertidamente, deve ser rodada de imediato.
-
 ---
 
 ## 👥 Perfis de Utilizador
@@ -420,7 +418,7 @@ A cobertura inclui: `authController`, `coachingController`, `escolaController`, 
 
 ## 👨‍💻 Autor
 
-**Brito** · Instituto Politécnico do Cávado e do Ave  
+**Edgar Brito** · Instituto Politécnico do Cávado e do Ave  
 Engenharia de Sistemas Informáticos · 2.º Ano
 
 [![GitHub](https://img.shields.io/badge/GitHub-Brito21x-181717?style=flat-square&logo=github&logoColor=white)](https://github.com/Brito21x)

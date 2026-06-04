@@ -431,6 +431,6 @@ Engenharia de Sistemas Informáticos · 2.º Ano
 
 <div align="center">
 
-Desenvolvido com dedicação no IPCA · **Viva D'arte** · 2025
+Desenvolvido com dedicação · **Viva D'arte** · 2026
 
 </div>

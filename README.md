@@ -1,7 +1,5 @@
 <div align="center">
 
-<img src="https://raw.githubusercontent.com/Brito21x/vivadarte/main/frontend/src/assets/logo.png" alt="Viva D'arte" width="140" />
-
 # Viva D'arte
 
 ### Plataforma de Gestão para Escolas de Dança

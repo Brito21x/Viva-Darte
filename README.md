@@ -1,42 +1,44 @@
 <div align="center">
 
-<img src="https://raw.githubusercontent.com/Brito21x/vivadarte/main/frontend/src/assets/logo.png" alt="Viva D'arte Logo" width="130" />
+<img src="https://raw.githubusercontent.com/Brito21x/vivadarte/main/frontend/src/assets/logo.png" alt="Viva D'arte" width="140" />
 
 # Viva D'arte
 
-### Plataforma de Gestão de Escola de Dança
+### Plataforma de Gestão para Escolas de Dança
 
-Aplicação web full-stack desenvolvida para digitalizar e centralizar a gestão de uma escola de dança —  
-comunicação entre coordenação, professores e encarregados de educação numa única plataforma.
+> Aplicação web full-stack, em produção, que centraliza toda a operação de uma escola de dança — ligando coordenação, professores e encarregados de educação numa plataforma única, orientada a perfis e protegida de ponta a ponta.
 
-[![Frontend](https://img.shields.io/badge/Frontend-Railway-7B2FBE?style=flat-square&logo=railway&logoColor=white)](https://vivadarte-production.up.railway.app)
-[![API](https://img.shields.io/badge/API-Render-46E3B7?style=flat-square&logo=render&logoColor=black)](https://api-vivadarte.onrender.com/api/health)
-[![DB](https://img.shields.io/badge/Database-AWS%20RDS%20MySQL-FF9900?style=flat-square&logo=amazonaws&logoColor=white)](https://aws.amazon.com/rds/)
-[![React](https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=black)](https://react.dev)
+[![Em Produção](https://img.shields.io/badge/Estado-Em_Produção-success?style=flat-square&logo=railway&logoColor=white)](https://vivadarte-production.up.railway.app)
+[![API](https://img.shields.io/badge/API-Operacional-46E3B7?style=flat-square&logo=render&logoColor=black)](https://api-vivadarte.onrender.com/api/health)
+[![Base de Dados](https://img.shields.io/badge/AWS_RDS-MySQL_8-FF9900?style=flat-square&logo=amazonaws&logoColor=white)](https://aws.amazon.com/rds/)
+[![React](https://img.shields.io/badge/React-19.2-61DAFB?style=flat-square&logo=react&logoColor=black)](https://react.dev)
 [![Node](https://img.shields.io/badge/Node.js-18+-339933?style=flat-square&logo=nodedotjs&logoColor=white)](https://nodejs.org)
-[![Vitest](https://img.shields.io/badge/Testes-Vitest-6E9F18?style=flat-square&logo=vitest&logoColor=white)](https://vitest.dev)
+[![Testes](https://img.shields.io/badge/Testes-Vitest-6E9F18?style=flat-square&logo=vitest&logoColor=white)](https://vitest.dev)
+[![Docs](https://img.shields.io/badge/Documentação-JSDoc-orange?style=flat-square)](https://github.com/Brito21x/vivadarte)
 
 ---
 
-🌐 **Aplicação:** [vivadarte-production.up.railway.app](https://vivadarte-production.up.railway.app)  
-🔧 **API Health:** [api-vivadarte.onrender.com/api/health](https://api-vivadarte.onrender.com/api/health)  
-👤 **Painel Admin:** [vivadarte-production.up.railway.app/admin](https://vivadarte-production.up.railway.app/admin)
+| 🌐 Aplicação | 🔧 Estado da API | 👤 Painel de Coordenação |
+|:---:|:---:|:---:|
+| [vivadarte-production.up.railway.app](https://vivadarte-production.up.railway.app) | [/api/health](https://api-vivadarte.onrender.com/api/health) | [/admin](https://vivadarte-production.up.railway.app/admin) |
 
 </div>
 
 ---
 
-## 📋 Índice
+## Índice
 
 - [Contexto Académico](#-contexto-académico)
-- [Sobre o Projeto](#-sobre-o-projeto)
+- [Visão Geral](#-visão-geral)
+- [O Problema e a Solução](#-o-problema-e-a-solução)
 - [Funcionalidades](#-funcionalidades)
-- [Tecnologias](#-tecnologias)
-- [Arquitetura](#-arquitetura)
+- [Stack Tecnológica](#-stack-tecnológica)
+- [Arquitetura do Sistema](#-arquitetura-do-sistema)
+- [Decisões de Engenharia](#-decisões-de-engenharia)
 - [Estrutura do Projeto](#-estrutura-do-projeto)
-- [API — Endpoints](#-api--endpoints)
+- [Referência da API](#-referência-da-api)
 - [Testes](#-testes)
-- [Instalação e Configuração](#-instalação-e-configuração)
+- [Começar](#-começar)
 - [Variáveis de Ambiente](#-variáveis-de-ambiente)
 - [Perfis de Utilizador](#-perfis-de-utilizador)
 - [Segurança](#-segurança)
@@ -47,130 +49,161 @@ comunicação entre coordenação, professores e encarregados de educação numa
 
 ## 🎓 Contexto Académico
 
-| Campo | Detalhe |
+| | |
 |---|---|
 | **Instituição** | Instituto Politécnico do Cávado e do Ave (IPCA) |
 | **Curso** | Engenharia de Sistemas Informáticos |
 | **Ano** | 2.º Ano |
-| **Tipo** | Projeto de Desenvolvimento de Software |
+| **Tipo de Projeto** | Desenvolvimento de Software Full-Stack |
 
 ---
 
-## 🎯 Sobre o Projeto
+## 🎯 Visão Geral
 
-A **Viva D'arte** é uma plataforma digital desenvolvida para responder a necessidades reais identificadas na gestão de escolas de dança: comunicação dispersa, agendamento manual de aulas, falta de transparência financeira e ausência de um canal centralizado entre os vários intervenientes.
+A **Viva D'arte** é uma plataforma digital que dá resposta a um desafio operacional concreto das escolas de artes performativas: a gestão dispersa, manual e pouco transparente do dia a dia letivo.
 
-A solução implementa três perfis distintos de utilizador com fluxos de trabalho próprios, comunicando através de uma API REST protegida por JWT, com dados persistidos numa base de dados MySQL gerida na cloud AWS.
+A solução materializa um ecossistema digital coeso onde cada interveniente — coordenação, professor e encarregado de educação — interage através de uma interface desenhada à medida do seu papel, sustentada por uma API REST segura. O sistema impõe controlo de acesso baseado em perfis, mantém um registo de auditoria completo das operações sensíveis e distribui-se de forma resiliente por três alvos de implementação: uma CDN estática na Railway, um runtime Node.js na Render e uma base de dados relacional gerida na AWS RDS.
+
+O projeto foi concebido, desenhado e implementado de ponta a ponta como um esforço individual, abrangendo análise de requisitos, modelação de dados, desenho da API, engenharia de frontend, testes automatizados e implementação na cloud.
+
+---
+
+## 💡 O Problema e a Solução
+
+As escolas de dança operam frequentemente com ferramentas fragmentadas — mensagens informais, folhas de cálculo dispersas e registos em papel. Isto traduz-se em três problemas recorrentes:
+
+| Desafio | Resposta da Plataforma |
+|---|---|
+| **Comunicação dispersa** entre coordenação, professores e famílias | Canal único e centralizado com fluxos de trabalho dedicados a cada perfil |
+| **Agendamento manual** de aulas e sessões privadas | Grelha semanal interativa com gestão de disponibilidades e pedidos em tempo real |
+| **Opacidade financeira** no acompanhamento de pagamentos | Motor de preços configurável, validação de pagamentos e histórico financeiro auditável |
+
+O resultado é uma redução significativa do esforço administrativo e um aumento da transparência para todos os intervenientes.
 
 ---
 
 ## ✨ Funcionalidades
 
-### 👨‍💼 Coordenação / Admin
-- Dashboard com estatísticas em tempo real (utilizadores, pedidos, aulas, receita)
-- Gestão completa de utilizadores — criação, aprovação, revogação e eliminação
-- Gestão de horários de aulas regulares por modalidade, sala e dia da semana
-- Aprovação e rejeição de pedidos de coaching com atribuição de professor, sala e valor final
-- Agendamento direto de sessões de coaching sem passar pelo fluxo de pedido
-- Tabela de preços configurável por modalidade e formato de aula
-- Histórico financeiro completo com filtragem por período
-- Log de auditoria de todas as ações sensíveis do sistema
-- Gestão de inventário de figurinos
+### 👨‍💼 Coordenação
+- Painel operacional com indicadores em tempo real — utilizadores, pedidos, aulas e receita
+- Gestão completa do ciclo de vida do utilizador — registo, aprovação, suspensão e remoção
+- Motor de preços configurável por modalidade e formato de aula (Solo, Dueto, Trio, Ensemble)
+- Fluxo de aprovação de coaching em várias etapas: pedido → análise do professor → aprovação da coordenação → agendamento
+- Agendamento direto de sessões, ignorando o fluxo de pedido quando necessário
+- Livro financeiro completo com filtragem por período e detalhe por aula
+- Registo de auditoria imutável de todas as ações sensíveis, com autor, data e resultado
+- Gestão de inventário de figurinos integrada na plataforma
 
 ### 👩‍🏫 Professor
-- Grelha semanal interativa com disponibilidades e aulas agendadas
-- Gestão de disponibilidades horárias semanais (criação e remoção)
-- Receção e resposta a pedidos de coaching (aceitar / rejeitar)
-- Validação de realização de aulas com registo de método de pagamento
-- Resumo financeiro mensal filtrado por mês e ano letivo
-- Painel de gestão de pedidos pendentes e próximas aulas
+- Grelha semanal interativa com disponibilidades e sessões de coaching confirmadas
+- Controlo total sobre as janelas de disponibilidade semanais — criar e remover horários autonomamente
+- Resposta a pedidos de coaching em dois passos: aceitar (encaminhado para a coordenação) ou rejeitar com justificação
+- Validação da realização de aulas com registo do método de pagamento por sessão
+- Resumo de rendimentos mensal, filtrável por mês e ano letivo
+- Painéis laterais de acesso rápido a pedidos pendentes e próximas aulas
 
 ### 👨‍👩‍👧 Encarregado de Educação
-- Consulta da agenda semanal de aulas regulares dos educandos
-- Pedido de sessões de coaching com seleção de professor, modalidade, formato e duração
-- Acompanhamento do estado dos pedidos em tempo real
-- Inscrição e remoção de educandos em modalidades
-- Pesquisa de outros EE por email para pedidos em grupo (Dueto, Trio, Ensemble)
-- Marketplace de figurinos — compra e empréstimo com calendário de disponibilidade
+- Vista da agenda semanal dos educandos, filtrável por aluno e modalidade
+- Inscrição e cancelamento de educandos em modalidades, de forma autónoma
+- Submissão de pedidos de coaching com controlo total sobre professor, modalidade, formato e duração
+- Acompanhamento do estado dos pedidos em tempo real ao longo de todo o fluxo de aprovação
+- Marcação de sessões com vários participantes através de pesquisa por email (Dueto, Trio, Ensemble)
+- Marketplace de figurinos integrado, para compra e empréstimo dentro da comunidade escolar
 
 ### 🛍️ Marketplace de Figurinos
-- Listagem com carrossel de imagens, upload múltiplo e pré-visualização
-- Filtros por tipo de transação, condição e ordenação
-- Sistema de pedidos de empréstimo com gestão de reservas e calendário de datas ocupadas
-- Ciclo completo de gestão — pedido → aprovação → pagamento → devolução
+- Listagem peer-to-peer com carrossel de múltiplas imagens e carregamento de fotos
+- Filtragem avançada por tipo de transação, condição e recência
+- Calendário de disponibilidade para pedidos de empréstimo com deteção automática de conflitos de datas
+- Ciclo de empréstimo completo: pedido → aprovação → confirmação de pagamento → registo de devolução
 
 ---
 
-## 🛠️ Tecnologias
+## 🛠️ Stack Tecnológica
 
 ### Frontend
-| Tecnologia | Versão | Utilização |
+| Tecnologia | Versão | Função |
 |---|---|---|
-| React | 19.2.5 | Framework principal (SPA) |
-| Vite | 8.0.10 | Build tool e dev server |
+| React | 19.2.5 | Framework de UI — SPA orientada a componentes |
+| Vite | 8.0.10 | Ferramenta de build e servidor de desenvolvimento com HMR |
 | React Router DOM | 7.15.0 | Navegação client-side |
-| Lucide React | 1.17.0 | Biblioteca de ícones |
-| React DatePicker | 9.1.0 | Seleção de datas |
-| React Google reCAPTCHA | 3.1.0 | Proteção contra bots |
-| date-fns | 4.3.0 | Manipulação de datas |
-| ESLint | 10.2.1 | Linting de código |
+| Lucide React | 1.17.0 | Sistema de ícones consistente |
+| React DatePicker | 9.1.0 | Seleção de datas acessível |
+| React Google reCAPTCHA | 3.1.0 | Mitigação de bots nos formulários de autenticação |
+| date-fns | 4.3.0 | Manipulação imutável de datas |
+| ESLint | 10.2.1 | Análise estática e uniformização de código |
 
 ### Backend
-| Tecnologia | Versão | Utilização |
+| Tecnologia | Versão | Função |
 |---|---|---|
-| Node.js | 18+ | Runtime JavaScript |
-| Express | 4.18.2 | Framework HTTP |
-| mssql / MySQL2 | — | Driver da base de dados |
-| jsonwebtoken | 9.0.3 | Autenticação JWT |
-| bcryptjs | 3.0.3 | Hash de passwords |
-| multer | 2.1.1 | Upload de ficheiros (imagens) |
-| dotenv | 16.4.5 | Variáveis de ambiente |
-| cors | 2.8.6 | Política de origens cruzadas |
-| nodemon | 3.1.0 | Hot reload em desenvolvimento |
-| Vitest | 4.1.5 | Testes unitários e de integração |
-| Supertest | 7.2.2 | Testes de endpoints HTTP |
-| JSDoc | 4.0.5 | Geração de documentação |
+| Node.js | 18+ | Runtime JavaScript do lado do servidor |
+| Express | 4.18.2 | Framework HTTP e encaminhamento |
+| MySQL2 / mssql | — | Driver da base de dados relacional |
+| jsonwebtoken | 9.0.3 | Autenticação stateless por JWT |
+| bcryptjs | 3.0.3 | Hashing adaptativo de palavras-passe |
+| multer | 2.1.1 | Tratamento de upload de ficheiros (multipart) |
+| dotenv | 16.4.5 | Configuração de ambiente (twelve-factor) |
+| cors | 2.8.6 | Imposição de lista branca de origens |
+| nodemon | 3.1.0 | Reinício automático em desenvolvimento |
+| Vitest | 4.1.5 | Runner de testes unitários e de integração |
+| Supertest | 7.2.2 | Biblioteca de asserções sobre endpoints HTTP |
+| JSDoc | 4.0.5 | Geração automática de documentação da API |
 
 ### Infraestrutura
-| Serviço | Plano | Utilização |
+| Serviço | Plano | Papel |
 |---|---|---|
-| Railway | Hobby | Hosting do frontend (build estático) |
-| Render | Free | Hosting da API REST (Node.js) |
-| AWS RDS | Free Tier | Base de dados MySQL 8 gerida |
+| Railway | Hobby | Entrega do frontend estático via CDN global |
+| Render | Free | Runtime da API Node.js com deployment zero-config |
+| AWS RDS | Free Tier | MySQL 8 gerido, com backups automáticos |
 
 ---
 
-## 🏗️ Arquitetura
+## 🏗️ Arquitetura do Sistema
 
 ```
-┌──────────────────────────────────────────────────────────┐
-│                     CLIENTE (Browser)                     │
-│           React 19 SPA — Railway CDN                      │
-│                                                           │
-│  Landing  │  Auth  │  Agenda  │  Coaching  │  Figurinos   │
-│                    │  Admin Dashboard                     │
-└───────────────────────────┬──────────────────────────────┘
-                            │ HTTPS + Bearer JWT
-┌───────────────────────────▼──────────────────────────────┐
-│                   API REST — Render                       │
-│              Node.js 18 + Express 4                       │
-│                                                           │
-│  /api/auth       /api/escola      /api/coaching           │
-│  /api/inventario /api/faturacao   /api/auditoria          │
-│  /api/agenda     /api/health                              │
-│                                                           │
-│  ┌─────────────────────────────────────────────────┐     │
-│  │  Middlewares: JWT Auth │ CORS │ Error Handler    │     │
-│  └─────────────────────────────────────────────────┘     │
-└───────────────────────────┬──────────────────────────────┘
-                            │ MySQL2 / mssql
-┌───────────────────────────▼──────────────────────────────┐
-│               Base de Dados — AWS RDS                     │
-│                     MySQL 8                               │
-└──────────────────────────────────────────────────────────┘
+╔══════════════════════════════════════════════════════════╗
+║              CAMADA DE CLIENTE — Browser                 ║
+║               React 19 SPA · Railway CDN                 ║
+║                                                          ║
+║  Landing · Auth · Agenda · Coaching · Marketplace        ║
+║                Painel de Coordenação                     ║
+╚═══════════════════════╤══════════════════════════════════╝
+                        │  HTTPS · JWT (Bearer)
+╔═══════════════════════▼══════════════════════════════════╗
+║            CAMADA DE APLICAÇÃO — Render                  ║
+║               Node.js 18 · Express 4                     ║
+║                                                          ║
+║  /api/auth        /api/escola       /api/coaching        ║
+║  /api/inventario  /api/faturacao    /api/auditoria       ║
+║  /api/agenda      /api/health                            ║
+║                                                          ║
+║  ┌────────────────────────────────────────────────────┐ ║
+║  │  Middleware JWT · Lista Branca CORS · Error Handler │ ║
+║  └────────────────────────────────────────────────────┘ ║
+╚═══════════════════════╤══════════════════════════════════╝
+                        │  Pool de ligações MySQL2
+╔═══════════════════════▼══════════════════════════════════╗
+║               CAMADA DE DADOS — AWS RDS                  ║
+║                      MySQL 8                             ║
+╚══════════════════════════════════════════════════════════╝
 ```
 
-O frontend é uma SPA servida como ficheiros estáticos, comunicando exclusivamente com a API via HTTPS. Toda a autenticação é stateless (JWT), sem sessões no servidor.
+O frontend é implementado como um build estático servido pela CDN da Railway, sem renderização do lado do servidor. Todos os dados dinâmicos circulam exclusivamente através da API REST sobre HTTPS. A autenticação é totalmente stateless — os JWT são emitidos no login, armazenados do lado do cliente e validados em cada pedido protegido. Não existe estado de sessão no servidor, o que permite escalabilidade horizontal sem estado partilhado.
+
+---
+
+## 🧠 Decisões de Engenharia
+
+Algumas das opções técnicas que moldaram o projeto e a sua justificação:
+
+| Decisão | Justificação |
+|---|---|
+| **Arquitetura em camadas (MVC)** no backend | Separação clara entre encaminhamento, lógica de negócio (controllers) e acesso a dados (models), facilitando testes e manutenção |
+| **Autenticação stateless por JWT** | Elimina o estado de sessão no servidor, permitindo escalar horizontalmente e simplificar o deployment na Render |
+| **Frontend e API desacoplados** | Permite implementar, escalar e versionar cada camada de forma independente; o frontend é apenas ficheiros estáticos na CDN |
+| **Pool de ligações à base de dados** | Reutiliza ligações à AWS RDS em vez de abrir uma por pedido, reduzindo latência e carga na base de dados |
+| **Aprovação manual de registos** | Modelo de confiança adequado a uma escola — nenhum acesso é concedido sem validação humana da coordenação |
+| **Registo de auditoria persistido** | Garante rastreabilidade total de ações sensíveis, requisito essencial para um sistema com dados de menores |
+| **Testes com mocks de dependências** | Os controllers são testados isoladamente, sem depender da base de dados real, garantindo testes rápidos e determinísticos |
 
 ---
 
@@ -179,37 +212,37 @@ O frontend é uma SPA servida como ficheiros estáticos, comunicando exclusivame
 ```
 vivadarte/
 │
-├── frontend/                              # React 19 + Vite
+├── frontend/                              # React 19 · Vite 8
 │   ├── src/
-│   │   ├── assets/                        # Logótipo e imagens estáticas
+│   │   ├── assets/                        # Recursos estáticos — logótipo, ícones sociais
 │   │   ├── pages/
-│   │   │   ├── LandingPage/               # Página pública com carosseis
-│   │   │   ├── Login-Registo/             # Login, Registo, RecoverPassword
-│   │   │   ├── AgendaAulas/               # Grelha semanal de aulas regulares
-│   │   │   ├── MinhaAgendaProfessor/      # Coaching — Professor e EE
+│   │   │   ├── LandingPage/               # Página pública com carrosseis automáticos
+│   │   │   ├── Login-Registo/             # Fluxos de autenticação: Login · Registo · Recuperação
+│   │   │   ├── AgendaAulas/               # Agenda semanal de aulas regulares
+│   │   │   ├── MinhaAgendaProfessor/      # Agenda de coaching — modo duplo (Professor e EE)
 │   │   │   ├── Figurinos/                 # Marketplace de figurinos
-│   │   │   └── AdminDashboard/            # Painel de administração
+│   │   │   └── AdminDashboard/            # Painel de coordenação completo
 │   │   ├── services/
-│   │   │   └── api.js                     # Fetch autenticado com JWT
+│   │   │   └── api.js                     # Wrapper de fetch autenticado com injeção de JWT
 │   │   ├── utils/
-│   │   │   └── perfilUtilizador.js        # Helpers de perfil
-│   │   ├── App.jsx                        # Roteamento por estado
+│   │   │   └── perfilUtilizador.js        # Funções de resolução de perfil
+│   │   ├── App.jsx                        # Encaminhamento por estado (sem router de URL)
 │   │   └── main.jsx
 │   └── package.json
 │
-└── backend/                               # Node.js + Express
+└── backend/                               # Node.js 18 · Express 4 · MVC
     ├── src/
     │   ├── config/
-    │   │   └── db.js                      # Pool de conexões MySQL
-    │   ├── controllers/                   # Lógica de negócio (MVC)
-    │   │   ├── authController.js
-    │   │   ├── coachingController.js
-    │   │   ├── escolaController.js
-    │   │   ├── inventarioController.js
-    │   │   ├── faturacaoController.js
-    │   │   ├── auditoriaController.js
-    │   │   └── agendaController.js
-    │   ├── models/                        # Queries à base de dados
+    │   │   └── db.js                      # Pool de ligações — AWS RDS MySQL
+    │   ├── controllers/                   # Tratamento de pedidos e lógica de negócio
+    │   │   ├── authController.js          # Registo, login, recuperação de palavra-passe
+    │   │   ├── coachingController.js      # Ciclo de marcações, agendamento, validação
+    │   │   ├── escolaController.js        # Modalidades, salas, horários, anos letivos
+    │   │   ├── inventarioController.js    # Listagens de figurinos, vendas, empréstimos
+    │   │   ├── faturacaoController.js     # Regras de preço, histórico financeiro
+    │   │   ├── auditoriaController.js     # Consulta do registo de auditoria
+    │   │   └── agendaController.js        # Agenda de aulas regulares por utilizador
+    │   ├── models/                        # Camada de acesso a dados — queries SQL
     │   │   ├── authModel.js
     │   │   ├── coachingModel.js
     │   │   ├── escolaModel.js
@@ -218,20 +251,13 @@ vivadarte/
     │   │   ├── auditoriaModel.js
     │   │   ├── agendaModel.js
     │   │   └── precoCoachingModel.js
-    │   ├── routes/                        # Definição de endpoints
-    │   │   ├── authRoutes.js
-    │   │   ├── coachingRoutes.js
-    │   │   ├── escolaRoutes.js
-    │   │   ├── inventarioRoutes.js
-    │   │   ├── faturacaoRoutes.js
-    │   │   ├── auditoriaRoutes.js
-    │   │   └── agendaRoutes.js
+    │   ├── routes/                        # Definição dos endpoints Express
     │   ├── middlewares/
-    │   │   ├── auth.js                    # Verificação JWT e perfil
-    │   │   └── errorHandler.js            # Tratamento global de erros
+    │   │   ├── auth.js                    # Verificação de JWT + imposição de perfil
+    │   │   └── errorHandler.js            # Tratamento centralizado de erros — sem fuga de stack traces
     │   └── helpers/
-    │       └── auditoriaHelper.js         # Registo de eventos de auditoria
-    ├── tests/                             # Testes Vitest + Supertest
+    │       └── auditoriaHelper.js         # Utilitário de registo de eventos de auditoria
+    ├── tests/                             # Suítes de teste Vitest + Supertest
     │   ├── authController.test.js
     │   ├── coachingController.test.js
     │   ├── faturacaoController.test.js
@@ -239,162 +265,172 @@ vivadarte/
     │   └── unit/
     │       └── coachingController.test.js
     ├── docs/                              # Documentação JSDoc gerada
-    ├── app.js                             # Entry point Express
+    ├── app.js                             # Ponto de entrada da aplicação
     └── package.json
 ```
 
 ---
 
-## 🔌 API — Endpoints
+## 🔌 Referência da API
 
-| Prefixo | Controlador | Descrição |
+Todos os endpoints têm o prefixo `/api` e exigem um cabeçalho `Authorization: Bearer <token>` válido, salvo indicação em contrário.
+
+| Prefixo | Controlador | Responsabilidade |
 |---|---|---|
-| `/api/auth` | authController | Registo, login, recuperação de password, gestão de utilizadores |
-| `/api/escola` | escolaController | Modalidades, salas, anos letivos, horários regulares |
-| `/api/coaching` | coachingController | Pedidos, agenda, disponibilidades, validação de realização |
-| `/api/inventario` | inventarioController | Figurinos, vendas, empréstimos, reservas |
-| `/api/faturacao` | faturacaoController | Preços por modalidade, histórico financeiro |
-| `/api/auditoria` | auditoriaController | Log de eventos do sistema |
-| `/api/agenda` | agendaController | Agenda de aulas regulares por utilizador |
-| `/api/health` | — | Health check da API e da base de dados |
+| `/api/auth` | authController | Registo, login, emissão de JWT, recuperação de palavra-passe, gestão de utilizadores |
+| `/api/escola` | escolaController | Modalidades, salas, anos letivos, horários de aulas regulares |
+| `/api/coaching` | coachingController | Pedidos de sessão, fluxo de agendamento, disponibilidades, validação de realização |
+| `/api/inventario` | inventarioController | Listagens de figurinos, vendas, ciclo de empréstimos, reservas |
+| `/api/faturacao` | faturacaoController | Configuração de preços por modalidade e formato, histórico financeiro |
+| `/api/auditoria` | auditoriaController | Registo de auditoria do sistema — apenas leitura, restrito à coordenação |
+| `/api/agenda` | agendaController | Consulta da agenda de aulas regulares por utilizador autenticado |
+| `/api/health` | — | Verificação de saúde da API e da ligação à base de dados · **público** |
 
 ---
 
 ## 🧪 Testes
 
-O projeto inclui **5 ficheiros de teste** com cobertura sobre os principais módulos do backend, escritos com **Vitest** e **Supertest**.
+A suíte de testes do backend assenta no **Vitest** com **Supertest** para asserções ao nível HTTP, seguindo uma abordagem que combina testes unitários com dependências simuladas (mocks) e testes de integração contra a aplicação Express real.
 
 ```bash
-# Executar testes em modo watch
-cd backend
-npm test
+# Executar em modo watch (desenvolvimento)
+cd backend && npm test
 
-# Executar uma vez (CI)
-npm run test:run
+# Execução única — adequada para pipelines de CI
+cd backend && npm run test:run
 ```
 
-| Ficheiro de Teste | Módulo Coberto | Exemplos de Casos |
+| Suíte | Âmbito | Casos Notáveis |
 |---|---|---|
-| `authController.test.js` | Autenticação | Login com credenciais inválidas, conta desativada, token JWT gerado |
-| `coachingController.test.js` | Coaching | Criação de pedidos, validação de disponibilidade, cancelamento |
-| `coachingController.unit.test.js` | Coaching (unitário) | Lógica isolada com mocks completos |
-| `faturacaoController.test.js` | Faturação | Cálculo de preços, histórico financeiro |
-| `inventarioController.test.js` | Inventário | Criação de figurinos, pedidos de empréstimo |
+| `authController.test.js` | Autenticação | Credenciais em falta (400), conta desativada (403), emissão de JWT com sucesso (200) |
+| `coachingController.test.js` | Fluxo de coaching | Criação de pedidos, validação de disponibilidade, lógica de cancelamento |
+| `coachingController.unit.test.js` | Coaching (isolado) | Testes unitários puros, com isolamento total de dependências via `vi.mock()` |
+| `faturacaoController.test.js` | Preços e faturação | Cálculo automático de custos, consulta de histórico financeiro |
+| `inventarioController.test.js` | Marketplace | Criação de figurinos, processamento de pedidos de empréstimo, conflitos de reserva |
 
 ---
 
-## 🚀 Instalação e Configuração
+## 🚀 Começar
 
 ### Pré-requisitos
-- Node.js 18+
-- MySQL 8 (local ou remoto)
+
+- Node.js ≥ 18
+- Instância MySQL 8 (local ou remota)
 - npm
 
-### 1. Clonar o repositório
+### 1 — Clonar o repositório
+
 ```bash
 git clone https://github.com/Brito21x/vivadarte.git
 cd vivadarte
 ```
 
-### 2. Configurar o Backend
+### 2 — Configurar e arrancar a API
+
 ```bash
 cd backend
 npm install
-cp .env.example .env
-# Preenche o .env com as tuas credenciais
-npm run dev
+cp .env.example .env        # Preencher com as credenciais — ver secção abaixo
+npm run dev                 # Arranca com nodemon na porta 3000
 ```
 
-### 3. Configurar o Frontend
+### 3 — Configurar e arrancar o frontend
+
 ```bash
 cd frontend
 npm install
-cp .env.example .env
-# Define VITE_API_URL no .env
-npm run dev
+cp .env.example .env        # Definir VITE_API_URL
+npm run dev                 # Servidor de desenvolvimento Vite na porta 5173
 ```
 
-A aplicação fica disponível em `http://localhost:5173` e a API em `http://localhost:3000`.
+A aplicação ficará disponível em `http://localhost:5173` e a API em `http://localhost:3000`.  
+Executa `GET /api/health` para confirmar a API e a ligação à base de dados antes de prosseguir.
 
 ---
 
 ## 🔐 Variáveis de Ambiente
 
 ### Backend — `.env`
+
 ```env
-# Base de Dados (AWS RDS ou local)
+# ── Base de Dados (AWS RDS ou MySQL local) ────────────────
 DB_HOST=
 DB_PORT=3306
 DB_USER=
 DB_PASSWORD=
 DB_NAME=vivadarte
 
-# Autenticação
-JWT_SECRET=
+# ── Autenticação ──────────────────────────────────────────
+JWT_SECRET=            # Mín. 32 caracteres — usar um valor criptograficamente aleatório
 
-# Servidor
+# ── Servidor ──────────────────────────────────────────────
 PORT=3000
-NODE_ENV=development
+NODE_ENV=development   # Definir como "production" em deployment
 ```
 
 ### Frontend — `.env`
+
 ```env
 VITE_API_URL=https://api-vivadarte.onrender.com
 ```
 
-> ⚠️ **Nunca commites ficheiros `.env` com credenciais reais.** O `.gitignore` já os exclui — certifica-te que está configurado antes do primeiro commit.
+> **Aviso de segurança:** Nunca faças commit de ficheiros `.env` com credenciais reais. O `.gitignore` do repositório exclui-os por defeito. Se alguma chave for exposta inadvertidamente, deve ser rodada de imediato.
 
 ---
 
 ## 👥 Perfis de Utilizador
 
-| Perfil | Acesso | Aprovação Necessária |
-|---|---|---|
-| **Admin** | Painel de administração completo | — (criado manualmente) |
-| **Professor** | Agenda de coaching, disponibilidades, resumo financeiro | ✅ Pela coordenação |
-| **EE** | Agenda do educando, pedidos de coaching, marketplace | ✅ Pela coordenação |
+| Perfil | Interface | Registo | Ativação |
+|---|---|---|---|
+| **Coordenação** | Painel de administração completo | Manual (interno) | Imediata |
+| **Professor** | Agenda de coaching, disponibilidades, rendimentos | Auto-registo público | Requer aprovação da coordenação |
+| **Enc. Educação** | Agenda do educando, pedidos de coaching, marketplace | Auto-registo público | Requer aprovação da coordenação |
 
-O registo é público mas fica **pendente de aprovação** pela coordenação. Após 3 tentativas de login falhadas, é obrigatório resolver um reCAPTCHA v2.
+Os novos registos entram num estado **pendente** e só são ativados após aprovação explícita da coordenação. Após três tentativas de login falhadas consecutivas, é imposta a verificação por reCAPTCHA v2.
 
 ---
 
 ## 🛡️ Segurança
 
-- **JWT** com expiração curta para autenticação stateless em todas as rotas protegidas
-- **bcryptjs** para hash de passwords — nunca armazenadas em texto simples
-- **reCAPTCHA v2** nos formulários de login (após 3 falhas) e registo
-- **Middleware de autorização** por perfil em todas as rotas sensíveis da API
-- **CORS** configurado com lista branca de origens permitidas
-- **Aprovação manual** de todos os novos registos pela coordenação
-- **Log de auditoria** persistido em base de dados para todas as ações sensíveis
-- **Error handler** global que nunca expõe stack traces em produção
+A aplicação adota uma estratégia de defesa em profundidade em toda a stack:
+
+| Controlo | Implementação |
+|---|---|
+| **Autenticação** | JWT stateless com expiração curta — sem sessões no servidor |
+| **Armazenamento de palavras-passe** | Hashing adaptativo com bcryptjs — texto simples nunca é persistido |
+| **Proteção contra bots** | reCAPTCHA v2 no registo e após tentativas de login repetidas |
+| **Autorização** | Middleware por rota valida a validade do token e o perfil exigido |
+| **Controlo de origens** | Lista branca de CORS imposta na camada Express — origens desconhecidas rejeitadas |
+| **Controlo de contas** | Fluxo de aprovação manual previne acessos não autorizados à partida |
+| **Trilho de auditoria** | Cada ação sensível é registada na base de dados com autor, data e resultado |
+| **Tratamento de erros** | Handler centralizado devolve respostas higienizadas — stack traces nunca expostos em produção |
 
 ---
 
 ## 📖 Documentação
 
-A documentação da API foi gerada automaticamente com **JSDoc** a partir dos controllers, models e routes do backend.
+A API está documentada com **JSDoc**, com anotações em todos os controllers, models e rotas. A documentação é gerada como um site HTML estático para `backend/docs/`.
 
 ```bash
-# Gerar documentação (output em backend/docs/)
 cd backend
-npm run docs
+npm run docs   # Gera o output em backend/docs/
 ```
 
-A documentação gerada cobre todos os módulos: `authController`, `coachingController`, `escolaController`, `inventarioController`, `faturacaoController` e `auditoriaController`.
+A cobertura inclui: `authController`, `coachingController`, `escolaController`, `inventarioController`, `faturacaoController`, `auditoriaController` e os respetivos models e definições de rotas.
 
 ---
 
 ## 👨‍💻 Autor
 
-Desenvolvido por **Brito** — IPCA, Engenharia de Sistemas Informáticos, 2.º Ano.
+**Brito** · Instituto Politécnico do Cávado e do Ave  
+Engenharia de Sistemas Informáticos · 2.º Ano
 
-[![GitHub](https://img.shields.io/badge/GitHub-Brito21x-181717?style=flat-square&logo=github)](https://github.com/Brito21x)
+[![GitHub](https://img.shields.io/badge/GitHub-Brito21x-181717?style=flat-square&logo=github&logoColor=white)](https://github.com/Brito21x)
 
 ---
 
 <div align="center">
 
-Desenvolvido com ❤️ no IPCA para a **Viva D'arte**
+Desenvolvido com dedicação no IPCA · **Viva D'arte** · 2025
 
 </div>

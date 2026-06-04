@@ -52,7 +52,7 @@
 | **Instituição** | Instituto Politécnico do Cávado e do Ave (IPCA) |
 | **Curso** | Engenharia de Sistemas Informáticos |
 | **Ano** | 2.º Ano |
-| **Tipo de Projeto** | Desenvolvimento de Software Full-Stack |
+| **Tipo de Projeto** | Projeto de Desenvolvimento de Software + Programação WEB (Projeto 50+10) |
 
 ---
 

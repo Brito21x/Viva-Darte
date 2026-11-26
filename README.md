@@ -7,9 +7,9 @@
 > A production full-stack web application that centralizes all operations of a dance school — connecting administrators, instructors, and guardians in a single, role-based, end-to-end secured platform.
 
 [![In Production](https://img.shields.io/badge/Status-In_Production-success?style=flat-square&logo=railway&logoColor=white)](https://vivadarte-production.up.railway.app)
-[![API](https://img.shields.io/badge/API-Operational-46E3B7?style=flat-square&logo=render&logoColor=black)](https://api-vivadarte.onrender.com/api/health)
+[![API](https://img.shields.io/badge/API-Operational-46E3B7?style=flat-square&logo=render&logoColor=white)](https://api-vivadarte.onrender.com/api/health)
 [![Database](https://img.shields.io/badge/AWS_RDS-MySQL_8-FF9900?style=flat-square&logo=mysql&logoColor=white)](https://aws.amazon.com/rds/)
-[![React](https://img.shields.io/badge/React-19.2-61DAFB?style=flat-square&logo=react&logoColor=black)](https://react.dev)
+[![React](https://img.shields.io/badge/React-19.2-61DAFB?style=flat-square&logo=react&logoColor=white)](https://react.dev)
 [![Node](https://img.shields.io/badge/Node.js-18%2B-339933?style=flat-square&logo=nodedotjs&logoColor=white)](https://nodejs.org)
 [![Tests](https://img.shields.io/badge/Tests-Vitest-6E9F18?style=flat-square&logo=vitest&logoColor=white)](https://vitest.dev)
 [![Docs](https://img.shields.io/badge/Docs-JSDoc-orange?style=flat-square&logo=readthedocs&logoColor=white)](https://github.com/Brito21x/vivadarte)
@@ -49,7 +49,7 @@
 
 | | |
 |---|---|
-| **Institution** | Polytechnic Institute of Cávado and Ave (IPCA) |
+| **Institution** | UPCA |
 | **Degree** | Computer Systems Engineering |
 | **Year** | 2nd Year |
 | **Project Type** | Software Development Project + Web Programming (50+10 Project) |
@@ -418,7 +418,7 @@ Coverage includes: `authController`, `coachingController`, `escolaController`, `
 
 ## Author
 
-**Edgar Brito** · Polytechnic Institute of Cávado and Ave  
+**Edgar Brito** · UPCA  
 Computer Systems Engineering · 2nd Year
 
 [![GitHub](https://img.shields.io/badge/GitHub-Brito21x-181717?style=flat-square&logo=github&logoColor=white)](https://github.com/Brito21x)

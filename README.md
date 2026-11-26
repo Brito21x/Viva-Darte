@@ -8,15 +8,15 @@
 
 [![In Production](https://img.shields.io/badge/Status-In_Production-success?style=flat-square&logo=railway&logoColor=white)](https://vivadarte-production.up.railway.app)
 [![API](https://img.shields.io/badge/API-Operational-46E3B7?style=flat-square&logo=render&logoColor=black)](https://api-vivadarte.onrender.com/api/health)
-[![Database](https://img.shields.io/badge/AWS_RDS-MySQL_8-FF9900?style=flat-square&logo=amazonaws&logoColor=white)](https://aws.amazon.com/rds/)
+[![Database](https://img.shields.io/badge/AWS_RDS-MySQL_8-FF9900?style=flat-square&logo=mysql&logoColor=white)](https://aws.amazon.com/rds/)
 [![React](https://img.shields.io/badge/React-19.2-61DAFB?style=flat-square&logo=react&logoColor=black)](https://react.dev)
-[![Node](https://img.shields.io/badge/Node.js-18+-339933?style=flat-square&logo=nodedotjs&logoColor=white)](https://nodejs.org)
+[![Node](https://img.shields.io/badge/Node.js-18%2B-339933?style=flat-square&logo=nodedotjs&logoColor=white)](https://nodejs.org)
 [![Tests](https://img.shields.io/badge/Tests-Vitest-6E9F18?style=flat-square&logo=vitest&logoColor=white)](https://vitest.dev)
-[![Docs](https://img.shields.io/badge/Docs-JSDoc-orange?style=flat-square)](https://github.com/Brito21x/vivadarte)
+[![Docs](https://img.shields.io/badge/Docs-JSDoc-orange?style=flat-square&logo=readthedocs&logoColor=white)](https://github.com/Brito21x/vivadarte)
 
 ---
 
-| 🌐 Application | 🔧 API Status | 👤 Admin Dashboard |
+| Application | API Status | Admin Dashboard |
 |:---:|:---:|:---:|
 | [vivadarte-production.up.railway.app](https://vivadarte-production.up.railway.app) | [/api/health](https://api-vivadarte.onrender.com/api/health) | [/admin](https://vivadarte-production.up.railway.app/admin) |
 
@@ -26,26 +26,26 @@
 
 ## Table of Contents
 
-- [Academic Context](#-academic-context)
-- [Overview](#-overview)
-- [The Problem and Solution](#-the-problem-and-solution)
-- [Features](#-features)
-- [Tech Stack](#-tech-stack)
-- [System Architecture](#-system-architecture)
-- [Engineering Decisions](#-engineering-decisions)
-- [Project Structure](#-project-structure)
-- [API Reference](#-api-reference)
-- [Testing](#-testing)
-- [Getting Started](#-getting-started)
-- [Environment Variables](#-environment-variables)
-- [User Roles](#-user-roles)
-- [Security](#-security)
-- [Documentation](#-documentation)
-- [Author](#-author)
+- [Academic Context](#academic-context)
+- [Overview](#overview)
+- [The Problem and Solution](#the-problem-and-solution)
+- [Features](#features)
+- [Tech Stack](#tech-stack)
+- [System Architecture](#system-architecture)
+- [Engineering Decisions](#engineering-decisions)
+- [Project Structure](#project-structure)
+- [API Reference](#api-reference)
+- [Testing](#testing)
+- [Getting Started](#getting-started)
+- [Environment Variables](#environment-variables)
+- [User Roles](#user-roles)
+- [Security](#security)
+- [Documentation](#documentation)
+- [Author](#author)
 
 ---
 
-## 🎓 Academic Context
+## Academic Context
 
 | | |
 |---|---|
@@ -56,7 +56,7 @@
 
 ---
 
-## 🎯 Overview
+## Overview
 
 **Viva D'arte** is a digital platform built to address a concrete operational challenge faced by performing arts schools: fragmented, manual, and opaque day-to-day academic management.
 
@@ -66,7 +66,7 @@ This project was conceived, designed, and implemented end-to-end as an individua
 
 ---
 
-## 💡 The Problem and Solution
+## The Problem and Solution
 
 Dance schools frequently rely on disconnected tools — informal messaging apps, scattered spreadsheets, and paper records. This leads to three recurring pain points:
 
@@ -80,9 +80,9 @@ The result is a significant reduction in administrative overhead and greater tra
 
 ---
 
-## ✨ Features
+## Features
 
-### 👨‍💼 Administration
+### Administration
 - Operational dashboard with real-time metrics — users, requests, classes, and revenue
 - Full user lifecycle management — registration, approval, suspension, and removal
 - Configurable pricing engine by discipline and class format (Solo, Duet, Trio, Ensemble)
@@ -92,7 +92,7 @@ The result is a significant reduction in administrative overhead and greater tra
 - Immutable audit log tracking all sensitive actions with actor, timestamp, and outcome
 - Built-in costume inventory management
 
-### 👩‍🏫 Instructor
+### Instructor
 - Interactive weekly grid displaying availability slots and confirmed coaching sessions
 - Full autonomy over weekly availability windows — create and remove time slots independently
 - Two-step response to coaching requests: accept (forwarded to administration) or reject with a reason
@@ -100,7 +100,7 @@ The result is a significant reduction in administrative overhead and greater tra
 - Monthly earnings summary, filterable by month and academic year
 - Quick-access side panels for pending requests and upcoming classes
 
-### 👨‍👩‍👧 Parent / Guardian
+### Parent / Guardian
 - Weekly class schedule view for their students, filterable by student and discipline
 - Self-service enrollment and unenrollment of students in disciplines
 - Coaching request submission with full control over instructor, discipline, format, and duration
@@ -108,7 +108,7 @@ The result is a significant reduction in administrative overhead and greater tra
 - Multi-participant session booking via email search (Duet, Trio, Ensemble)
 - Integrated costume marketplace for buying and borrowing costumes within the school community
 
-### 🛍️ Costume Marketplace
+### Costume Marketplace
 - Peer-to-peer listings with multi-image carousels and photo uploads
 - Advanced filtering by transaction type, condition, and recency
 - Availability calendar for loan requests with automatic date-conflict detection
@@ -116,7 +116,7 @@ The result is a significant reduction in administrative overhead and greater tra
 
 ---
 
-## 🛠️ Tech Stack
+## Tech Stack
 
 ### Frontend
 | Technology | Version | Purpose |
@@ -155,7 +155,7 @@ The result is a significant reduction in administrative overhead and greater tra
 
 ---
 
-## 🏗️ System Architecture
+## System Architecture
 
 ```
 ╔══════════════════════════════════════════════════════════╗
@@ -189,7 +189,7 @@ The frontend is deployed as a static build served through Railway's CDN, with no
 
 ---
 
-## 🧠 Engineering Decisions
+## Engineering Decisions
 
 Key technical choices that shaped the project and their rationale:
 
@@ -205,7 +205,7 @@ Key technical choices that shaped the project and their rationale:
 
 ---
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 vivadarte/
@@ -269,7 +269,7 @@ vivadarte/
 
 ---
 
-## 🔌 API Reference
+## API Reference
 
 All endpoints are prefixed with `/api` and require a valid `Authorization: Bearer <token>` header unless noted otherwise.
 
@@ -286,7 +286,7 @@ All endpoints are prefixed with `/api` and require a valid `Authorization: Beare
 
 ---
 
-## 🧪 Testing
+## Testing
 
 The backend test suite uses **Vitest** alongside **Supertest** for HTTP-level assertions, combining isolated unit tests with mocked dependencies and integration tests against the live Express application.
 
@@ -308,7 +308,7 @@ cd backend && npm run test:run
 
 ---
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
 
@@ -346,7 +346,7 @@ Send a `GET /api/health` request to verify both the API and database connection 
 
 ---
 
-## 🔐 Environment Variables
+## Environment Variables
 
 ### Backend — `.env`
 
@@ -374,7 +374,7 @@ VITE_API_URL=[https://api-vivadarte.onrender.com](https://api-vivadarte.onrender
 
 ---
 
-## 👥 User Roles
+## User Roles
 
 | Role | Interface | Registration | Activation |
 |---|---|---|---|
@@ -386,7 +386,7 @@ New registrations enter a **pending** state and are activated only after explici
 
 ---
 
-## 🛡️ Security
+## Security
 
 The application follows a defense-in-depth strategy across the entire stack:
 
@@ -403,7 +403,7 @@ The application follows a defense-in-depth strategy across the entire stack:
 
 ---
 
-## 📖 Documentation
+## Documentation
 
 The API is documented using **JSDoc**, with annotations across all controllers, models, and routes. Documentation compiles to a static HTML site in `backend/docs/`.
 
@@ -416,7 +416,7 @@ Coverage includes: `authController`, `coachingController`, `escolaController`, `
 
 ---
 
-## 👨‍💻 Author
+## Author
 
 **Edgar Brito** · Polytechnic Institute of Cávado and Ave  
 Computer Systems Engineering · 2nd Year

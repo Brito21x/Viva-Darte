@@ -49,7 +49,7 @@
 
 | | |
 |---|---|
-| **Institution** | UPCA |
+| **Institution** | Polytechnic University of Cávado and Ave (UPCA) |
 | **Degree** | Computer Systems Engineering |
 | **Year** | 2nd Year |
 | **Project Type** | Software Development Project + Web Programming (50+10 Project) |
@@ -418,7 +418,7 @@ Coverage includes: `authController`, `coachingController`, `escolaController`, `
 
 ## Author
 
-**Edgar Brito** · UPCA  
+**Edgar Brito** · Polytechnic University of Cávado and Ave (UPCA)  
 Computer Systems Engineering · 2nd Year
 
 [![GitHub](https://img.shields.io/badge/GitHub-Brito21x-181717?style=flat-square&logo=github&logoColor=white)](https://github.com/Brito21x)
